@@ -50,18 +50,32 @@ jobs:
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
-      - name: Validate required Vercel secrets
+      - name: Validate required secrets
         shell: bash
         run: |
           missing=""
-          [ -z "${{ secrets.VERCEL_TOKEN }}" ]      && missing="$missing VERCEL_TOKEN"
-          [ -z "${{ secrets.VERCEL_ORG_ID }}" ]     && missing="$missing VERCEL_ORG_ID"
-          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ] && missing="$missing VERCEL_PROJECT_ID"
+          [ -z "${{ secrets.VERCEL_TOKEN }}" ]           && missing="$missing VERCEL_TOKEN"
+          [ -z "${{ secrets.VERCEL_ORG_ID }}" ]          && missing="$missing VERCEL_ORG_ID"
+          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]      && missing="$missing VERCEL_PROJECT_ID"
+          [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]  && missing="$missing SUPABASE_ACCESS_TOKEN"
+          [ -z "${{ secrets.SUPABASE_DB_PASSWORD }}" ]   && missing="$missing SUPABASE_DB_PASSWORD"
           if [ -n "$missing" ]; then
             echo "::error::Missing required secrets:$missing"
             echo "Add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
             exit 1
           fi
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      - name: Apply database migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          supabase link --project-ref bvccuypipogprmjxctxp
+          supabase db push --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
 
       - name: Setup pnpm
         uses: pnpm/action-setup@v4
@@ -76,14 +90,6 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-
-      - name: Apply database migrations
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
-        run: |
-          npx supabase link --project-ref bvccuypipogprmjxctxp
-          npx supabase db push --password "$SUPABASE_DB_PASSWORD"
 
       - name: Pull Vercel environment
         run: pnpm vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
