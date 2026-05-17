@@ -6,9 +6,11 @@ name: Deploy to Vercel (Production)
 #   • Manual trigger from the GitHub Actions UI (workflow_dispatch)
 #
 # Required GitHub Secrets  (Settings → Secrets → Actions):
-#   VERCEL_TOKEN        – https://vercel.com/account/tokens
-#   VERCEL_ORG_ID       – vercel.com → project → Settings → General
-#   VERCEL_PROJECT_ID   – same page
+#   VERCEL_TOKEN              – https://vercel.com/account/tokens
+#   VERCEL_ORG_ID             – vercel.com → project → Settings → General
+#   VERCEL_PROJECT_ID         – same page
+#   SUPABASE_ACCESS_TOKEN     – https://supabase.com/dashboard/account/tokens
+#   SUPABASE_DB_PASSWORD      – Supabase project → Settings → Database → Database password
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
@@ -74,6 +76,14 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Apply database migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          npx supabase link --project-ref bvccuypipogprmjxctxp
+          npx supabase db push --password "$SUPABASE_DB_PASSWORD"
 
       - name: Pull Vercel environment
         run: pnpm vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
