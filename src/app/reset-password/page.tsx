@@ -1,14 +1,11 @@
 'use client'
 
-export const dynamic = 'force-dynamic'
-
 import { useEffect, useState, type FormEvent } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
 export default function ResetPasswordPage() {
   const router = useRouter()
-  const supabase = createClient()
 
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -20,6 +17,7 @@ export default function ResetPasswordPage() {
     let active = true
 
     const checkSession = async () => {
+      const supabase = createClient()
       const {
         data: { session },
       } = await supabase.auth.getSession()
@@ -41,7 +39,7 @@ export default function ResetPasswordPage() {
     return () => {
       active = false
     }
-  }, [supabase])
+  }, [])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -59,6 +57,7 @@ export default function ResetPasswordPage() {
     setLoading(true)
     setStatus(null)
 
+    const supabase = createClient()
     const { error } = await supabase.auth.updateUser({ password })
 
     if (error) {
