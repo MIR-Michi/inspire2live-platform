@@ -24,6 +24,13 @@ function MobileNavIcon({ navKey }: { navKey: NavKey }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
         </svg>
       )
+    case 'comms':
+      return (
+        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+          <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 3.94c.09-.54.56-.94 1.1-.94h1.12c.54 0 1.01.4 1.1.94l.18 1.06a7.502 7.502 0 013.12 1.81l.95-.5a1.125 1.125 0 011.37.23l.79.79c.4.4.49 1.01.23 1.5l-.5.95A7.5 7.5 0 0121 12c0 .8-.13 1.58-.37 2.3l.5.95c.26.49.17 1.1-.23 1.5l-.79.79c-.4.4-1.01.49-1.5.23l-.95-.5A7.502 7.502 0 0114 19.19l-.18 1.06c-.09.54-.56.94-1.1.94h-1.12c-.54 0-1.01-.4-1.1-.94l-.18-1.06a7.502 7.502 0 01-3.12-1.81l-.95.5a1.125 1.125 0 01-1.37-.23l-.79-.79a1.125 1.125 0 01-.23-1.5l.5-.95A7.5 7.5 0 013 12c0-.8.13-1.58.37-2.3l-.5-.95a1.125 1.125 0 01.23-1.5l.79-.79c.4-.4 1.01-.49 1.5-.23l.95.5A7.502 7.502 0 0110.16 5l.18-1.06z" />
+          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 12h7.5M8.25 15h4.5M8.25 9h7.5" />
+        </svg>
+      )
     case 'bureau':
       return (
         <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -57,9 +64,18 @@ interface TopNavProps {
   unreadCount?: number
   isAdmin?: boolean
   viewAsRole?: string | null
+  showCommsNav?: boolean
 }
 
-export function TopNav({ userName, userRole, userInitials, unreadCount = 0, isAdmin = false, viewAsRole }: TopNavProps) {
+export function TopNav({
+  userName,
+  userRole,
+  userInitials,
+  unreadCount = 0,
+  isAdmin = false,
+  viewAsRole,
+  showCommsNav = false,
+}: TopNavProps) {
   const router = useRouter()
   const pathname = usePathname()
   const [profileOpen, setProfileOpen] = useState(false)
@@ -99,7 +115,7 @@ export function TopNav({ userName, userRole, userInitials, unreadCount = 0, isAd
 
 
   const notificationsAccessible = canAccessAppPath(userRole, '/app/notifications')
-  const navItems = getSideNavItems(userRole)
+  const navItems = getSideNavItems(userRole, { showComms: showCommsNav })
 
   return (
     <>

@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
+import { getPostLoginLandingPath } from '@/lib/comms-access'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -61,7 +62,7 @@ export async function GET(request: Request) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('onboarding_completed')
+    .select('onboarding_completed, role, comms_team')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -69,5 +70,9 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/onboarding', url.origin))
   }
 
-  return NextResponse.redirect(new URL(next, url.origin))
+  const destination = requestedNext === '/app/dashboard'
+    ? getPostLoginLandingPath(profile?.role, profile?.comms_team)
+    : next
+
+  return NextResponse.redirect(new URL(destination, url.origin))
 }

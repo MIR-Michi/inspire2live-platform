@@ -139,6 +139,7 @@ describe('resolveAccessFromRole', () => {
   it('Moderator: manage stories, invisible tasks, invisible admin', () => {
     expect(resolveAccessFromRole('Moderator', 'stories')).toBe('manage')
     expect(resolveAccessFromRole('Moderator', 'tasks')).toBe('invisible')
+    expect(resolveAccessFromRole('Moderator', 'comms')).toBe('invisible')
     expect(resolveAccessFromRole('Moderator', 'admin')).toBe('invisible')
   })
 

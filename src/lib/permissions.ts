@@ -28,6 +28,7 @@ export type AccessLevel = 'invisible' | 'view' | 'edit' | 'manage'
 
 export type PlatformSpace =
   | 'dashboard'
+  | 'comms'
   | 'initiatives'
   | 'tasks'
   | 'congress'
@@ -45,6 +46,7 @@ export type ScopeType = 'global' | 'congress' | 'initiative'
 
 export const PLATFORM_SPACES: PlatformSpace[] = [
   'dashboard',
+  'comms',
   'initiatives',
   'tasks',
   'congress',
@@ -89,6 +91,7 @@ type SpaceDefaults = Record<PlatformSpace, AccessLevel>
 export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   PatientAdvocate: {
     dashboard:     'view',
+    comms:         'invisible',
     initiatives:   'edit',
     tasks:         'edit',
     congress:      'view',
@@ -104,6 +107,7 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   },
   Clinician: {
     dashboard:     'view',
+    comms:         'invisible',
     initiatives:   'edit',
     tasks:         'edit',
     congress:      'view',
@@ -119,6 +123,7 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   },
   Researcher: {
     dashboard:     'view',
+    comms:         'invisible',
     initiatives:   'edit',
     tasks:         'edit',
     congress:      'view',
@@ -134,6 +139,7 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   },
   Moderator: {
     dashboard:     'view',
+    comms:         'invisible',
     initiatives:   'view',
     tasks:         'invisible',
     congress:      'view',
@@ -149,6 +155,7 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   },
   HubCoordinator: {
     dashboard:     'view',
+    comms:         'invisible',
     initiatives:   'manage',
     tasks:         'manage',
     congress:      'view',
@@ -164,6 +171,7 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   },
   IndustryPartner: {
     dashboard:     'view',
+    comms:         'invisible',
     initiatives:   'invisible',
     tasks:         'invisible',
     congress:      'view',
@@ -179,6 +187,7 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   },
   BoardMember: {
     dashboard:     'view',
+    comms:         'invisible',
     initiatives:   'view',
     tasks:         'invisible',
     congress:      'view',
@@ -194,6 +203,7 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
   },
   PlatformAdmin: {
     dashboard:     'manage',
+    comms:         'manage',
     initiatives:   'manage',
     tasks:         'manage',
     congress:      'manage',

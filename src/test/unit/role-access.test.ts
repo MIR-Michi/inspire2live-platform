@@ -54,4 +54,11 @@ describe('getSideNavItems', () => {
     const items = getSideNavItems('PatientAdvocate')
     expect(items.some((item) => item.key === 'stories')).toBe(true)
   })
+
+  it('includes communications entry only when showComms is enabled for Moderator', () => {
+    const hidden = getSideNavItems('Moderator')
+    const visible = getSideNavItems('Moderator', { showComms: true })
+    expect(hidden.some((item) => item.key === 'comms')).toBe(false)
+    expect(visible.some((item) => item.key === 'comms')).toBe(true)
+  })
 })

@@ -1,4 +1,4 @@
-﻿-- ─────────────────────────────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 00012: Full Congress Lifecycle Schema
 -- Adds multi-year congress events, themes, sessions, session notes,
 -- assets, and cross-year bridging (carryover links).
@@ -17,6 +17,20 @@ CREATE TABLE IF NOT EXISTS congress_themes (
 
 -- ── congress_events ───────────────────────────────────────────────────────────
 -- One row per annual congress (or other major event).
+ALTER TABLE congress_events
+  ADD COLUMN IF NOT EXISTS title            text,
+  ADD COLUMN IF NOT EXISTS description      text,
+  ADD COLUMN IF NOT EXISTS theme_headline   text,
+  ADD COLUMN IF NOT EXISTS parent_event_id  uuid REFERENCES congress_events(id) ON DELETE SET NULL,
+  ADD COLUMN IF NOT EXISTS updated_at       timestamptz NOT NULL DEFAULT now();
+
+UPDATE congress_events
+SET
+  title = COALESCE(title, 'Inspire2Live Congress ' || year::text),
+  description = COALESCE(description, theme),
+  theme_headline = COALESCE(theme_headline, theme),
+  updated_at = COALESCE(updated_at, now());
+
 CREATE TABLE IF NOT EXISTS congress_events (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   year             integer NOT NULL UNIQUE,
@@ -61,6 +75,18 @@ CREATE INDEX IF NOT EXISTS congress_decisions_event_id_idx ON congress_decisions
 CREATE INDEX IF NOT EXISTS congress_decisions_year_idx     ON congress_decisions(congress_year);
 
 -- ── congress_sessions ─────────────────────────────────────────────────────────
+ALTER TABLE congress_sessions
+  ADD COLUMN IF NOT EXISTS event_id         uuid REFERENCES congress_events(id) ON DELETE CASCADE,
+  ADD COLUMN IF NOT EXISTS session_type     text NOT NULL DEFAULT 'plenary',
+  ADD COLUMN IF NOT EXISTS agenda_order     integer NOT NULL DEFAULT 0,
+  ADD COLUMN IF NOT EXISTS status           text NOT NULL DEFAULT 'planned',
+  ADD COLUMN IF NOT EXISTS max_attendees    integer,
+  ADD COLUMN IF NOT EXISTS updated_at       timestamptz NOT NULL DEFAULT now();
+
+UPDATE congress_sessions
+SET event_id = congress_id
+WHERE event_id IS NULL;
+
 CREATE TABLE IF NOT EXISTS congress_sessions (
   id               uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   event_id         uuid NOT NULL REFERENCES congress_events(id) ON DELETE CASCADE,
@@ -231,88 +257,97 @@ CREATE POLICY "coordinators_manage_event_themes" ON congress_event_themes
   FOR ALL USING (is_coordinator_or_admin());
 
 -- ── Seed: congress_events ─────────────────────────────────────────────────────
-INSERT INTO congress_events (id, year, title, description, location, start_date, end_date, theme_headline, status)
+INSERT INTO congress_events (id, year, theme, title, description, location, start_date, end_date, theme_headline, status)
 VALUES
   (
     '00000000-c001-0000-0000-000000000001',
     2024,
+    'Evidence-Driven Patient Advocacy',
     'Inspire2Live Congress 2024',
     'The 2024 congress focused on patient-centred evidence frameworks and expanding access to clinical trials for rare cancer patients across Europe and Africa.',
     'Rotterdam, Netherlands',
     '2024-11-08',
     '2024-11-09',
     'Evidence-Driven Patient Advocacy',
-    'archived'
+    'completed'
   ),
   (
     '00000000-c002-0000-0000-000000000002',
     2025,
+    'From Decision to Action: The 48-Hour Standard',
     'Inspire2Live Congress 2025',
     'The 2025 congress accelerated the translation of congress decisions into active workstreams, piloting the 48-hour conversion framework for the first time.',
     'Amsterdam, Netherlands',
     '2025-11-14',
     '2025-11-15',
     'From Decision to Action: The 48-Hour Standard',
-    'archived'
+    'completed'
   ),
   (
     '00000000-c003-0000-0000-000000000003',
     2026,
+    'Scale What Works: Platform-Driven Impact',
     'Inspire2Live Congress 2026',
     'Congress 2026 will convene patient advocates, researchers, clinicians, and partners to advance the next generation of cross-border cancer initiatives. Theme: scaling what works.',
     'Amsterdam, Netherlands',
     '2026-11-13',
     '2026-11-14',
     'Scale What Works: Platform-Driven Impact',
-    'open_for_topics'
+    'upcoming'
   )
 ON CONFLICT (year) DO NOTHING;
 
 -- Link 2025 and 2026 to their predecessors
-UPDATE congress_events SET parent_event_id = '00000000-c001-0000-0000-000000000001' WHERE year = 2025;
-UPDATE congress_events SET parent_event_id = '00000000-c002-0000-0000-000000000002' WHERE year = 2026;
+UPDATE congress_events
+SET parent_event_id = (SELECT id FROM congress_events WHERE year = 2024 LIMIT 1)
+WHERE year = 2025;
+
+UPDATE congress_events
+SET parent_event_id = (SELECT id FROM congress_events WHERE year = 2025 LIMIT 1)
+WHERE year = 2026;
 
 -- ── Seed: congress_themes ─────────────────────────────────────────────────────
 INSERT INTO congress_themes (id, title, description, color, first_year)
 VALUES
-  ('00000000-t001-0000-0000-000000000001', 'Patient-Led Evidence', 'Ensuring patients co-create and co-own the evidence that shapes cancer care policy and research.', 'orange', 2024),
-  ('00000000-t002-0000-0000-000000000002', 'Equitable Access', 'Removing barriers to diagnostics, trials, and treatments across income levels, geographies, and health system capabilities.', 'blue', 2024),
-  ('00000000-t003-0000-0000-000000000003', 'Decision-to-Action Pipeline', 'Converting congress decisions into measurable actions within 48 hours — the operational backbone of governance.', 'emerald', 2025),
-  ('00000000-t004-0000-0000-000000000004', 'Cross-Border Collaboration', 'Building durable multi-country alliances around shared cancer priorities.', 'violet', 2024),
-  ('00000000-t005-0000-0000-000000000005', 'Platform & Digital Infrastructure', 'Using technology to make collaboration, traceability, and transparency the default.', 'rose', 2025)
+  ('00000000-a001-0000-0000-000000000001', 'Patient-Led Evidence', 'Ensuring patients co-create and co-own the evidence that shapes cancer care policy and research.', 'orange', 2024),
+  ('00000000-a002-0000-0000-000000000002', 'Equitable Access', 'Removing barriers to diagnostics, trials, and treatments across income levels, geographies, and health system capabilities.', 'blue', 2024),
+  ('00000000-a003-0000-0000-000000000003', 'Decision-to-Action Pipeline', 'Converting congress decisions into measurable actions within 48 hours — the operational backbone of governance.', 'emerald', 2025),
+  ('00000000-a004-0000-0000-000000000004', 'Cross-Border Collaboration', 'Building durable multi-country alliances around shared cancer priorities.', 'violet', 2024),
+  ('00000000-a005-0000-0000-000000000005', 'Platform & Digital Infrastructure', 'Using technology to make collaboration, traceability, and transparency the default.', 'rose', 2025)
 ON CONFLICT DO NOTHING;
 
 -- Link themes to events
 INSERT INTO congress_event_themes (event_id, theme_id) VALUES
-  ('00000000-c001-0000-0000-000000000001', '00000000-t001-0000-0000-000000000001'),
-  ('00000000-c001-0000-0000-000000000001', '00000000-t002-0000-0000-000000000002'),
-  ('00000000-c001-0000-0000-000000000001', '00000000-t004-0000-0000-000000000004'),
-  ('00000000-c002-0000-0000-000000000002', '00000000-t001-0000-0000-000000000001'),
-  ('00000000-c002-0000-0000-000000000002', '00000000-t003-0000-0000-000000000003'),
-  ('00000000-c002-0000-0000-000000000002', '00000000-t004-0000-0000-000000000004'),
-  ('00000000-c003-0000-0000-000000000003', '00000000-t002-0000-0000-000000000002'),
-  ('00000000-c003-0000-0000-000000000003', '00000000-t003-0000-0000-000000000003'),
-  ('00000000-c003-0000-0000-000000000003', '00000000-t004-0000-0000-000000000004'),
-  ('00000000-c003-0000-0000-000000000003', '00000000-t005-0000-0000-000000000005')
+  ((SELECT id FROM congress_events WHERE year = 2024 LIMIT 1), '00000000-a001-0000-0000-000000000001'),
+  ((SELECT id FROM congress_events WHERE year = 2024 LIMIT 1), '00000000-a002-0000-0000-000000000002'),
+  ((SELECT id FROM congress_events WHERE year = 2024 LIMIT 1), '00000000-a004-0000-0000-000000000004'),
+  ((SELECT id FROM congress_events WHERE year = 2025 LIMIT 1), '00000000-a001-0000-0000-000000000001'),
+  ((SELECT id FROM congress_events WHERE year = 2025 LIMIT 1), '00000000-a003-0000-0000-000000000003'),
+  ((SELECT id FROM congress_events WHERE year = 2025 LIMIT 1), '00000000-a004-0000-0000-000000000004'),
+  ((SELECT id FROM congress_events WHERE year = 2026 LIMIT 1), '00000000-a002-0000-0000-000000000002'),
+  ((SELECT id FROM congress_events WHERE year = 2026 LIMIT 1), '00000000-a003-0000-0000-000000000003'),
+  ((SELECT id FROM congress_events WHERE year = 2026 LIMIT 1), '00000000-a004-0000-0000-000000000004'),
+  ((SELECT id FROM congress_events WHERE year = 2026 LIMIT 1), '00000000-a005-0000-0000-000000000005')
 ON CONFLICT DO NOTHING;
 
 -- Update existing congress decisions to link to 2026 event
 UPDATE congress_decisions
-SET event_id = '00000000-c003-0000-0000-000000000003',
+SET event_id = (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
     congress_year = 2026
 WHERE event_id IS NULL;
 
 -- Update existing congress topics to link to 2026 event
 UPDATE congress_topics
-SET event_id = '00000000-c003-0000-0000-000000000003'
+SET event_id = (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1)
 WHERE event_id IS NULL;
 
 -- ── Seed: congress_sessions for 2026 ─────────────────────────────────────────
-INSERT INTO congress_sessions (id, event_id, title, session_type, agenda_order, start_time, end_time, room, status, description)
+INSERT INTO congress_sessions (id, congress_id, event_id, title, session_type, agenda_order, start_time, end_time, room, status, description)
 VALUES
   (
-    '00000000-s001-0000-0000-000000000001',
-    '00000000-c003-0000-0000-000000000003',
+    '00000000-b001-0000-0000-000000000001',
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
     'Opening Plenary: The State of Patient Advocacy 2026',
     'plenary', 1,
     '2026-11-13 09:00:00+00', '2026-11-13 10:00:00+00',
@@ -321,8 +356,9 @@ VALUES
     'Annual keynote reviewing the state of patient advocacy across Inspire2Live initiatives, with spotlight on 2025 congress decision outcomes.'
   ),
   (
-    '00000000-s002-0000-0000-000000000002',
-    '00000000-c003-0000-0000-000000000003',
+    '00000000-b002-0000-0000-000000000002',
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
     'Workshop: Multi-Stakeholder Initiative Design',
     'workshop', 2,
     '2026-11-13 10:30:00+00', '2026-11-13 12:00:00+00',
@@ -331,8 +367,9 @@ VALUES
     'Interactive workshop developing templates and principles for building effective cross-border, multi-stakeholder cancer initiatives.'
   ),
   (
-    '00000000-s003-0000-0000-000000000003',
-    '00000000-c003-0000-0000-000000000003',
+    '00000000-b003-0000-0000-000000000003',
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
     'Panel: Scaling Equitable Access to Diagnostics',
     'panel', 3,
     '2026-11-13 13:30:00+00', '2026-11-13 15:00:00+00',
@@ -341,8 +378,9 @@ VALUES
     'Expert panel examining what it takes to scale molecular diagnostics access across income levels and health systems.'
   ),
   (
-    '00000000-s004-0000-0000-000000000004',
-    '00000000-c003-0000-0000-000000000003',
+    '00000000-b004-0000-0000-000000000004',
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
     'Working Group: Decision-to-Task Conversion Review',
     'working_group', 4,
     '2026-11-13 15:30:00+00', '2026-11-13 17:00:00+00',
@@ -351,8 +389,9 @@ VALUES
     'Structured review of all pending congress decisions from 2025, converting outstanding items to tasks and documenting blockers.'
   ),
   (
-    '00000000-s005-0000-0000-000000000005',
-    '00000000-c003-0000-0000-000000000003',
+    '00000000-b005-0000-0000-000000000005',
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
     'Keynote: Platform as Infrastructure for Impact',
     'keynote', 5,
     '2026-11-14 09:00:00+00', '2026-11-14 10:00:00+00',
@@ -361,8 +400,9 @@ VALUES
     'Keynote on the Inspire2Live digital platform as the operational backbone of the community — past achievements and future roadmap.'
   ),
   (
-    '00000000-s006-0000-0000-000000000006',
-    '00000000-c003-0000-0000-000000000003',
+    '00000000-b006-0000-0000-000000000006',
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
     'Closing: Congress Decisions & Commitments',
     'plenary', 6,
     '2026-11-14 15:00:00+00', '2026-11-14 16:30:00+00',

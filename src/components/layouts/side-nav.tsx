@@ -12,6 +12,7 @@ import type { AccessLevel, PlatformSpace } from '@/lib/permissions'
 
 const ALL_NAV_ITEMS: { key: PlatformSpace; label: string; href: string }[] = [
   { key: 'dashboard',   label: 'Dashboard',       href: '/app/dashboard' },
+  { key: 'comms',       label: 'Communications',  href: '/app/comms' },
   { key: 'initiatives', label: 'Initiatives',      href: '/app/initiatives' },
   { key: 'tasks',       label: 'My Tasks',         href: '/app/tasks' },
   { key: 'bureau',      label: 'Bureau',           href: '/app/bureau' },
@@ -94,6 +95,7 @@ const NetworkIcon = () => (
 function iconForKey(key: PlatformSpace) {
   switch (key) {
     case 'dashboard':   return <DashIcon />
+    case 'comms':       return <StoriesIcon />
     case 'initiatives': return <InitIcon />
     case 'tasks':       return <TaskIcon />
     case 'bureau':      return <BureauIcon />
