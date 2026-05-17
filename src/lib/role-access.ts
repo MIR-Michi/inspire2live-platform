@@ -56,6 +56,7 @@ export function getRoleBadgeColor(role?: string | null): string {
 
 export type NavKey =
   | 'dashboard'
+  | 'comms'
   | 'initiatives'
   | 'tasks'
   | 'bureau'
@@ -108,6 +109,7 @@ const NAV_BY_ROLE: Record<PlatformRole, NavItemConfig[]> = {
   ],
   Moderator: [
     { key: 'dashboard',     label: 'Dashboard',       href: '/app/dashboard' },
+    { key: 'comms',         label: 'Communications',  href: '/app/comms' },
     { key: 'stories',       label: 'Stories',         href: '/app/stories' },
     { key: 'network',       label: 'My Network',      href: '/app/network' },
     { key: 'congress',      label: 'Congress',        href: '/app/congress/workspace' },
@@ -145,6 +147,7 @@ const NAV_BY_ROLE: Record<PlatformRole, NavItemConfig[]> = {
   ],
   PlatformAdmin: [
     { key: 'dashboard',     label: 'Dashboard',       href: '/app/dashboard' },
+    { key: 'comms',         label: 'Communications',  href: '/app/comms' },
     { key: 'bureau',        label: 'Bureau',          href: '/app/bureau' },
     { key: 'initiatives',   label: 'All Initiatives', href: '/app/initiatives' },
     { key: 'network',       label: 'My Network',      href: '/app/network' },
@@ -182,9 +185,16 @@ export function canAccessAppPath(role: string | null | undefined, pathname: stri
  * Returns filtered nav items for a role, excluding any space with access level 'invisible'.
  * Uses the permissions resolver as the gate — single source of truth.
  */
-export function getSideNavItems(role: string | null | undefined): NavItemConfig[] {
+export function getSideNavItems(
+  role: string | null | undefined,
+  options?: { showComms?: boolean }
+): NavItemConfig[] {
+  const normalized = normalizeRole(role)
   const all = NAV_BY_ROLE[normalizeRole(role)]
   return all.filter((item) => {
+    if (item.key === 'comms' && normalized !== 'PlatformAdmin') {
+      return options?.showComms === true
+    }
     const level = resolveAccessFromRole(role, item.key as PlatformSpace)
     return level !== 'invisible'
   })

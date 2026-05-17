@@ -1,4 +1,4 @@
-﻿-- ─────────────────────────────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
 -- Migration 00013: Congress assignments (2-layer role model)
 -- Adds congress-level responsibility mapping without duplicating platform roles.
 --
@@ -69,5 +69,4 @@ from public.profiles p
 join public.congress_events ce on ce.year = 2026
 where p.email in ('michael.wittinger@gmail.com')
 on conflict do nothing;
-
 

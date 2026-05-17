@@ -1,4 +1,4 @@
-﻿-- ─────────────────────────────────────────────────────────────────────────────
+-- ─────────────────────────────────────────────────────────────────────────────
 -- WP-5: Resource Library + Partner Portal
 -- New tables: resource_translations, partner_applications, partner_audit_log
 -- Extends: resources (adds version, translation_status, is_partner_contribution,
@@ -55,9 +55,19 @@ CREATE TABLE IF NOT EXISTS partner_applications (
 );
 
 -- Aliases to match FK names used in page selects
-ALTER TABLE partner_applications
-  RENAME CONSTRAINT IF EXISTS partner_applications_submitted_by_id_fkey
-  TO partner_applications_submitted_by_fkey;
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'partner_applications_submitted_by_id_fkey'
+  ) THEN
+    ALTER TABLE partner_applications
+      RENAME CONSTRAINT partner_applications_submitted_by_id_fkey
+      TO partner_applications_submitted_by_fkey;
+  END IF;
+END;
+$$;
 
 -- Actually simpler to just create the right view aliases via index
 CREATE INDEX IF NOT EXISTS partner_applications_submitted_by_idx ON partner_applications(submitted_by_id);
@@ -139,92 +149,106 @@ CREATE TRIGGER trg_partner_app_status
 -- and inserts new library resources.
 -- First update existing resources from WP-3 seed (seeded in 00005/00006)
 UPDATE resources SET
-  version = '1.0',
-  translation_status = 'in_progress',
+  version = COALESCE(version, 1),
+  translation_status = 'needs_translation',
   is_partner_contribution = false,
   superseded = false
-WHERE version IS NULL OR version = '';
+WHERE version IS NULL OR translation_status NOT IN ('original', 'translated', 'needs_translation');
 
 -- Insert new WP-5 library resources
 WITH
   mced AS (SELECT id FROM initiatives WHERE slug = 'mced-patient-voice-2024' LIMIT 1),
   mdx  AS (SELECT id FROM initiatives WHERE slug = 'molecular-dx-eu-access' LIMIT 1),
-  prom AS (SELECT id FROM initiatives WHERE slug = 'prom-standardisation' LIMIT 1)
-INSERT INTO resources (title, type, language, version, cancer_type, translation_status, is_partner_contribution, partner_org, superseded, initiative_id, created_at)
+  prom AS (SELECT id FROM initiatives WHERE slug = 'prom-standardisation' LIMIT 1),
+  sophie AS (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1)
+INSERT INTO resources (
+  title,
+  type,
+  uploaded_by_id,
+  language,
+  version,
+  cancer_types,
+  translation_status,
+  is_partner_contribution,
+  partner_organization,
+  superseded,
+  initiative_id,
+  created_at
+)
 VALUES
   -- MCED resources
   (
     'MCED Patient Information Leaflet v2 — English',
-    'report', 'en', '2.0', 'breast', 'complete',
+    'report', (SELECT id FROM sophie), 'en', 2, ARRAY['breast']::text[], 'translated',
     false, NULL, false,
     (SELECT id FROM mced), '2026-01-10 09:00:00+00'
   ),
   (
     'MCED Patient Information Leaflet v2 — German',
-    'report', 'de', '2.0', 'breast', 'complete',
+    'report', (SELECT id FROM sophie), 'de', 2, ARRAY['breast']::text[], 'translated',
     false, NULL, false,
     (SELECT id FROM mced), '2026-01-15 09:00:00+00'
   ),
   (
     'MCED Patient Information Leaflet v1 — English (superseded)',
-    'report', 'en', '1.0', 'breast', 'complete',
+    'report', (SELECT id FROM sophie), 'en', 1, ARRAY['breast']::text[], 'translated',
     false, NULL, true,
     (SELECT id FROM mced), '2025-10-01 09:00:00+00'
   ),
   (
     'MCED Inclusion Criteria Protocol v1.2',
-    'protocol', 'en', '1.2', NULL, 'needed',
+    'document', (SELECT id FROM sophie), 'en', 1, NULL, 'needs_translation',
     false, NULL, false,
     (SELECT id FROM mced), '2026-01-20 09:00:00+00'
   ),
   -- MDx EU resources
   (
     'Molecular Diagnostics EU Access Report 2025',
-    'report', 'en', '1.0', 'lung', 'in_progress',
+    'report', (SELECT id FROM sophie), 'en', 1, ARRAY['lung']::text[], 'needs_translation',
     false, NULL, false,
     (SELECT id FROM mdx), '2026-01-05 09:00:00+00'
   ),
   (
     'Liquid Biopsy Reimbursement Advocacy Toolkit',
-    'template', 'en', '1.0', NULL, 'needed',
+    'template', (SELECT id FROM sophie), 'en', 1, NULL, 'needs_translation',
     true, 'Roche Diagnostics GmbH', false,
     (SELECT id FROM mdx), '2026-01-22 09:00:00+00'
   ),
   (
     'MDx EU Clinical Evidence Summary — Partner Contribution',
-    'paper', 'en', '1.0', 'colorectal', 'needed',
+    'document', (SELECT id FROM sophie), 'en', 1, ARRAY['colorectal']::text[], 'needs_translation',
     true, 'Illumina Europe Ltd', false,
     (SELECT id FROM mdx), '2026-01-25 09:00:00+00'
   ),
   -- PROM resources
   (
     'EQ-5D-5L Implementation Guide for Cancer Studies',
-    'guideline', 'en', '1.0', NULL, 'in_progress',
+    'document', (SELECT id FROM sophie), 'en', 1, NULL, 'needs_translation',
     false, NULL, false,
     (SELECT id FROM prom), '2026-02-01 09:00:00+00'
   ),
   (
     'PROM Data Collection Template — Multi-language',
-    'template', 'en', '1.0', NULL, 'complete',
+    'template', (SELECT id FROM sophie), 'en', 1, NULL, 'translated',
     false, NULL, false,
     (SELECT id FROM prom), '2026-02-05 09:00:00+00'
   ),
   (
     'PROM Validation Literature Review — Breast Cancer',
-    'paper', 'en', '1.0', 'breast', 'needed',
+    'document', (SELECT id FROM sophie), 'en', 1, ARRAY['breast']::text[], 'needs_translation',
     false, NULL, false,
     (SELECT id FROM prom), '2026-02-10 09:00:00+00'
   ),
   -- Platform-wide
   (
     'Inspire2Live Governance Framework v3',
-    'guideline', 'en', '3.0', NULL, 'complete',
+    'document', (SELECT id FROM sophie), 'en', 3, NULL, 'translated',
     false, NULL, false,
     NULL, '2025-09-01 09:00:00+00'
   ),
   (
     'Patient Engagement Best Practices — Presentation',
-    'presentation', 'en', '1.0', NULL, 'in_progress',
+    'recording', (SELECT id FROM sophie), 'en', 1, NULL, 'needs_translation',
     false, NULL, false,
     NULL, '2026-01-08 09:00:00+00'
   );
@@ -262,7 +286,7 @@ VALUES
     'Provision of liquid biopsy technical data and support materials for the Molecular Diagnostics EU Access initiative. No commercial claims to be made from outputs. All contributions will be labelled as Partner Contribution.',
     true, 'approved',
     'Application reviewed and approved by Bureau on 2026-01-20. Scope is clearly bounded and neutrality declaration accepted.',
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'molecular-dx-eu-access' LIMIT 1),
     '2026-01-10 10:00:00+00'
   ),
@@ -273,7 +297,7 @@ VALUES
     'Co-authorship contribution to the clinical evidence summary for molecular diagnostics access in the EU. Organisation will provide sequencing data analysis methodology. No editorial control over final outputs.',
     true, 'approved',
     'Approved with condition: all Illumina contributions labelled separately. Data sharing agreement to be signed before access granted.',
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'molecular-dx-eu-access' LIMIT 1),
     '2026-01-14 14:00:00+00'
   ),
@@ -284,7 +308,7 @@ VALUES
     'Request to co-sponsor the PROM standardisation initiative and contribute validated PROM datasets from the BEACON trial. Seeking observer status at working group sessions.',
     true, 'clarify',
     'Bureau requests clarification on the data provenance of the BEACON trial datasets and confirmation that patient consent covers secondary use in advocacy research.',
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'prom-standardisation' LIMIT 1),
     '2026-02-08 09:00:00+00'
   ),
@@ -294,13 +318,13 @@ VALUES
     'thomas.vanderberg@janssen.com',
     'Request to provide translation funding and project management support for the MCED Patient Information Leaflet localisation project (DE, FR, ES, NL, PL).',
     true, 'submitted', NULL,
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'mced-patient-voice-2024' LIMIT 1),
     '2026-02-15 11:00:00+00'
   );
 
 -- ── Seed Data: Partner Audit Log ──────────────────────────────────────────────
-WITH sophie AS (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1)
+WITH sophie AS (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1)
 INSERT INTO partner_audit_log (partner_application_id, actor_id, action, note, created_at)
 SELECT
   pa.id,
@@ -311,7 +335,7 @@ SELECT
 FROM partner_applications pa;
 
 -- Log approval events
-WITH sophie AS (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1)
+WITH sophie AS (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1)
 INSERT INTO partner_audit_log (partner_application_id, actor_id, action, note, created_at)
 SELECT
   pa.id,

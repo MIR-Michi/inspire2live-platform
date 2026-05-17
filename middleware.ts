@@ -1,6 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { canAccessAppPath } from '@/lib/role-access'
+import { canAccessCommsWorkspace, getPostLoginLandingPath } from '@/lib/comms-access'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -15,6 +16,7 @@ export async function middleware(request: NextRequest) {
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
   const isOnboardingPage = pathname.startsWith('/onboarding')
   const isProtected = pathname.startsWith('/app')
+  const isCommsRoute = pathname === '/app/comms' || pathname.startsWith('/app/comms/')
 
   // Without Supabase credentials (e.g. CI without secrets), treat every request
   // as unauthenticated. Protected routes still redirect to /login so smoke tests
@@ -65,24 +67,32 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  if (user && isAuthPage) {
-    const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = '/app/dashboard'
-    return NextResponse.redirect(redirectUrl)
-  }
+  let profile: {
+    onboarding_completed: boolean | null
+    role: string | null
+    comms_team: boolean | null
+  } | null = null
 
-  if (user && !isOnboardingPage && !isAuthPage) {
-    let profile: { onboarding_completed: boolean | null; role: string | null } | null = null
+  if (user) {
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('onboarding_completed, role')
+        .select('onboarding_completed, role, comms_team')
         .eq('id', user.id)
         .maybeSingle()
       profile = data
     } catch {
       // Treat profile lookup failure as no profile; downstream guards handle it.
     }
+  }
+
+  if (user && isAuthPage) {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = getPostLoginLandingPath(profile?.role, profile?.comms_team)
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  if (user && !isOnboardingPage && !isAuthPage) {
 
     if (profile && profile.onboarding_completed === false && isProtected) {
       const redirectUrl = request.nextUrl.clone()
@@ -91,7 +101,9 @@ export async function middleware(request: NextRequest) {
     }
 
     if (profile?.onboarding_completed && isProtected) {
-      const allowed = canAccessAppPath(profile.role, pathname)
+      const allowed = isCommsRoute
+        ? canAccessCommsWorkspace(profile.role, profile.comms_team)
+        : canAccessAppPath(profile.role, pathname)
       if (!allowed) {
         const redirectUrl = request.nextUrl.clone()
         redirectUrl.pathname = '/app/dashboard'

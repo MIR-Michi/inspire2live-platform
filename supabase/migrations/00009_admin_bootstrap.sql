@@ -1,4 +1,4 @@
-﻿-- ============================================================
+-- ============================================================
 -- Migration 00009: Admin bootstrap
 -- Sets michael.wittinger@gmail.com as PlatformAdmin
 -- Adds RLS policies so PlatformAdmin can read/update all profiles

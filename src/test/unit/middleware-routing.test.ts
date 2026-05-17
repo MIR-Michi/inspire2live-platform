@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest'
+import { canAccessCommsWorkspace, getPostLoginLandingPath } from '@/lib/comms-access'
 
 /**
  * Unit tests for middleware routing logic.
@@ -18,20 +19,25 @@ import { describe, it, expect } from 'vitest'
 type RoutingInput = {
   user: boolean
   onboardingCompleted: boolean | null
+  role?: string | null
+  commsTeam?: boolean | null
   pathname: string
 }
 
 function resolveRedirect(input: RoutingInput): string | null {
-  const { user, onboardingCompleted, pathname } = input
+  const { user, onboardingCompleted, pathname, role = null, commsTeam = null } = input
 
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
   const isOnboardingPage = pathname.startsWith('/onboarding')
   const isProtected = pathname.startsWith('/app')
 
   if (!user && isProtected) return '/login'
-  if (user && isAuthPage) return '/app/dashboard'
+  if (user && isAuthPage) return getPostLoginLandingPath(role, commsTeam)
   if (user && !isOnboardingPage && !isAuthPage && onboardingCompleted === false && isProtected) {
     return '/onboarding'
+  }
+  if (user && onboardingCompleted && pathname.startsWith('/app/comms')) {
+    return canAccessCommsWorkspace(role, commsTeam) ? null : '/app/dashboard'
   }
   return null
 }
@@ -70,6 +76,18 @@ describe('Middleware routing logic', () => {
       ).toBe('/app/dashboard')
     })
 
+    it('redirects comms-team users away from /login to /app/comms/intake', () => {
+      expect(
+        resolveRedirect({
+          user: true,
+          onboardingCompleted: true,
+          role: 'Moderator',
+          commsTeam: true,
+          pathname: '/login',
+        })
+      ).toBe('/app/comms/intake')
+    })
+
     it('passes through to /app/dashboard without redirect', () => {
       expect(
         resolveRedirect({ user: true, onboardingCompleted: true, pathname: '/app/dashboard' })
@@ -101,6 +119,30 @@ describe('Middleware routing logic', () => {
       expect(
         resolveRedirect({ user: true, onboardingCompleted: false, pathname: '/login' })
       ).toBe('/app/dashboard')
+    })
+
+    it('blocks non-comms users from /app/comms routes', () => {
+      expect(
+        resolveRedirect({
+          user: true,
+          onboardingCompleted: true,
+          role: 'Moderator',
+          commsTeam: false,
+          pathname: '/app/comms/intake',
+        })
+      ).toBe('/app/dashboard')
+    })
+
+    it('allows comms-team moderators to access /app/comms routes', () => {
+      expect(
+        resolveRedirect({
+          user: true,
+          onboardingCompleted: true,
+          role: 'Moderator',
+          commsTeam: true,
+          pathname: '/app/comms/intake',
+        })
+      ).toBeNull()
     })
   })
 })

@@ -4,9 +4,11 @@ import { TopNav } from '@/components/layouts/top-nav'
 import { SideNav } from '@/components/layouts/side-nav'
 import { canAccessAppPath, normalizeRole } from '@/lib/role-access'
 import { resolveAllSpaces } from '@/lib/permissions'
+import type { AccessLevel } from '@/lib/permissions'
 import { getViewAsRole } from '@/lib/view-as'
 import { switchPerspective } from './admin/view-as-action'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
+import { canAccessCommsWorkspace } from '@/lib/comms-access'
 
 function getInitials(name: string): string {
   return name
@@ -27,7 +29,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('name, role, onboarding_completed')
+    .select('name, role, onboarding_completed, comms_team')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -61,6 +63,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Uses effectiveRole (view-as aware) so preview mode reflects the target role's defaults,
   // but DB overrides are looked up by the actual user's id.
   const effectiveSpaces = await resolveAllSpaces(user.id, effectiveRole, supabase)
+  const showCommsNav = isAdmin || canAccessCommsWorkspace(actualRole, profile?.comms_team)
+  const effectiveSpacesWithComms = showCommsNav
+    ? {
+        ...effectiveSpaces,
+        comms: (isAdmin ? 'manage' : 'edit') as AccessLevel,
+      }
+    : effectiveSpaces
 
   return (
     <RoleLayersProvider platformRole={effectiveRole}>
@@ -88,9 +97,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           unreadCount={unread ?? 0}
           isAdmin={isAdmin}
           viewAsRole={viewAsRole}
+          showCommsNav={showCommsNav}
         />
         <div className="flex min-h-0 flex-1">
-          <SideNav effectiveSpaces={effectiveSpaces} isAdmin={isAdmin} />
+          <SideNav effectiveSpaces={effectiveSpacesWithComms} isAdmin={isAdmin} />
           <main
             className="flex-1 overflow-y-auto px-3 py-4 md:p-6"
             role="main"

@@ -168,114 +168,185 @@ CREATE POLICY "users_manage_own_votes" ON congress_topic_votes
 --   PROM   → 'init-prom-2024'
 -- We reference by subquery to remain portable.
 
+INSERT INTO congress_sessions (
+  id,
+  congress_id,
+  title,
+  description,
+  start_time,
+  end_time,
+  room,
+  session_lead_id,
+  note_taker_id,
+  decision_capture_id
+)
+VALUES (
+  '40000000-0000-0000-0000-000000000101',
+  (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+  'Congress Decisions Review',
+  'Structured decision review session used to seed congress decision follow-up data.',
+  '2026-02-07 09:00:00+00',
+  '2026-02-07 17:00:00+00',
+  'Main Hall',
+  (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
+  (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
+  (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1)
+)
+ON CONFLICT (id) DO NOTHING;
+
 WITH
   mced AS (SELECT id FROM initiatives WHERE slug = 'mced-patient-voice-2024' LIMIT 1),
   mdx  AS (SELECT id FROM initiatives WHERE slug = 'molecular-dx-eu-access' LIMIT 1),
   prom AS (SELECT id FROM initiatives WHERE slug = 'prom-standardisation' LIMIT 1)
-INSERT INTO congress_decisions (title, body, initiative_id, session_date, captured_at, conversion_status)
+INSERT INTO congress_decisions (
+  session_id,
+  description,
+  proposed_by,
+  initiative_id,
+  captured_at,
+  conversion_status,
+  title,
+  body,
+  session_date
+)
 VALUES
   (
+    '40000000-0000-0000-0000-000000000101',
+    'Mandate translation of all patient-facing MCED materials into 6 EU languages',
+    'Congress bureau',
+    (SELECT id FROM mced),
+    '2026-01-17 10:30:00+00',
+    'converted',
     'Mandate translation of all patient-facing MCED materials into 6 EU languages',
     'Congress agreed that all materials produced under the MCED initiative must be translated into DE, FR, ES, IT, NL, PL before distribution. Responsibility assigned to Hub Coordinator.',
-    (SELECT id FROM mced),
-    '2026-01-17',
-    '2026-01-17 10:30:00+00',
-    'converted'
+    '2026-01-17'
   ),
   (
+    '40000000-0000-0000-0000-000000000101',
+    'Establish quarterly patient-reported outcomes review cadence for MCED',
+    'Congress bureau',
+    (SELECT id FROM mced),
+    '2026-01-17 11:15:00+00',
+    'pending',
     'Establish quarterly patient-reported outcomes review cadence for MCED',
     'A standing quarterly review of patient-reported outcomes data will be integrated into the MCED governance calendar, starting Q2 2026.',
-    (SELECT id FROM mced),
-    '2026-01-17',
-    '2026-01-17 11:15:00+00',
-    'pending'
+    '2026-01-17'
   ),
   (
+    '40000000-0000-0000-0000-000000000101',
+    'Pilot Molecular Diagnostics reimbursement model in 3 member states',
+    'Congress bureau',
+    (SELECT id FROM mdx),
+    '2026-01-17 14:00:00+00',
+    'converted',
     'Pilot Molecular Diagnostics reimbursement model in 3 member states',
     'Congress approved a 6-month pilot of a harmonised reimbursement advocacy model for liquid biopsy across BE, NL, AT. Results to be reviewed at next congress.',
-    (SELECT id FROM mdx),
-    '2026-01-17',
-    '2026-01-17 14:00:00+00',
-    'converted'
+    '2026-01-17'
   ),
   (
+    '40000000-0000-0000-0000-000000000101',
+    'Approve formal partnership with ESMO for molecular diagnostics guideline development',
+    'Congress bureau',
+    (SELECT id FROM mdx),
+    '2026-01-17 15:30:00+00',
+    'needs_clarification',
     'Approve formal partnership with ESMO for molecular diagnostics guideline development',
     'Pending legal review of the ESMO partnership framework. Congress to reconvene on this decision once neutrality review completes.',
-    (SELECT id FROM mdx),
-    '2026-01-17',
-    '2026-01-17 15:30:00+00',
-    'needs_clarification'
+    '2026-01-17'
   ),
   (
+    '40000000-0000-0000-0000-000000000101',
+    'Adopt EQ-5D-5L and EORTC QLQ-C30 as mandatory PROM instruments',
+    'Congress bureau',
+    (SELECT id FROM prom),
+    '2026-02-07 09:45:00+00',
+    'converted',
     'Adopt EQ-5D-5L and EORTC QLQ-C30 as mandatory PROM instruments',
     'After reviewing patient input from the PROM working group, Congress mandated use of EQ-5D-5L and EORTC QLQ-C30 as the baseline PROM battery across all initiatives.',
-    (SELECT id FROM prom),
-    '2026-02-07',
-    '2026-02-07 09:45:00+00',
-    'converted'
+    '2026-02-07'
   ),
   (
+    '40000000-0000-0000-0000-000000000101',
+    'Commission systematic review of cancer-specific PROM validation literature',
+    'Congress bureau',
+    (SELECT id FROM prom),
+    '2026-02-07 11:00:00+00',
+    'pending',
     'Commission systematic review of cancer-specific PROM validation literature',
     'A systematic literature review of validated PROMs for breast, lung, and colorectal cancer will be commissioned, to be completed by Q3 2026.',
-    (SELECT id FROM prom),
-    '2026-02-07',
-    '2026-02-07 11:00:00+00',
-    'pending'
+    '2026-02-07'
   ),
   (
+    '40000000-0000-0000-0000-000000000101',
+    'Allocate dedicated Congress session to platform progress review',
+    'Congress bureau',
+    NULL,
+    '2026-02-07 16:00:00+00',
+    'pending',
     'Allocate dedicated Congress session to platform progress review',
     'A 30-minute standing agenda item for platform KPI review will be added to each Congress session from March 2026 onward.',
-    NULL,
-    '2026-02-07',
-    '2026-02-07 16:00:00+00',
-    'pending'
+    '2026-02-07'
   );
 
 -- ── Seed Data: Congress Topics ────────────────────────────────────────────────
--- submitted_by references Sophie (coordinator) inserted in WP-3 seed
+-- submitted_by references seeded demo users from WP-3 seed
 -- Using subquery on profiles.email
-INSERT INTO congress_topics (title, description, submitted_by, initiative_id, status, vote_count, created_at)
+INSERT INTO congress_topics (
+  congress_id,
+  submitter_id,
+  title,
+  description,
+  related_initiative_id,
+  status,
+  vote_count,
+  created_at
+)
 VALUES
   (
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     'Unified digital consent framework for multi-country studies',
     'We currently have inconsistent consent processes across member states. Propose that Congress endorses a unified digital consent framework aligned with GDPR Art.9 for all initiative data collection activities.',
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
     NULL,
-    'approved',
+    'accepted',
     12,
     '2026-02-01 08:00:00+00'
   ),
   (
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'maria@inspire2live.org' LIMIT 1),
     'Mandate bi-annual patient experience surveys for all active initiatives',
     'To ensure we maintain authentic patient-centred governance, propose mandatory bi-annual patient experience surveys with results shared at Congress.',
-    (SELECT id FROM profiles WHERE email = 'maria.advocate@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'mced-patient-voice-2024' LIMIT 1),
-    'discussing',
+    'under_review',
     9,
     '2026-02-03 10:00:00+00'
   ),
   (
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     'Create an industry partner advisory council with non-voting observer status',
     'Industry partners bring expertise but must remain non-voting to preserve integrity. Propose formalising an advisory council with quarterly input sessions and observer status at Congress.',
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
     NULL,
     'submitted',
     7,
     '2026-02-05 14:00:00+00'
   ),
   (
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'kai@inspire2live.org' LIMIT 1),
     'Establish PROM data sharing agreement with academic cancer registries',
     'Sharing anonymised PROM data with academic registries would accelerate research. Request Congress approval for a standard data-sharing agreement template.',
-    (SELECT id FROM profiles WHERE email = 'dr.chen.researcher@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'prom-standardisation' LIMIT 1),
     'submitted',
     5,
     '2026-02-10 09:00:00+00'
   ),
   (
+    (SELECT id FROM congress_events WHERE year = 2026 LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'peter@inspire2live.org' LIMIT 1),
     'Publish annual platform transparency report',
     'To maintain stakeholder trust, Inspire2Live should publish an annual transparency report covering governance decisions, partner interactions, and initiative outcomes.',
-    (SELECT id FROM profiles WHERE email = 'peter.board@inspire2live.org' LIMIT 1),
     NULL,
     'submitted',
     4,
@@ -289,36 +360,36 @@ INSERT INTO notifications (user_id, initiative_id, type, title, body, is_read, c
 VALUES
   -- Sophie notifications
   (
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'mced-patient-voice-2024' LIMIT 1),
-    'task_overdue',
+    'task_assigned',
     'Task overdue: Conduct baseline PRA literature review',
     'This task has been overdue for 3 days. The owner has not logged any activity.',
     false,
     now() - interval '2 hours'
   ),
   (
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'molecular-dx-eu-access' LIMIT 1),
-    'inactivity_alert',
+    'inactivity_nudge',
     'Inactivity alert: James Thornton (18 days inactive)',
     'James Thornton has not accessed the platform in 18 days. Consider sending a nudge.',
     false,
     now() - interval '4 hours'
   ),
   (
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     NULL,
-    'decision_pending',
+    'decision_flagged',
     'Congress decision pending conversion (48h)',
     '"Establish quarterly patient-reported outcomes review cadence" was captured 49 hours ago and has not been converted to a task.',
     false,
     now() - interval '1 hour'
   ),
   (
-    (SELECT id FROM profiles WHERE email = 'sophie.coordinator@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'sophie@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'prom-standardisation' LIMIT 1),
-    'milestone_due',
+    'milestone_approaching',
     'Milestone due in 5 days: PROM instrument validation report',
     'The "PROM instrument validation report" milestone is due on 2026-02-24. 2 tasks remain open.',
     true,
@@ -326,7 +397,7 @@ VALUES
   ),
   -- Maria notifications
   (
-    (SELECT id FROM profiles WHERE email = 'maria.advocate@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'maria@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'mced-patient-voice-2024' LIMIT 1),
     'task_assigned',
     'New task assigned: Review MCED patient survey draft',
@@ -335,18 +406,18 @@ VALUES
     now() - interval '3 hours'
   ),
   (
-    (SELECT id FROM profiles WHERE email = 'maria.advocate@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'maria@inspire2live.org' LIMIT 1),
     (SELECT id FROM initiatives WHERE slug = 'mced-patient-voice-2024' LIMIT 1),
-    'discussion_reply',
+    'new_discussion',
     'New reply in: Inclusion criteria for rare cancer subtypes',
     'Dr. Elena Vasquez replied to your comment: "I agree with your concern about the current wording — let me propose revised language."',
     false,
     now() - interval '6 hours'
   ),
   (
-    (SELECT id FROM profiles WHERE email = 'maria.advocate@inspire2live.org' LIMIT 1),
+    (SELECT id FROM profiles WHERE email = 'maria@inspire2live.org' LIMIT 1),
     NULL,
-    'member_joined',
+    'initiative_joined',
     'New member joined Inspire2Live: Amara Osei',
     'Amara Osei (Patient Advocate, Ghana) has joined the platform and is requesting to join the MCED initiative.',
     true,

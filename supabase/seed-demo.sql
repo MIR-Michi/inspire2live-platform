@@ -74,6 +74,16 @@ INSERT INTO auth.users (
     '{"name":"Platform Admin","role":"PlatformAdmin","country":"NL"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
     '', '', false
+  ),
+  (
+    'a0000001-0000-0000-0000-000000000007',
+    '00000000-0000-0000-0000-000000000000',
+    'atefeh@inspire2live.org',
+    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    now(),
+    '{"name":"Atefeh Rahimi","role":"Moderator","country":"NL","comms_team":true}'::jsonb,
+    'authenticated', 'authenticated', now(), now(),
+    '', '', false
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -98,18 +108,35 @@ INSERT INTO auth.identities (
    'email', 'a0000001-0000-0000-0000-000000000005', now(), now(), now()),
   ('a0000001-0000-0000-0000-000000000006', 'a0000001-0000-0000-0000-000000000006',
    '{"sub":"a0000001-0000-0000-0000-000000000006","email":"admin@inspire2live.org"}'::jsonb,
-   'email', 'a0000001-0000-0000-0000-000000000006', now(), now(), now())
+   'email', 'a0000001-0000-0000-0000-000000000006', now(), now(), now()),
+  ('a0000001-0000-0000-0000-000000000007', 'a0000001-0000-0000-0000-000000000007',
+   '{"sub":"a0000001-0000-0000-0000-000000000007","email":"atefeh@inspire2live.org"}'::jsonb,
+   'email', 'a0000001-0000-0000-0000-000000000007', now(), now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Profiles (trigger may auto-create, but we ensure completeness) ──────
-INSERT INTO public.profiles (id, name, email, role, organization, country, city, expertise_tags, bio, onboarding_completed, last_active_at)
+INSERT INTO public.profiles (
+  id,
+  name,
+  email,
+  role,
+  organization,
+  country,
+  city,
+  expertise_tags,
+  bio,
+  onboarding_completed,
+  last_active_at,
+  comms_team
+)
 VALUES
-  ('a0000001-0000-0000-0000-000000000001', 'Sophie van der Berg', 'sophie@inspire2live.org', 'HubCoordinator', 'Inspire2Live Foundation', 'NL', 'Amsterdam', ARRAY['coordination','patient-engagement','research-translation'], 'Hub Coordinator for the Netherlands. Passionate about connecting patients with researchers.', true, now() - interval '1 day'),
-  ('a0000001-0000-0000-0000-000000000002', 'Maria Hofer', 'maria@inspire2live.org', 'PatientAdvocate', 'Austrian Cancer Aid', 'AT', 'Vienna', ARRAY['breast-cancer','patient-voice','advocacy'], 'Patient advocate with 8 years experience in breast cancer communities.', true, now() - interval '3 days'),
-  ('a0000001-0000-0000-0000-000000000003', 'Peter Lindqvist', 'peter@inspire2live.org', 'BoardMember', 'Nordic Oncology Foundation', 'SE', 'Stockholm', ARRAY['governance','funding','strategy'], 'Board member focused on sustainable funding for patient-led research.', true, now() - interval '10 days'),
-  ('a0000001-0000-0000-0000-000000000004', 'Dr. Kai Bergmann', 'kai@inspire2live.org', 'Researcher', 'Charite Berlin', 'DE', 'Berlin', ARRAY['molecular-diagnostics','liquid-biopsy','MCED'], 'Translational researcher specialising in multi-cancer early detection technologies.', true, now() - interval '2 days'),
-  ('a0000001-0000-0000-0000-000000000005', 'Dr. Nadia Rousseau', 'nadia@inspire2live.org', 'Clinician', 'Institut Gustave Roussy', 'FR', 'Paris', ARRAY['clinical-trials','outcomes-research','breast-cancer'], 'Oncologist and clinical trialist with focus on patient-reported outcomes.', true, now() - interval '1 day'),
-  ('a0000001-0000-0000-0000-000000000006', 'Platform Admin', 'admin@inspire2live.org', 'PlatformAdmin', 'Inspire2Live', 'NL', 'Amsterdam', ARRAY['platform-admin','user-management'], 'Platform administrator with full access to all features.', true, now())
+  ('a0000001-0000-0000-0000-000000000001', 'Sophie van der Berg', 'sophie@inspire2live.org', 'HubCoordinator', 'Inspire2Live Foundation', 'NL', 'Amsterdam', ARRAY['coordination','patient-engagement','research-translation'], 'Hub Coordinator for the Netherlands. Passionate about connecting patients with researchers.', true, now() - interval '1 day', false),
+  ('a0000001-0000-0000-0000-000000000002', 'Maria Hofer', 'maria@inspire2live.org', 'PatientAdvocate', 'Austrian Cancer Aid', 'AT', 'Vienna', ARRAY['breast-cancer','patient-voice','advocacy'], 'Patient advocate with 8 years experience in breast cancer communities.', true, now() - interval '3 days', false),
+  ('a0000001-0000-0000-0000-000000000003', 'Peter Lindqvist', 'peter@inspire2live.org', 'BoardMember', 'Nordic Oncology Foundation', 'SE', 'Stockholm', ARRAY['governance','funding','strategy'], 'Board member focused on sustainable funding for patient-led research.', true, now() - interval '10 days', false),
+  ('a0000001-0000-0000-0000-000000000004', 'Dr. Kai Bergmann', 'kai@inspire2live.org', 'Researcher', 'Charite Berlin', 'DE', 'Berlin', ARRAY['molecular-diagnostics','liquid-biopsy','MCED'], 'Translational researcher specialising in multi-cancer early detection technologies.', true, now() - interval '2 days', false),
+  ('a0000001-0000-0000-0000-000000000005', 'Dr. Nadia Rousseau', 'nadia@inspire2live.org', 'Clinician', 'Institut Gustave Roussy', 'FR', 'Paris', ARRAY['clinical-trials','outcomes-research','breast-cancer'], 'Oncologist and clinical trialist with focus on patient-reported outcomes.', true, now() - interval '1 day', false),
+  ('a0000001-0000-0000-0000-000000000006', 'Platform Admin', 'admin@inspire2live.org', 'PlatformAdmin', 'Inspire2Live', 'NL', 'Amsterdam', ARRAY['platform-admin','user-management'], 'Platform administrator with full access to all features.', true, now(), false),
+  ('a0000001-0000-0000-0000-000000000007', 'Atefeh Rahimi', 'atefeh@inspire2live.org', 'Moderator', 'Inspire2Live Communications', 'NL', 'Amsterdam', ARRAY['moderation','communications','story-distribution'], 'Moderator supporting the communications workspace and community publishing flow.', true, now() - interval '4 hours', true)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   role = EXCLUDED.role,
@@ -119,7 +146,8 @@ ON CONFLICT (id) DO UPDATE SET
   expertise_tags = EXCLUDED.expertise_tags,
   bio = EXCLUDED.bio,
   onboarding_completed = true,
-  last_active_at = EXCLUDED.last_active_at;
+  last_active_at = EXCLUDED.last_active_at,
+  comms_team = EXCLUDED.comms_team;
 
 -- ============================================================
 -- INSTRUCTIONS:

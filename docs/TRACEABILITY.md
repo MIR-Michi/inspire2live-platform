@@ -49,6 +49,20 @@ Format: `REQ-[DOMAIN]-[NNN]` — see `docs/IMPLEMENTATION_GUIDE.md` §5 for doma
 
 ## Phase 1 — MVP Build
 
+### L0: Communications Workspace Foundation
+
+| Requirement ID | Description | Design Doc Ref | Status | Code Location | Last Verified | Notes |
+|---|---|---|---|---|---|---|
+| REQ-COMMS-001 | Communications intake queue schema with review/routing fields | Concept Update §11 | `done` | `supabase/migrations/00028_comms_intake_items.sql` | 2026-05-17 | Verified locally after making older migrations compatible: Supabase applied through `00035` and `pnpm dlx supabase@2.76.10 db lint --local --fail-on error` returned no schema errors |
+| REQ-COMMS-002 | Communications event pipeline and content calendar schema | Concept Update §11 | `done` | `supabase/migrations/00029_comms_events.sql`, `supabase/migrations/00033_comms_content_calendar.sql` | 2026-05-17 | Verified in the same local migration-only apply and clean schema lint run |
+| REQ-COMMS-003 | World Campus session, member, and media asset schema foundation | Concept Update §11 | `done` | `supabase/migrations/00030_comms_campus_sessions.sql`, `00031_comms_media_assets.sql`, `00032_comms_campus_members.sql` | 2026-05-17 | Verified in local Supabase after resolving older congress migration incompatibilities |
+| REQ-COMMS-004 | Communications access flag on profiles and comms-only RLS policies | Concept Update §9, §11 | `done` | `supabase/migrations/00034_profiles_comms_team.sql`, `00035_comms_permissions_rls.sql` | 2026-05-17 | Verified via local migration apply through `00035` plus clean schema lint |
+| REQ-COMMS-005 | Generated application types updated for the communications schema | Concept Update §11 | `done` | `src/types/database.ts` | 2026-05-17 | TypeScript compile passes after schema type updates |
+| REQ-COMMS-006 | Communications workspace shell with five placeholder sub-routes | Concept Update §10 | `done` | `src/app/app/comms/layout.tsx`, `src/app/app/comms/*`, `src/components/comms/comms-placeholder.tsx` | 2026-05-17 | Layout, nav tabs, redirect, and placeholder pages compile successfully |
+| REQ-COMMS-007 | Communications post-login routing and gated navigation visibility | Concept Update §9, §10 | `done` | `src/lib/comms-access.ts`, `src/app/auth/callback/route.ts`, `middleware.ts`, `src/app/app/layout.tsx`, `src/lib/role-access.ts`, `src/components/layouts/*` | 2026-05-17 | Middleware and navigation regression tests pass |
+| REQ-COMMS-008 | Demo comms-team persona and regression tests for communications access | Concept Update §9, MVP verification | `done` | `supabase/seed-demo.sql`, `src/test/unit/middleware-routing.test.ts`, `src/test/unit/role-access.test.ts`, `src/test/unit/permissions.test.ts` | 2026-05-17 | Added Atefeh moderator persona with `comms_team = true`; unit test suite passes |
+| REQ-COMMS-009 | Communications permission model and architecture decision captured in docs | Concept Update §9, §11 | `done` | `docs/ROLE_PERMISSION_MODEL.md`, `docs/ADR/0006-communications-workspace.md` | 2026-05-17 | Governance docs now reflect the communications module and access rules |
+
 ### L1: Core Continuity
 
 | Requirement ID | Description | Design Doc Ref | Status | Code Location | Last Verified | Notes |

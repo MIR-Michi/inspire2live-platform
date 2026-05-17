@@ -97,6 +97,271 @@ export type Database = {
           },
         ]
       }
+      campus_members: {
+        Row: {
+          country: string | null
+          created_at: string
+          date_welcomed: string | null
+          id: string
+          initiative_affiliations: string[] | null
+          last_channel_activity: string | null
+          name: string
+          notes: string | null
+          organisation: string | null
+          platform_profile_id: string | null
+          role_description: string | null
+          updated_at: string
+          welcomed_by_peter: boolean
+          whatsapp_id: string | null
+        }
+        Insert: {
+          country?: string | null
+          created_at?: string
+          date_welcomed?: string | null
+          id?: string
+          initiative_affiliations?: string[] | null
+          last_channel_activity?: string | null
+          name: string
+          notes?: string | null
+          organisation?: string | null
+          platform_profile_id?: string | null
+          role_description?: string | null
+          updated_at?: string
+          welcomed_by_peter?: boolean
+          whatsapp_id?: string | null
+        }
+        Update: {
+          country?: string | null
+          created_at?: string
+          date_welcomed?: string | null
+          id?: string
+          initiative_affiliations?: string[] | null
+          last_channel_activity?: string | null
+          name?: string
+          notes?: string | null
+          organisation?: string | null
+          platform_profile_id?: string | null
+          role_description?: string | null
+          updated_at?: string
+          welcomed_by_peter?: boolean
+          whatsapp_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campus_members_platform_profile_id_fkey"
+            columns: ["platform_profile_id"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "campus_members_platform_profile_id_fkey"
+            columns: ["platform_profile_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_members_platform_profile_id_fkey"
+            columns: ["platform_profile_id"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+        ]
+      }
+      campus_sessions: {
+        Row: {
+          action_items_for_publication: string[] | null
+          created_at: string
+          created_by: string | null
+          id: string
+          initiative_ids: string[] | null
+          participating_hub_ids: string[] | null
+          published_outputs: string[] | null
+          recording_url: string | null
+          session_date: string
+          slides_media_id: string | null
+          summary: string | null
+          theme: string | null
+          updated_at: string
+        }
+        Insert: {
+          action_items_for_publication?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          initiative_ids?: string[] | null
+          participating_hub_ids?: string[] | null
+          published_outputs?: string[] | null
+          recording_url?: string | null
+          session_date: string
+          slides_media_id?: string | null
+          summary?: string | null
+          theme?: string | null
+          updated_at?: string
+        }
+        Update: {
+          action_items_for_publication?: string[] | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          initiative_ids?: string[] | null
+          participating_hub_ids?: string[] | null
+          published_outputs?: string[] | null
+          recording_url?: string | null
+          session_date?: string
+          slides_media_id?: string | null
+          summary?: string | null
+          theme?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "campus_sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "campus_sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "campus_sessions_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+          {
+            foreignKeyName: "campus_sessions_slides_media_id_fkey"
+            columns: ["slides_media_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      content_calendar: {
+        Row: {
+          author_id: string | null
+          body_draft: string | null
+          channels: string[]
+          created_at: string
+          id: string
+          published_at: string | null
+          scheduled_at: string | null
+          source_event_id: string | null
+          source_initiative_id: string | null
+          source_intake_id: string | null
+          status: string
+          tags: string[] | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          author_id?: string | null
+          body_draft?: string | null
+          channels: string[]
+          created_at?: string
+          id?: string
+          published_at?: string | null
+          scheduled_at?: string | null
+          source_event_id?: string | null
+          source_initiative_id?: string | null
+          source_intake_id?: string | null
+          status?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          author_id?: string | null
+          body_draft?: string | null
+          channels?: string[]
+          created_at?: string
+          id?: string
+          published_at?: string | null
+          scheduled_at?: string | null
+          source_event_id?: string | null
+          source_initiative_id?: string | null
+          source_intake_id?: string | null
+          status?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "content_calendar_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "content_calendar_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_calendar_author_id_fkey"
+            columns: ["author_id"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+          {
+            foreignKeyName: "content_calendar_source_event_id_fkey"
+            columns: ["source_event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_calendar_source_initiative_id_fkey"
+            columns: ["source_initiative_id"]
+            isOneToOne: false
+            referencedRelation: "decision_pipeline"
+            referencedColumns: ["initiative_id"]
+          },
+          {
+            foreignKeyName: "content_calendar_source_initiative_id_fkey"
+            columns: ["source_initiative_id"]
+            isOneToOne: false
+            referencedRelation: "initiative_health"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_calendar_source_initiative_id_fkey"
+            columns: ["source_initiative_id"]
+            isOneToOne: false
+            referencedRelation: "initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "content_calendar_source_initiative_id_fkey"
+            columns: ["source_initiative_id"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["initiative_id"]
+          },
+          {
+            foreignKeyName: "content_calendar_source_intake_id_fkey"
+            columns: ["source_intake_id"]
+            isOneToOne: false
+            referencedRelation: "intake_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       congress_decisions: {
         Row: {
           id: string
@@ -299,6 +564,72 @@ export type Database = {
           color?: string
           first_year?: number
           created_at?: string
+        }
+        Relationships: []
+      }
+      events: {
+        Row: {
+          created_at: string
+          end_date: string | null
+          event_type: string
+          i2l_representatives: string[] | null
+          id: string
+          initiative_ids: string[] | null
+          is_annual_congress: boolean
+          location_city: string | null
+          location_country: string | null
+          name: string
+          notes: string | null
+          organiser: string | null
+          output_linkedin_published: boolean
+          output_media_stored: boolean
+          output_newsletter_mentioned: boolean
+          output_report_drafted: boolean
+          stage: string
+          start_date: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          end_date?: string | null
+          event_type: string
+          i2l_representatives?: string[] | null
+          id?: string
+          initiative_ids?: string[] | null
+          is_annual_congress?: boolean
+          location_city?: string | null
+          location_country?: string | null
+          name: string
+          notes?: string | null
+          organiser?: string | null
+          output_linkedin_published?: boolean
+          output_media_stored?: boolean
+          output_newsletter_mentioned?: boolean
+          output_report_drafted?: boolean
+          stage?: string
+          start_date: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          end_date?: string | null
+          event_type?: string
+          i2l_representatives?: string[] | null
+          id?: string
+          initiative_ids?: string[] | null
+          is_annual_congress?: boolean
+          location_city?: string | null
+          location_country?: string | null
+          name?: string
+          notes?: string | null
+          organiser?: string | null
+          output_linkedin_published?: boolean
+          output_media_stored?: boolean
+          output_newsletter_mentioned?: boolean
+          output_report_drafted?: boolean
+          stage?: string
+          start_date?: string
+          updated_at?: string
         }
         Relationships: []
       }
@@ -1166,6 +1497,200 @@ export type Database = {
           },
         ]
       }
+      intake_items: {
+        Row: {
+          capture_method: string
+          captured_at: string
+          classification_confidence: string | null
+          content_type: string
+          created_at: string
+          dismissed_reason: string | null
+          id: string
+          is_peter_kapitein: boolean
+          raw_content: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          routed_to_id: string | null
+          routed_to_type: string | null
+          sender_name: string
+          sender_whatsapp_id: string | null
+          source_url: string | null
+          status: string
+        }
+        Insert: {
+          capture_method: string
+          captured_at?: string
+          classification_confidence?: string | null
+          content_type: string
+          created_at?: string
+          dismissed_reason?: string | null
+          id?: string
+          is_peter_kapitein?: boolean
+          raw_content: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          routed_to_id?: string | null
+          routed_to_type?: string | null
+          sender_name: string
+          sender_whatsapp_id?: string | null
+          source_url?: string | null
+          status?: string
+        }
+        Update: {
+          capture_method?: string
+          captured_at?: string
+          classification_confidence?: string | null
+          content_type?: string
+          created_at?: string
+          dismissed_reason?: string | null
+          id?: string
+          is_peter_kapitein?: boolean
+          raw_content?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          routed_to_id?: string | null
+          routed_to_type?: string | null
+          sender_name?: string
+          sender_whatsapp_id?: string | null
+          source_url?: string | null
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_items_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "intake_items_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_items_reviewed_by_fkey"
+            columns: ["reviewed_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+        ]
+      }
+      media_assets: {
+        Row: {
+          asset_type: string
+          contributed_by: string | null
+          created_at: string
+          event_id: string | null
+          id: string
+          initiative_id: string | null
+          rights_status: string
+          session_id: string | null
+          sharepoint_url: string | null
+          storage_path: string | null
+          tags: string[] | null
+          title: string
+          usage_count: number
+        }
+        Insert: {
+          asset_type: string
+          contributed_by?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          initiative_id?: string | null
+          rights_status?: string
+          session_id?: string | null
+          sharepoint_url?: string | null
+          storage_path?: string | null
+          tags?: string[] | null
+          title: string
+          usage_count?: number
+        }
+        Update: {
+          asset_type?: string
+          contributed_by?: string | null
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          initiative_id?: string | null
+          rights_status?: string
+          session_id?: string | null
+          sharepoint_url?: string | null
+          storage_path?: string | null
+          tags?: string[] | null
+          title?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_assets_contributed_by_fkey"
+            columns: ["contributed_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "media_assets_contributed_by_fkey"
+            columns: ["contributed_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_contributed_by_fkey"
+            columns: ["contributed_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+          {
+            foreignKeyName: "media_assets_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "decision_pipeline"
+            referencedColumns: ["initiative_id"]
+          },
+          {
+            foreignKeyName: "media_assets_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "initiative_health"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_assets_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["initiative_id"]
+          },
+          {
+            foreignKeyName: "media_assets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "campus_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       milestones: {
         Row: {
           completed_date: string | null
@@ -1503,6 +2028,7 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           city: string | null
+          comms_team: boolean
           country: string
           created_at: string
           email: string
@@ -1523,6 +2049,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
+          comms_team?: boolean
           country: string
           created_at?: string
           email: string
@@ -1543,6 +2070,7 @@ export type Database = {
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
+          comms_team?: boolean
           country?: string
           created_at?: string
           email?: string
@@ -2291,6 +2819,7 @@ export type Database = {
     }
     Functions: {
       current_user_role: { Args: never; Returns: string }
+      is_comms_team_or_admin: { Args: never; Returns: boolean }
       is_coordinator_or_admin: { Args: never; Returns: boolean }
       is_initiative_lead: { Args: { init_id: string }; Returns: boolean }
       is_initiative_member: { Args: { init_id: string }; Returns: boolean }
