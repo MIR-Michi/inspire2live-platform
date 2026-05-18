@@ -3,7 +3,7 @@
 Maps design requirements to implementation status and code locations.  
 **Source of truth for requirement IDs:** `docs/IMPLEMENTATION_GUIDE.md` §5  
 **Benchmark:** `PLATFORM_DESIGN_DOCUMENT.md` v2.0  
-**Last updated:** 2026-02-19
+**Last updated:** 2026-05-18
 
 ---
 
@@ -62,6 +62,13 @@ Format: `REQ-[DOMAIN]-[NNN]` — see `docs/IMPLEMENTATION_GUIDE.md` §5 for doma
 | REQ-COMMS-007 | Communications post-login routing and gated navigation visibility | Concept Update §9, §10 | `done` | `src/lib/comms-access.ts`, `src/app/auth/callback/route.ts`, `middleware.ts`, `src/app/app/layout.tsx`, `src/lib/role-access.ts`, `src/components/layouts/*` | 2026-05-17 | Middleware and navigation regression tests pass |
 | REQ-COMMS-008 | Demo comms-team persona and regression tests for communications access | Concept Update §9, MVP verification | `done` | `supabase/seed-demo.sql`, `src/test/unit/middleware-routing.test.ts`, `src/test/unit/role-access.test.ts`, `src/test/unit/permissions.test.ts` | 2026-05-17 | Added Atefeh moderator persona with `comms_team = true`; unit test suite passes |
 | REQ-COMMS-009 | Communications permission model and architecture decision captured in docs | Concept Update §9, §11 | `done` | `docs/ROLE_PERMISSION_MODEL.md`, `docs/ADR/0006-communications-workspace.md` | 2026-05-17 | Governance docs now reflect the communications module and access rules |
+| REQ-COMMS-010 | Manual intake capture form and server action for structured Phase 1 capture | Concept Update §7.2 | `done` | `src/app/app/comms/intake/new/page.tsx`, `src/components/comms/manual-intake-form.tsx`, `src/app/app/comms/intake/actions.ts` | 2026-05-18 | Verified with `pnpm exec tsc --noEmit`, `pnpm lint`, `pnpm test`, and `pnpm build` |
+| REQ-COMMS-011 | Intake queue review surface with filters, badges, route/edit/dismiss actions, and 90-day dismissed archive | Concept Update §7.3 | `done` | `src/app/app/comms/intake/page.tsx`, `src/components/comms/intake-queue-shell.tsx`, `src/lib/comms-workflow.ts`, `src/app/app/comms/intake/actions.ts` | 2026-05-18 | Verified in app build plus local schema lint after applying migration `00036` |
+| REQ-COMMS-012 | Routing destinations and manual classification correction log | Concept Update §7.3, §7.5 | `done` | `supabase/migrations/00036_comms_sprint02_support.sql`, `src/app/app/comms/intake/actions.ts`, `src/test/unit/comms-workflow.test.ts` | 2026-05-18 | Added destination record creation, `routed_to_*` updates, and `intake_classification_corrections` logging |
+| REQ-COMMS-013 | Content calendar monthly/list views, editor, promote-from-intake, and manual publish/archive status flow | Concept Update §6.2 | `done` | `src/app/app/comms/calendar/page.tsx`, `src/components/comms/content-calendar-shell.tsx`, `src/app/app/comms/calendar/actions.ts`, `src/lib/comms-workflow.ts` | 2026-05-18 | Verified with typecheck, lint, tests, and production build; status machine covered by unit tests |
+| REQ-COMMS-014 | Daily communications digest email with configurable send time and scheduled cron entry point | Concept Update §7.4 | `done` | `src/lib/comms-digest.ts`, `src/lib/supabase/admin.ts`, `src/app/api/comms/digest/route.ts`, `vercel.json` | 2026-05-18 | Vercel cron config validated; digest schedule uses `profiles.notification_prefs.digestDeliveryTime` with 08:00 fallback |
+| REQ-COMMS-015 | Sprint 02 communications demo seed pack (intake items + calendar drafts) | Concept Update §4, §7 | `done` | `supabase/seed-demo.sql` | 2026-05-18 | Verified by loading `seed-demo.sql` into the running local Supabase DB container after applying migration `00036`; full `supabase/seed.sql` still has a pre-existing syntax issue unrelated to Sprint 02 |
+| REQ-COMMS-016 | Sprint 02 workflow regression tests for routing and calendar status transitions | Concept Update §6.2, §7.5 | `done` | `src/test/unit/comms-workflow.test.ts` | 2026-05-18 | `pnpm test` passes with 190/190 tests green |
 
 ### L1: Core Continuity
 

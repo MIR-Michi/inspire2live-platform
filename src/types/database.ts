@@ -249,6 +249,7 @@ export type Database = {
       }
       content_calendar: {
         Row: {
+          attached_media_refs: string[]
           author_id: string | null
           body_draft: string | null
           channels: string[]
@@ -259,12 +260,14 @@ export type Database = {
           source_event_id: string | null
           source_initiative_id: string | null
           source_intake_id: string | null
+          source_link: string | null
           status: string
           tags: string[] | null
           title: string
           updated_at: string
         }
         Insert: {
+          attached_media_refs?: string[]
           author_id?: string | null
           body_draft?: string | null
           channels: string[]
@@ -275,12 +278,14 @@ export type Database = {
           source_event_id?: string | null
           source_initiative_id?: string | null
           source_intake_id?: string | null
+          source_link?: string | null
           status?: string
           tags?: string[] | null
           title: string
           updated_at?: string
         }
         Update: {
+          attached_media_refs?: string[]
           author_id?: string | null
           body_draft?: string | null
           channels?: string[]
@@ -291,6 +296,7 @@ export type Database = {
           source_event_id?: string | null
           source_initiative_id?: string | null
           source_intake_id?: string | null
+          source_link?: string | null
           status?: string
           tags?: string[] | null
           title?: string
@@ -359,6 +365,67 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "intake_items"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      comms_digest_runs: {
+        Row: {
+          digest_date: string
+          error_message: string | null
+          id: string
+          item_count: number
+          recipient_email: string
+          recipient_id: string | null
+          send_time: string
+          sent_at: string
+          status: string
+          timezone: string
+        }
+        Insert: {
+          digest_date: string
+          error_message?: string | null
+          id?: string
+          item_count?: number
+          recipient_email: string
+          recipient_id?: string | null
+          send_time: string
+          sent_at?: string
+          status: string
+          timezone?: string
+        }
+        Update: {
+          digest_date?: string
+          error_message?: string | null
+          id?: string
+          item_count?: number
+          recipient_email?: string
+          recipient_id?: string | null
+          send_time?: string
+          sent_at?: string
+          status?: string
+          timezone?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comms_digest_runs_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "comms_digest_runs_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_digest_runs_recipient_id_fkey"
+            columns: ["recipient_id"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
           },
         ]
       }
@@ -1499,6 +1566,7 @@ export type Database = {
       }
       intake_items: {
         Row: {
+          attached_media_ref: string | null
           capture_method: string
           captured_at: string
           classification_confidence: string | null
@@ -1518,6 +1586,7 @@ export type Database = {
           status: string
         }
         Insert: {
+          attached_media_ref?: string | null
           capture_method: string
           captured_at?: string
           classification_confidence?: string | null
@@ -1537,6 +1606,7 @@ export type Database = {
           status?: string
         }
         Update: {
+          attached_media_ref?: string | null
           capture_method?: string
           captured_at?: string
           classification_confidence?: string | null
@@ -1576,6 +1646,62 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "resource_library"
             referencedColumns: ["uploader_id"]
+          },
+        ]
+      }
+      intake_classification_corrections: {
+        Row: {
+          corrected_at: string
+          corrected_by: string | null
+          corrected_content_type: string
+          id: string
+          intake_item_id: string
+          previous_content_type: string
+        }
+        Insert: {
+          corrected_at?: string
+          corrected_by?: string | null
+          corrected_content_type: string
+          id?: string
+          intake_item_id: string
+          previous_content_type: string
+        }
+        Update: {
+          corrected_at?: string
+          corrected_by?: string | null
+          corrected_content_type?: string
+          id?: string
+          intake_item_id?: string
+          previous_content_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_classification_corrections_corrected_by_fkey"
+            columns: ["corrected_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "intake_classification_corrections_corrected_by_fkey"
+            columns: ["corrected_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_classification_corrections_corrected_by_fkey"
+            columns: ["corrected_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+          {
+            foreignKeyName: "intake_classification_corrections_intake_item_id_fkey"
+            columns: ["intake_item_id"]
+            isOneToOne: false
+            referencedRelation: "intake_items"
+            referencedColumns: ["id"]
           },
         ]
       }
