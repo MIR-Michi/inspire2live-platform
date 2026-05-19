@@ -18,6 +18,7 @@ export type IntakeFilter =
   | 'members'
   | 'initiative_updates'
   | 'media_requests'
+  | 'peter_messages'
   | 'dismissed'
 
 export type RouteDestination = 'calendar' | 'event' | 'campus_member' | 'media_asset'
@@ -26,6 +27,8 @@ export type CalendarChannel = 'linkedin' | 'newsletter' | 'wordpress' | 'podcast
 
 export type CalendarStatus = 'draft' | 'in_review' | 'scheduled' | 'published' | 'archived'
 
+export type EventStage = 'announced' | 'attending' | 'in_progress' | 'post_event' | 'archived'
+
 export const INTAKE_FILTERS: Array<{ key: IntakeFilter; label: string }> = [
   { key: 'all', label: 'All' },
   { key: 'events', label: 'Events' },
@@ -33,6 +36,7 @@ export const INTAKE_FILTERS: Array<{ key: IntakeFilter; label: string }> = [
   { key: 'members', label: 'Members' },
   { key: 'initiative_updates', label: 'Initiative Updates' },
   { key: 'media_requests', label: 'Media Requests' },
+  { key: 'peter_messages', label: "Peter's messages" },
   { key: 'dismissed', label: 'Dismissed' },
 ]
 
@@ -109,7 +113,18 @@ export const CALENDAR_STATUS_META: Record<
   archived: { label: 'Archived', tone: 'violet' },
 }
 
-const FILTER_TYPE_MAP: Record<Exclude<IntakeFilter, 'all' | 'dismissed'>, IntakeContentType[]> = {
+export const EVENT_STAGE_META: Record<
+  EventStage,
+  { label: string; tone: 'neutral' | 'amber' | 'blue' | 'green' | 'violet' }
+> = {
+  announced: { label: 'Announced', tone: 'neutral' },
+  attending: { label: 'Attending', tone: 'blue' },
+  in_progress: { label: 'In Progress', tone: 'amber' },
+  post_event: { label: 'Post-event', tone: 'green' },
+  archived: { label: 'Archived', tone: 'violet' },
+}
+
+const FILTER_TYPE_MAP: Record<Exclude<IntakeFilter, 'all' | 'dismissed' | 'peter_messages'>, IntakeContentType[]> = {
   events: ['event_report'],
   articles: ['article_share'],
   members: ['member_intro'],
@@ -130,7 +145,7 @@ const ROUTING_OPTIONS_MAP: Record<IntakeContentType, RouteDestination[]> = {
   event_report: ['calendar', 'event', 'media_asset'],
   article_share: ['calendar', 'media_asset'],
   member_intro: ['campus_member'],
-  initiative_update: ['event', 'calendar'],
+  initiative_update: ['event', 'campus_member', 'calendar'],
   media_request: ['media_asset', 'calendar'],
   noise: [],
 }
@@ -161,11 +176,12 @@ export function getDestinationLabel(type: IntakeContentType): string {
 }
 
 export function matchesIntakeFilter(
-  item: Pick<IntakeRow, 'status' | 'content_type' | 'captured_at'>,
+  item: Pick<IntakeRow, 'status' | 'content_type' | 'captured_at' | 'is_peter_kapitein'>,
   filter: IntakeFilter,
   now = new Date()
 ) {
   if (filter === 'all') return item.status !== 'dismissed'
+  if (filter === 'peter_messages') return item.status !== 'dismissed' && Boolean(item.is_peter_kapitein)
   if (filter === 'dismissed') {
     if (item.status !== 'dismissed') return false
     const ninetyDaysAgo = new Date(now)
@@ -213,7 +229,12 @@ export function getDefaultChannelsForIntakeType(type: IntakeContentType): Calend
   }
 }
 
-export function buildCalendarDraftFromIntake(item: IntakeRow) {
+export function buildCalendarDraftFromIntake(
+  item: Pick<
+    IntakeRow,
+    'content_type' | 'sender_name' | 'raw_content' | 'source_url' | 'attached_media_ref' | 'is_peter_kapitein'
+  >
+) {
   const type = item.content_type as IntakeContentType
   return {
     title: createCalendarTitleFromIntake(item),

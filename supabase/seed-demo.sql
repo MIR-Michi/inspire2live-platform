@@ -423,6 +423,450 @@ ON CONFLICT (id) DO UPDATE SET
   attached_media_refs = EXCLUDED.attached_media_refs,
   tags = EXCLUDED.tags;
 
+-- ── Sprint 03 event pipeline seeds ───────────────────────────────────────
+INSERT INTO public.events (
+  id,
+  name,
+  event_type,
+  is_annual_congress,
+  start_date,
+  end_date,
+  location_city,
+  location_country,
+  organiser,
+  stage,
+  i2l_representatives,
+  initiative_ids,
+  output_report_drafted,
+  output_linkedin_published,
+  output_newsletter_mentioned,
+  output_media_stored,
+  notes
+)
+VALUES
+  (
+    'c0000001-0000-0000-0000-000000000201',
+    'GUIDE.MRD General Assembly Amsterdam',
+    'conference',
+    false,
+    CURRENT_DATE - 21,
+    CURRENT_DATE - 19,
+    'Amsterdam',
+    'Netherlands',
+    'GUIDE.MRD consortium',
+    'post_event',
+    ARRAY['a0000001-0000-0000-0000-000000000007', 'a0000001-0000-0000-0000-000000000006']::uuid[],
+    (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title LIMIT 1) initiative_rows),
+    true,
+    false,
+    true,
+    true,
+    'The Assembly produced a concise patient-advocacy recap, image package, and several follow-up actions for the comms queue.'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000202',
+    'Annual Congress 2026',
+    'congress',
+    true,
+    CURRENT_DATE + 35,
+    CURRENT_DATE + 37,
+    'Amsterdam',
+    'Netherlands',
+    'Inspire2Live Foundation',
+    'announced',
+    ARRAY['a0000001-0000-0000-0000-000000000006']::uuid[],
+    (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title LIMIT 2) initiative_rows),
+    false,
+    false,
+    false,
+    false,
+    'Planning banner event for the existing Congress workspace linkage.'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000203',
+    'World Campus London Forum',
+    'symposium',
+    false,
+    CURRENT_DATE + 12,
+    CURRENT_DATE + 12,
+    'London',
+    'United Kingdom',
+    'World Campus coordination',
+    'attending',
+    ARRAY['a0000001-0000-0000-0000-000000000007']::uuid[],
+    (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title OFFSET 1 LIMIT 1) initiative_rows),
+    false,
+    false,
+    false,
+    false,
+    'Comms team is preparing live coverage notes and speaker follow-up.'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000204',
+    'Precision Oncology Summit',
+    'conference',
+    false,
+    CURRENT_DATE - 1,
+    CURRENT_DATE + 1,
+    'Berlin',
+    'Germany',
+    'Precision Oncology Alliance',
+    'in_progress',
+    ARRAY['a0000001-0000-0000-0000-000000000007']::uuid[],
+    (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title OFFSET 2 LIMIT 1) initiative_rows),
+    false,
+    false,
+    false,
+    false,
+    'Live signal collection is still underway from the summit sessions.'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000205',
+    'Archived Brussels Policy Workshop',
+    'workshop',
+    false,
+    CURRENT_DATE - 180,
+    CURRENT_DATE - 179,
+    'Brussels',
+    'Belgium',
+    'European Policy Forum',
+    'archived',
+    ARRAY['a0000001-0000-0000-0000-000000000006']::uuid[],
+    null,
+    true,
+    true,
+    true,
+    true,
+    'Historical workshop kept as a reference for lifecycle and output tracking.'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  event_type = EXCLUDED.event_type,
+  is_annual_congress = EXCLUDED.is_annual_congress,
+  start_date = EXCLUDED.start_date,
+  end_date = EXCLUDED.end_date,
+  location_city = EXCLUDED.location_city,
+  location_country = EXCLUDED.location_country,
+  organiser = EXCLUDED.organiser,
+  stage = EXCLUDED.stage,
+  i2l_representatives = EXCLUDED.i2l_representatives,
+  initiative_ids = EXCLUDED.initiative_ids,
+  output_report_drafted = EXCLUDED.output_report_drafted,
+  output_linkedin_published = EXCLUDED.output_linkedin_published,
+  output_newsletter_mentioned = EXCLUDED.output_newsletter_mentioned,
+  output_media_stored = EXCLUDED.output_media_stored,
+  notes = EXCLUDED.notes;
+
+UPDATE public.content_calendar
+SET source_event_id = 'c0000001-0000-0000-0000-000000000201'
+WHERE id IN (
+  'b0000001-0000-0000-0000-000000000102',
+  'b0000001-0000-0000-0000-000000000105'
+);
+
+-- ── Sprint 03 World Campus seeds ─────────────────────────────────────────
+INSERT INTO public.campus_members (
+  id,
+  name,
+  country,
+  organisation,
+  role_description,
+  date_welcomed,
+  welcomed_by_peter,
+  initiative_affiliations,
+  notes,
+  last_channel_activity
+)
+VALUES
+  ('c0000001-0000-0000-0000-000000000401', 'Atefeh Rahimi', 'Netherlands', 'Inspire2Live Communications', 'Moderator and communications lead', CURRENT_DATE - 80, false, null, 'Operational owner of the communications shell.', now() - interval '4 hours'),
+  ('c0000001-0000-0000-0000-000000000402', 'Stephen Rowley', 'United Kingdom', 'GUIDE.MRD', 'Patient advocate and partner liaison', CURRENT_DATE - 120, false, null, 'Regular source for GUIDE.MRD updates and event follow-up.', now() - interval '1 day'),
+  ('c0000001-0000-0000-0000-000000000403', 'Jeff Waldron', 'United States', 'World Campus', 'Media and partnerships contributor', CURRENT_DATE - 115, false, null, 'Often helps recover videos and speaker clips.', now() - interval '2 days'),
+  ('c0000001-0000-0000-0000-000000000404', 'Michael from Austria', 'Austria', 'Independent advocacy network', 'Cross-border policy advocate', CURRENT_DATE - 3, true, null, 'Welcomed into the World Campus by Peter Kapitein.', now() - interval '8 hours'),
+  ('c0000001-0000-0000-0000-000000000405', 'Kemi Adekanye', 'Nigeria', 'Lagos Oncology Network', 'Community builder and initiative connector', CURRENT_DATE - 5, true, null, 'Warm introduction shared by Peter with strong World Campus relevance.', now() - interval '1 day'),
+  ('c0000001-0000-0000-0000-000000000406', 'Peter Kapitein', 'Netherlands', 'Inspire2Live Foundation', 'Founder and signal amplifier', CURRENT_DATE - 400, false, null, 'Founder presence for the signal layer and founder badge views.', now() - interval '12 hours'),
+  ('c0000001-0000-0000-0000-000000000407', 'Sophie van der Berg', 'Netherlands', 'Inspire2Live Foundation', 'Hub coordinator', CURRENT_DATE - 300, false, null, 'Helps connect local and global hub work.', now() - interval '3 days'),
+  ('c0000001-0000-0000-0000-000000000408', 'Maria Hofer', 'Austria', 'Austrian Cancer Aid', 'Patient advocate', CURRENT_DATE - 280, false, null, 'Existing advocate profile mirrored into the campus log.', now() - interval '5 days'),
+  ('c0000001-0000-0000-0000-000000000409', 'Kai Bergmann', 'Germany', 'Charite Berlin', 'Researcher', CURRENT_DATE - 260, false, null, 'Feeds article-share opportunities into comms.', now() - interval '2 days'),
+  ('c0000001-0000-0000-0000-000000000410', 'Nadia Rousseau', 'France', 'Institut Gustave Roussy', 'Clinician', CURRENT_DATE - 250, false, null, 'Bridges clinical and patient-facing comms angles.', now() - interval '6 days'),
+  ('c0000001-0000-0000-0000-000000000411', 'Barbara', 'Belgium', 'Community network', 'Community member', CURRENT_DATE - 220, false, null, 'Seen mostly in social or birthday threads.', now() - interval '9 days'),
+  ('c0000001-0000-0000-0000-000000000412', 'Michael Hofer', 'Austria', 'Regional policy alliance', 'Advocacy collaborator', CURRENT_DATE - 2, false, null, 'Self-introduction followed the welcome message from Peter.', now() - interval '6 hours')
+ON CONFLICT (id) DO UPDATE SET
+  name = EXCLUDED.name,
+  country = EXCLUDED.country,
+  organisation = EXCLUDED.organisation,
+  role_description = EXCLUDED.role_description,
+  date_welcomed = EXCLUDED.date_welcomed,
+  welcomed_by_peter = EXCLUDED.welcomed_by_peter,
+  initiative_affiliations = EXCLUDED.initiative_affiliations,
+  notes = EXCLUDED.notes,
+  last_channel_activity = EXCLUDED.last_channel_activity;
+
+INSERT INTO public.campus_sessions (
+  id,
+  session_date,
+  theme,
+  participating_hub_ids,
+  summary,
+  action_items_for_publication,
+  recording_url,
+  initiative_ids,
+  published_outputs,
+  created_by
+)
+VALUES
+  (
+    'c0000001-0000-0000-0000-000000000301',
+    CURRENT_DATE - 14,
+    'Patient voice for GUIDE.MRD event follow-up',
+    (SELECT array_agg(id) FROM (SELECT id FROM public.hubs ORDER BY name LIMIT 2) hub_rows),
+    'Reviewed the GUIDE.MRD General Assembly outputs and agreed on a recap plus newsletter mention.',
+    ARRAY['Publish LinkedIn recap with 3-5 images', 'Reuse newsletter copy in the weekly digest'],
+    'https://example.org/world-campus/guide-mrd-recording',
+    (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title LIMIT 1) initiative_rows),
+    ARRAY['b0000001-0000-0000-0000-000000000102']::uuid[],
+    'a0000001-0000-0000-0000-000000000007'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000302',
+    CURRENT_DATE - 7,
+    'Welcoming new World Campus members',
+    (SELECT array_agg(id) FROM (SELECT id FROM public.hubs ORDER BY name OFFSET 1 LIMIT 2) hub_rows),
+    'Captured new member welcomes from Peter and aligned on the follow-up intro story for Michael and Kemi.',
+    ARRAY['Draft member spotlight for newsletter', 'Confirm countries and organisation fields'],
+    'https://example.org/world-campus/welcomes-recording',
+    null,
+    ARRAY['b0000001-0000-0000-0000-000000000106']::uuid[],
+    'a0000001-0000-0000-0000-000000000007'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000303',
+    CURRENT_DATE + 4,
+    'Annual Congress coordination touchpoint',
+    (SELECT array_agg(id) FROM (SELECT id FROM public.hubs ORDER BY name LIMIT 3) hub_rows),
+    'Pre-congress sync covering intake routing, event banner visibility, and media recovery dependencies.',
+    ARRAY['Promote congress banner in event pipeline', 'Track media requests against placeholder assets'],
+    null,
+    (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title LIMIT 2) initiative_rows),
+    ARRAY['b0000001-0000-0000-0000-000000000103']::uuid[],
+    'a0000001-0000-0000-0000-000000000006'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  session_date = EXCLUDED.session_date,
+  theme = EXCLUDED.theme,
+  participating_hub_ids = EXCLUDED.participating_hub_ids,
+  summary = EXCLUDED.summary,
+  action_items_for_publication = EXCLUDED.action_items_for_publication,
+  recording_url = EXCLUDED.recording_url,
+  initiative_ids = EXCLUDED.initiative_ids,
+  published_outputs = EXCLUDED.published_outputs,
+  created_by = EXCLUDED.created_by;
+
+-- ── Sprint 03 media placeholder seeds ────────────────────────────────────
+INSERT INTO public.media_assets (
+  id,
+  title,
+  asset_type,
+  rights_status,
+  sharepoint_url,
+  contributed_by,
+  event_id,
+  tags
+)
+VALUES
+  (
+    'c0000001-0000-0000-0000-000000000501',
+    'Congress photo recovery placeholder',
+    'document',
+    'needs_clearance',
+    'SharePoint: /world-campus/congress/recovery-needed',
+    'a0000001-0000-0000-0000-000000000007',
+    'c0000001-0000-0000-0000-000000000202',
+    ARRAY['media-recovery', 'congress']
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000502',
+    'GUIDE.MRD image package placeholder',
+    'photo',
+    'needs_clearance',
+    'SharePoint: /world-campus/guide-mrd/general-assembly-photos',
+    'a0000001-0000-0000-0000-000000000007',
+    'c0000001-0000-0000-0000-000000000201',
+    ARRAY['event-report', 'guide-mrd']
+  )
+ON CONFLICT (id) DO UPDATE SET
+  title = EXCLUDED.title,
+  asset_type = EXCLUDED.asset_type,
+  rights_status = EXCLUDED.rights_status,
+  sharepoint_url = EXCLUDED.sharepoint_url,
+  contributed_by = EXCLUDED.contributed_by,
+  event_id = EXCLUDED.event_id,
+  tags = EXCLUDED.tags;
+
+-- ── Sprint 03 routed intake verification seeds ───────────────────────────
+INSERT INTO public.intake_items (
+  id,
+  captured_at,
+  capture_method,
+  sender_name,
+  raw_content,
+  content_type,
+  classification_confidence,
+  is_peter_kapitein,
+  status,
+  routed_to_type,
+  routed_to_id,
+  reviewed_by,
+  reviewed_at
+)
+VALUES
+  (
+    'c0000001-0000-0000-0000-000000000011',
+    now() - interval '11 days',
+    'manual',
+    'Stephen Rowley',
+    'GUIDE.MRD General Assembly Amsterdam report is ready for structured event follow-up and output tracking.',
+    'event_report',
+    'high',
+    false,
+    'routed',
+    'event',
+    'c0000001-0000-0000-0000-000000000201',
+    'a0000001-0000-0000-0000-000000000007',
+    now() - interval '10 days'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000012',
+    now() - interval '9 days',
+    'manual',
+    'Jeff Waldron',
+    'The GUIDE.MRD image package still needs a media placeholder entry so the comms team can recover the final files.',
+    'event_report',
+    'medium',
+    false,
+    'routed',
+    'media_asset',
+    'c0000001-0000-0000-0000-000000000502',
+    'a0000001-0000-0000-0000-000000000007',
+    now() - interval '8 days'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000013',
+    now() - interval '3 days',
+    'manual',
+    'Peter Kapitein',
+    'A warm welcome to Michael from Austria. Michael joins our World Campus network with a strong background in patient advocacy and cross-border policy work.',
+    'member_intro',
+    'high',
+    true,
+    'routed',
+    'campus_member',
+    'c0000001-0000-0000-0000-000000000404',
+    'a0000001-0000-0000-0000-000000000007',
+    now() - interval '3 days'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000014',
+    now() - interval '6 days',
+    'manual',
+    'GUIDE.MRD team',
+    'The World Campus London Forum should be linked to the initiative follow-up planning and tracked in the event pipeline.',
+    'initiative_update',
+    'medium',
+    false,
+    'routed',
+    'event',
+    'c0000001-0000-0000-0000-000000000203',
+    'a0000001-0000-0000-0000-000000000007',
+    now() - interval '5 days'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000015',
+    now() - interval '4 days',
+    'manual',
+    'Peter Kapitein',
+    'Kemi Adekanye from Nigeria is bringing strong community-building energy into the World Campus and should be visible in the member log.',
+    'initiative_update',
+    'high',
+    true,
+    'routed',
+    'campus_member',
+    'c0000001-0000-0000-0000-000000000405',
+    'a0000001-0000-0000-0000-000000000007',
+    now() - interval '4 days'
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000016',
+    now() - interval '2 days',
+    'manual',
+    'Atefeh Rahimi',
+    'We still need a placeholder for congress media recovery while the real library lands in Sprint 04.',
+    'media_request',
+    'medium',
+    false,
+    'routed',
+    'media_asset',
+    'c0000001-0000-0000-0000-000000000501',
+    'a0000001-0000-0000-0000-000000000007',
+    now() - interval '2 days'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  captured_at = EXCLUDED.captured_at,
+  sender_name = EXCLUDED.sender_name,
+  raw_content = EXCLUDED.raw_content,
+  content_type = EXCLUDED.content_type,
+  classification_confidence = EXCLUDED.classification_confidence,
+  is_peter_kapitein = EXCLUDED.is_peter_kapitein,
+  status = EXCLUDED.status,
+  routed_to_type = EXCLUDED.routed_to_type,
+  routed_to_id = EXCLUDED.routed_to_id,
+  reviewed_by = EXCLUDED.reviewed_by,
+  reviewed_at = EXCLUDED.reviewed_at;
+
+UPDATE public.intake_items
+SET
+  status = 'routed',
+  routed_to_type = 'calendar',
+  routed_to_id = 'b0000001-0000-0000-0000-000000000104',
+  reviewed_by = 'a0000001-0000-0000-0000-000000000007',
+  reviewed_at = now() - interval '2 days'
+WHERE id = 'b0000001-0000-0000-0000-000000000008';
+
+INSERT INTO public.content_calendar (
+  id,
+  title,
+  channels,
+  status,
+  scheduled_at,
+  body_draft,
+  author_id,
+  source_intake_id,
+  source_event_id,
+  tags
+)
+VALUES
+  (
+    'b0000001-0000-0000-0000-000000000106',
+    'Welcome Michael from Austria to World Campus',
+    ARRAY['linkedin', 'newsletter'],
+    'draft',
+    now() + interval '3 days',
+    'Short welcome note introducing Michael from Austria and tying his policy background into the World Campus community story.',
+    'a0000001-0000-0000-0000-000000000007',
+    'c0000001-0000-0000-0000-000000000013',
+    null,
+    ARRAY['member-spotlight', 'michael-from-austria']
+  )
+ON CONFLICT (id) DO UPDATE SET
+  title = EXCLUDED.title,
+  channels = EXCLUDED.channels,
+  status = EXCLUDED.status,
+  scheduled_at = EXCLUDED.scheduled_at,
+  body_draft = EXCLUDED.body_draft,
+  author_id = EXCLUDED.author_id,
+  source_intake_id = EXCLUDED.source_intake_id,
+  source_event_id = EXCLUDED.source_event_id,
+  tags = EXCLUDED.tags;
+
 -- ============================================================
 -- INSTRUCTIONS:
 -- 1. Go to Supabase Dashboard > SQL Editor

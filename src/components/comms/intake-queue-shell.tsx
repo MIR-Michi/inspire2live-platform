@@ -2,6 +2,7 @@
 
 import Link from 'next/link'
 import { useActionState, useMemo, useState, useTransition, type FormEvent } from 'react'
+import { FounderBadge } from '@/components/comms/founder-badge'
 import { ActionModal } from '@/components/ui/action-modal'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
@@ -11,6 +12,7 @@ import {
   sendDailyDigestNow,
   type CommsFormState,
 } from '@/app/app/comms/intake/actions'
+import { buildEventDraftFromIntake, parseCampusMemberDraft } from '@/lib/comms-routing'
 import {
   CONTENT_TYPE_META,
   INTAKE_FILTERS,
@@ -37,6 +39,11 @@ type IntakeItem = {
   dismissed_reason: string | null
 }
 
+type InitiativeOption = {
+  id: string
+  label: string
+}
+
 const INITIAL_STATE: CommsFormState = { ok: false }
 
 function formatTimestamp(input: string) {
@@ -46,7 +53,13 @@ function formatTimestamp(input: string) {
   }).format(new Date(input))
 }
 
-function RouteModal({ item }: { item: IntakeItem }) {
+function RouteModal({
+  item,
+  initiatives,
+}: {
+  item: IntakeItem
+  initiatives: InitiativeOption[]
+}) {
   const [open, setOpen] = useState(false)
   const [destination, setDestination] = useState<RouteDestination | ''>(
     (getSuggestedDestination(item.content_type as IntakeContentType) ?? '') as RouteDestination | ''
@@ -58,6 +71,8 @@ function RouteModal({ item }: { item: IntakeItem }) {
     () => getSuggestedDestination(item.content_type as IntakeContentType),
     [item.content_type]
   )
+  const parsedEvent = useMemo(() => buildEventDraftFromIntake(item), [item])
+  const parsedMember = useMemo(() => parseCampusMemberDraft(item), [item])
 
   if (item.status === 'dismissed') return null
 
@@ -119,6 +134,159 @@ function RouteModal({ item }: { item: IntakeItem }) {
               className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
             />
           </label>
+
+          {(destination === 'event' || destination === 'campus_member') && initiatives.length > 0 && (
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold text-neutral-800">Related initiative (optional)</span>
+              <select
+                name="route_initiative_id"
+                defaultValue=""
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+              >
+                <option value="">No linked initiative</option>
+                {initiatives.map((initiative) => (
+                  <option key={initiative.id} value={initiative.id}>
+                    {initiative.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          )}
+
+          {destination === 'event' && (
+            <div className="grid gap-4 rounded-2xl border border-blue-200 bg-blue-50 p-4 md:grid-cols-2">
+              <label className="block space-y-2 md:col-span-2">
+                <span className="text-sm font-semibold text-neutral-800">Event name</span>
+                <input
+                  name="event_name"
+                  defaultValue={parsedEvent.name}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Event type</span>
+                <select
+                  name="event_type"
+                  defaultValue={parsedEvent.eventType}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                >
+                  {['conference', 'workshop', 'congress', 'symposium', 'webinar', 'other'].map((eventType) => (
+                    <option key={eventType} value={eventType}>
+                      {eventType.charAt(0).toUpperCase() + eventType.slice(1)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Start date</span>
+                <input
+                  type="date"
+                  name="event_start_date"
+                  defaultValue={parsedEvent.startDate}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">End date</span>
+                <input
+                  type="date"
+                  name="event_end_date"
+                  defaultValue={parsedEvent.endDate}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Organiser</span>
+                <input
+                  name="event_organiser"
+                  defaultValue={parsedEvent.organiser}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">City</span>
+                <input
+                  name="event_location_city"
+                  defaultValue={parsedEvent.locationCity}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Country</span>
+                <input
+                  name="event_location_country"
+                  defaultValue={parsedEvent.locationCountry}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-medium text-blue-900">
+                <input
+                  type="checkbox"
+                  name="event_is_annual_congress"
+                  value="true"
+                  defaultChecked={parsedEvent.isAnnualCongress}
+                />
+                Mark as Annual Congress
+              </label>
+            </div>
+          )}
+
+          {destination === 'campus_member' && (
+            <div className="grid gap-4 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 md:grid-cols-2">
+              <input
+                type="hidden"
+                name="member_welcomed_by_peter"
+                value={parsedMember.welcomedByPeter ? 'true' : 'false'}
+              />
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Member name</span>
+                <input
+                  name="member_name"
+                  defaultValue={parsedMember.name}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Country</span>
+                <input
+                  name="member_country"
+                  defaultValue={parsedMember.country}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Organisation</span>
+                <input
+                  name="member_organisation"
+                  defaultValue={parsedMember.organisation}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <label className="block space-y-2">
+                <span className="text-sm font-semibold text-neutral-800">Role or context</span>
+                <input
+                  name="member_role_description"
+                  defaultValue={parsedMember.roleDescription}
+                  className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+                />
+              </label>
+
+              <p className="text-xs text-emerald-800 md:col-span-2">
+                Parsed from the message with simple rules. Adjust anything before saving to the Campus Log.
+              </p>
+            </div>
+          )}
 
           {destination === 'calendar' && (
             <fieldset className="space-y-2">
@@ -328,7 +496,13 @@ function DigestButton() {
   )
 }
 
-function IntakeItemCard({ item }: { item: IntakeItem }) {
+function IntakeItemCard({
+  item,
+  initiatives,
+}: {
+  item: IntakeItem
+  initiatives: InitiativeOption[]
+}) {
   const meta = getIntakeTypeMeta(item.content_type)
   const suggested = getSuggestedDestination(item.content_type as IntakeContentType)
 
@@ -338,7 +512,7 @@ function IntakeItemCard({ item }: { item: IntakeItem }) {
         <div className="space-y-2">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={meta.label} tone={meta.tone} />
-            {item.is_peter_kapitein && <StatusBadge label="Peter signal" tone="amber" />}
+            {item.is_peter_kapitein && <FounderBadge />}
             {item.classification_confidence && (
               <StatusBadge label={`Confidence: ${item.classification_confidence}`} tone="neutral" />
             )}
@@ -399,7 +573,7 @@ function IntakeItemCard({ item }: { item: IntakeItem }) {
       </div>
 
       <footer className="flex flex-wrap items-center gap-2">
-        {item.status !== 'dismissed' && <RouteModal item={item} />}
+        {item.status !== 'dismissed' && <RouteModal item={item} initiatives={initiatives} />}
         {item.status !== 'dismissed' && <ClassificationModal item={item} />}
         <DismissModal item={item} />
       </footer>
@@ -411,10 +585,12 @@ export function IntakeQueueShell({
   items,
   filter,
   unreviewedCount,
+  initiatives,
 }: {
   items: IntakeItem[]
   filter: IntakeFilter
   unreviewedCount: number
+  initiatives: InitiativeOption[]
 }) {
   return (
     <section className="space-y-6">
@@ -475,7 +651,7 @@ export function IntakeQueueShell({
       ) : (
         <div className="space-y-4">
           {items.map((item) => (
-            <IntakeItemCard key={item.id} item={item} />
+            <IntakeItemCard key={item.id} item={item} initiatives={initiatives} />
           ))}
         </div>
       )}
