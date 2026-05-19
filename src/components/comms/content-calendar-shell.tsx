@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useActionState, useEffect, useMemo, useState } from 'react'
 import { ActionModal } from '@/components/ui/action-modal'
+import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
   promoteIntakeCandidate,
@@ -11,12 +12,18 @@ import {
   type CalendarFormState,
 } from '@/app/app/comms/calendar/actions'
 import {
+  triggerLinkedInScheduleStub,
+  triggerMailchimpDraftStub,
+  triggerWordpressPublishStub,
+} from '@/app/app/comms/integration-actions'
+import {
   CALENDAR_STATUS_META,
   CHANNEL_META,
   getNextCalendarStatuses,
   groupCalendarEntriesByDay,
   type CalendarStatus,
 } from '@/lib/comms-workflow'
+import type { IntegrationStubFlags } from '@/lib/comms-integrations'
 
 type CalendarEntry = {
   id: string
@@ -259,10 +266,14 @@ function CalendarListCard({
   entry,
   authors,
   onEdit,
+  canUseWordpressStub,
+  stubFlags,
 }: {
   entry: CalendarEntry
   authors: AuthorOption[]
   onEdit: (entry: CalendarEntry) => void
+  canUseWordpressStub: boolean
+  stubFlags: IntegrationStubFlags
 }) {
   const author = authors.find((candidate) => candidate.id === entry.author_id)
   const nextStatuses = getNextCalendarStatuses(entry.status as CalendarStatus)
@@ -337,6 +348,33 @@ function CalendarListCard({
           <StatusTransitionForm key={`${entry.id}-${nextStatus}`} entryId={entry.id} nextStatus={nextStatus} />
         ))}
       </div>
+
+      <div className="flex flex-wrap gap-2">
+        {stubFlags.linkedin && (
+          <IntegrationStubForm
+            action={triggerLinkedInScheduleStub}
+            entityId={entry.id}
+            buttonLabel="LinkedIn stub"
+            className="rounded-full border border-neutral-200 px-3 py-1 text-[11px] font-semibold text-neutral-700 transition hover:bg-neutral-50"
+          />
+        )}
+        {stubFlags.mailchimp && (
+          <IntegrationStubForm
+            action={triggerMailchimpDraftStub}
+            entityId={entry.id}
+            buttonLabel="Mailchimp stub"
+            className="rounded-full border border-neutral-200 px-3 py-1 text-[11px] font-semibold text-neutral-700 transition hover:bg-neutral-50"
+          />
+        )}
+        {stubFlags.wordpress && canUseWordpressStub && (
+          <IntegrationStubForm
+            action={triggerWordpressPublishStub}
+            entityId={entry.id}
+            buttonLabel="WordPress stub"
+            className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-[11px] font-semibold text-orange-700 transition hover:bg-orange-100"
+          />
+        )}
+      </div>
     </article>
   )
 }
@@ -347,12 +385,16 @@ export function ContentCalendarShell({
   intakeCandidates,
   view,
   statusFilter,
+  canUseWordpressStub,
+  stubFlags,
 }: {
   entries: CalendarEntry[]
   authors: AuthorOption[]
   intakeCandidates: IntakeCandidate[]
   view: 'month' | 'list'
   statusFilter: 'all' | CalendarStatus
+  canUseWordpressStub: boolean
+  stubFlags: IntegrationStubFlags
 }) {
   const [editorOpen, setEditorOpen] = useState(false)
   const [editingEntry, setEditingEntry] = useState<CalendarEntry | null>(null)
@@ -524,7 +566,14 @@ export function ContentCalendarShell({
       ) : (
         <div className="space-y-4">
           {filteredEntries.map((entry) => (
-            <CalendarListCard key={entry.id} entry={entry} authors={authors} onEdit={openEditModal} />
+            <CalendarListCard
+              key={entry.id}
+              entry={entry}
+              authors={authors}
+              onEdit={openEditModal}
+              canUseWordpressStub={canUseWordpressStub}
+              stubFlags={stubFlags}
+            />
           ))}
           {filteredEntries.length === 0 && (
             <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-14 text-center">

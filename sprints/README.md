@@ -13,13 +13,15 @@ Active delivery is organised into **two-week sprints**. Each sprint folder is th
   - `ID` — `S{NN}-T{NN}` task identifier.
   - `Task` — what is being built.
   - `Owner` — who is accountable (default: TBD until sprint start).
-  - `Status` — one of: `Not Started` · `In Progress` · `Completed`.
+  - `Status` — one of: `Not Started` · `In Progress` · `Completed` · `Blocked`.
   - `Notes` — links to PRs, ADRs, blockers.
 
 ## Task status workflow
 
 ```
 Not Started ──▶ In Progress ──▶ Completed
+                     │
+                     ├─▶ Blocked
                      │
                      └─▶ (move to next sprint if descoped, with note)
 ```
@@ -37,7 +39,13 @@ The MVP is the **Communications Workspace pilot** per `docs/PLATFORM_CONCEPT_UPD
 | 03 | [`sprint-03-events-and-campus-log/`](sprint-03-events-and-campus-log/description.md) | Event pipeline + World Campus Log + Peter signal layer | 5–6 | M4 — Full routing |
 | 04 | [`sprint-04-media-and-pilot-launch/`](sprint-04-media-and-pilot-launch/description.md) | Media library + integration stubs + comms team pilot | 7–8 | M5 — Pilot live |
 
-After Sprint 04 ships the MVP, Phase 2 begins: WhatsApp Business API webhook, rule-based classifier, WordPress/LinkedIn/Mailchimp publish APIs, SharePoint Graph API, re-promotion of the initiative workspace. Phase 2 will be planned into Sprint 05+ once the Sprint 04 retrospective is complete.
+After Sprint 04 ships the MVP, Phase 2 begins: WhatsApp Business API webhook, rule-based classifier, WordPress/LinkedIn/Mailchimp publish APIs, SharePoint Graph API, re-promotion of the initiative workspace. Draft placeholder backlogs now exist for:
+
+- [`sprint-05-intake-automation-and-classification/`](sprint-05-intake-automation-and-classification/description.md)
+- [`sprint-06-publishing-connectors-and-distribution/`](sprint-06-publishing-connectors-and-distribution/description.md)
+- [`sprint-07-media-graph-and-pilot-hardening/`](sprint-07-media-graph-and-pilot-hardening/description.md)
+
+These remain planning placeholders until the Sprint 04 pilot review is complete.
 
 ## How to read a sprint
 

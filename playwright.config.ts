@@ -30,7 +30,7 @@ export default defineConfig({
     // Locally, use the dev server for fast iteration.
     command: process.env.CI ? 'pnpm start' : 'pnpm dev',
     url: 'http://localhost:3000',
-    reuseExistingServer: !process.env.CI,
+    reuseExistingServer: !process.env.CI && process.env.PW_FORCE_FRESH_SERVER !== 'true',
     // Production build + startup can take up to 3 min on cold CI runners
     timeout: 180_000,
   },

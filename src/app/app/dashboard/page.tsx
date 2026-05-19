@@ -444,6 +444,7 @@ export default async function DashboardPage() {
     member_joined:    { icon: '👤', color: 'bg-orange-100 text-orange-700' },
     initiative_update:{ icon: '🚀', color: 'bg-teal-100 text-teal-700' },
     org_update:       { icon: '📢', color: 'bg-amber-100 text-amber-700' },
+    media_recovery_offer: { icon: '🖼️', color: 'bg-violet-100 text-violet-700' },
   }
 
   const NEWSFEED_META: Record<string, { label: string; color: string }> = {

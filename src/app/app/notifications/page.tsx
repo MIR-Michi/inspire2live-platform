@@ -10,6 +10,7 @@ const TYPE_ICON: Record<string, string> = {
   member_joined: '👤',
   initiative_update: '📊',
   invite_received: '✉️',
+  media_recovery_offer: '🖼️',
 }
 
 function timeAgo(dateStr: string): string {
@@ -48,14 +49,14 @@ export default async function NotificationsPage() {
 
   const notifications = useDemo
     ? DEMO_NOTIFICATIONS
-    : dbNotifs!.map(n => ({
+      : dbNotifs!.map(n => ({
         id: n.id,
         type: n.type,
         title: n.title ?? '',
         body: n.body ?? '',
         is_read: n.is_read,
         created_at: n.created_at,
-        link: (n as unknown as { link?: string }).link ?? null,
+        link: (n as unknown as { link_url?: string; link?: string }).link_url ?? (n as unknown as { link?: string }).link ?? null,
         invitation_id: null as string | null,
       }))
 

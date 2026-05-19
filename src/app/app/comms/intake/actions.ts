@@ -24,6 +24,7 @@ import {
   type ParsedCampusMemberDraft,
 } from '@/lib/comms-routing'
 import { sendDailyCommsDigest } from '@/lib/comms-digest'
+import { buildRecoveryTitle } from '@/lib/comms-media'
 import type { Database } from '@/types/database'
 
 export interface CommsFormState {
@@ -60,7 +61,6 @@ type CampusMemberRecord = Pick<
   | 'last_channel_activity'
   | 'initiative_affiliations'
 >
-
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -110,6 +110,7 @@ async function createDestinationRecord(
     eventDraft,
     memberDraft,
     linkedInitiativeId,
+    mediaRecoveryRequestId,
   }: {
     item: IntakeItemRow
     userId: string
@@ -124,6 +125,7 @@ async function createDestinationRecord(
       welcomedByPeter?: boolean
     }
     linkedInitiativeId?: string | null
+    mediaRecoveryRequestId?: string | null
   }
 ) {
   const title = titleOverride || summarizeRawContent(item.raw_content, 80)
@@ -267,6 +269,79 @@ async function createDestinationRecord(
     return { routedToId: data?.id ?? null, routedToType: 'campus_member' }
   }
 
+  if ((item.content_type as IntakeContentType) === 'media_request') {
+    if (mediaRecoveryRequestId) {
+      const { data: request, error: requestError } = await sb
+        .from('media_recovery_requests')
+        .select('id, title, requested_by')
+        .eq('id', mediaRecoveryRequestId)
+        .maybeSingle()
+
+      if (requestError) throw new Error(requestError.message)
+      if (!request) throw new Error('Selected recovery request was not found.')
+
+      const { data: offer, error: offerError } = await sb
+        .from('media_recovery_offers')
+        .insert({
+          recovery_request_id: request.id,
+          intake_item_id: item.id,
+          offered_by: item.sender_name,
+          notes: item.raw_content,
+          sharepoint_url: item.attached_media_ref || item.source_url,
+        })
+        .select('id')
+        .maybeSingle()
+
+      if (offerError) throw new Error(offerError.message)
+
+      const recipientIds = request.requested_by
+        ? [request.requested_by]
+        : (
+            await sb
+              .from('profiles')
+              .select('id, role, comms_team')
+              .in('role', ['PlatformAdmin', 'Moderator'])
+          ).data
+            ?.filter(
+              (profile) =>
+                profile.role === 'PlatformAdmin' || (profile.role === 'Moderator' && profile.comms_team)
+            )
+            .map((profile) => profile.id) ?? []
+
+      if (recipientIds.length > 0) {
+        const { error: notificationError } = await sb.from('notifications').insert(
+          recipientIds.map((recipientId) => ({
+            user_id: recipientId,
+            type: 'media_recovery_offer',
+            title: `New media offer for ${request.title}`,
+            body: `${item.sender_name} added a new offer to an open media recovery request.`,
+            is_read: false,
+            link_url: '/app/comms/media',
+          }))
+        )
+
+        if (notificationError) throw new Error(notificationError.message)
+      }
+
+      return { routedToId: request.id, routedToType: 'media_asset', offerId: offer?.id ?? null }
+    }
+
+    const { data: request, error: requestError } = await sb
+      .from('media_recovery_requests')
+      .insert({
+        title: titleOverride || buildRecoveryTitle(item.raw_content, item.sender_name),
+        summary: item.raw_content,
+        request_intake_id: item.id,
+        requested_by: userId,
+        initiative_id: linkedInitiativeId,
+      })
+      .select('id')
+      .maybeSingle()
+
+    if (requestError) throw new Error(requestError.message)
+    return { routedToId: request?.id ?? null, routedToType: 'media_asset' }
+  }
+
   const { data, error } = await sb
     .from('media_assets')
     .insert({
@@ -335,6 +410,7 @@ export async function routeIntakeItem(
     const titleOverride = asText(formData.get('route_title')) || null
     const channels = parseChannelList(formData.getAll('channels'))
     const linkedInitiativeId = asText(formData.get('route_initiative_id')) || null
+    const mediaRecoveryRequestId = asText(formData.get('media_recovery_request_id')) || null
 
     if (!intakeItemId || !requestedDestination) {
       return { ok: false, error: 'Item and destination are required.' }
@@ -387,6 +463,7 @@ export async function routeIntakeItem(
       eventDraft,
       memberDraft,
       linkedInitiativeId,
+      mediaRecoveryRequestId,
     })
 
     const { error: updateError } = await supabase
@@ -406,9 +483,14 @@ export async function routeIntakeItem(
     revalidatePath('/app/comms/calendar')
     revalidatePath('/app/comms/events')
     revalidatePath('/app/comms/campus-log')
+    revalidatePath('/app/comms/media')
+    revalidatePath('/app/notifications')
     if (route.routedToType === 'event' && route.routedToId) revalidatePath(`/app/comms/events/${route.routedToId}`)
     if (route.routedToType === 'campus_member' && route.routedToId) {
       revalidatePath(`/app/comms/campus-log/members/${route.routedToId}`)
+    }
+    if (route.routedToType === 'media_asset' && route.routedToId) {
+      revalidatePath(`/app/comms/media/${route.routedToId}`)
     }
 
     return { ok: true, message: 'Item routed successfully.' }

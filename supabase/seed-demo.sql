@@ -4,8 +4,8 @@
 -- Password for all accounts: demo1234
 -- ============================================================
 -- NOTE: This uses Supabase's internal auth schema.
--- The encrypted_password is bcrypt hash of 'demo1234'
--- Generated with: SELECT crypt('demo1234', gen_salt('bf'));
+-- The encrypted_password is generated on insert/update with:
+--   SELECT crypt('demo1234', gen_salt('bf', 10));
 
 -- ── Demo Auth Users with passwords ──────────────────────────
 -- These match the personas from 00006_wp3_initiative_seed.sql
@@ -13,79 +13,104 @@
 INSERT INTO auth.users (
   id, instance_id, email, encrypted_password, email_confirmed_at,
   raw_user_meta_data, role, aud, created_at, updated_at,
-  confirmation_token, recovery_token, is_anonymous
+  confirmation_token, recovery_token, email_change_token_new,
+  email_change, email_change_token_current, phone_change,
+  phone_change_token, reauthentication_token, is_anonymous
 ) VALUES
   (
     'a0000001-0000-0000-0000-000000000001',
     '00000000-0000-0000-0000-000000000000',
     'sophie@inspire2live.org',
-    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    crypt('demo1234', gen_salt('bf', 10)),
     now(),
     '{"name":"Sophie van der Berg","role":"HubCoordinator","country":"NL"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
-    '', '', false
+    '', '', '', '', '', '', '', '', false
   ),
   (
     'a0000001-0000-0000-0000-000000000002',
     '00000000-0000-0000-0000-000000000000',
     'maria@inspire2live.org',
-    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    crypt('demo1234', gen_salt('bf', 10)),
     now(),
     '{"name":"Maria Hofer","role":"PatientAdvocate","country":"AT"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
-    '', '', false
+    '', '', '', '', '', '', '', '', false
   ),
   (
     'a0000001-0000-0000-0000-000000000003',
     '00000000-0000-0000-0000-000000000000',
     'peter@inspire2live.org',
-    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    crypt('demo1234', gen_salt('bf', 10)),
     now(),
     '{"name":"Peter Lindqvist","role":"BoardMember","country":"SE"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
-    '', '', false
+    '', '', '', '', '', '', '', '', false
   ),
   (
     'a0000001-0000-0000-0000-000000000004',
     '00000000-0000-0000-0000-000000000000',
     'kai@inspire2live.org',
-    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    crypt('demo1234', gen_salt('bf', 10)),
     now(),
     '{"name":"Dr. Kai Bergmann","role":"Researcher","country":"DE"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
-    '', '', false
+    '', '', '', '', '', '', '', '', false
   ),
   (
     'a0000001-0000-0000-0000-000000000005',
     '00000000-0000-0000-0000-000000000000',
     'nadia@inspire2live.org',
-    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    crypt('demo1234', gen_salt('bf', 10)),
     now(),
     '{"name":"Dr. Nadia Rousseau","role":"Clinician","country":"FR"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
-    '', '', false
+    '', '', '', '', '', '', '', '', false
   ),
   (
     'a0000001-0000-0000-0000-000000000006',
     '00000000-0000-0000-0000-000000000000',
     'admin@inspire2live.org',
-    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    crypt('demo1234', gen_salt('bf', 10)),
     now(),
     '{"name":"Platform Admin","role":"PlatformAdmin","country":"NL"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
-    '', '', false
+    '', '', '', '', '', '', '', '', false
   ),
   (
     'a0000001-0000-0000-0000-000000000007',
     '00000000-0000-0000-0000-000000000000',
     'atefeh@inspire2live.org',
-    '$2a$10$PwC3lGPQtPNbVWGMpGBkaOKqFoFk5IROS.PLkpjLOEoQEKvJf6k8a',
+    crypt('demo1234', gen_salt('bf', 10)),
     now(),
     '{"name":"Atefeh Rahimi","role":"Moderator","country":"NL","comms_team":true}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
-    '', '', false
+    '', '', '', '', '', '', '', '', false
   )
 ON CONFLICT (id) DO NOTHING;
+
+UPDATE auth.users
+SET
+  encrypted_password = crypt('demo1234', gen_salt('bf', 10)),
+  aud = coalesce(aud, 'authenticated'),
+  role = coalesce(role, 'authenticated'),
+  confirmation_token = coalesce(confirmation_token, ''),
+  recovery_token = coalesce(recovery_token, ''),
+  email_change_token_new = coalesce(email_change_token_new, ''),
+  email_change = coalesce(email_change, ''),
+  email_change_token_current = coalesce(email_change_token_current, ''),
+  phone_change = coalesce(phone_change, ''),
+  phone_change_token = coalesce(phone_change_token, ''),
+  reauthentication_token = coalesce(reauthentication_token, '')
+WHERE id IN (
+  'a0000001-0000-0000-0000-000000000001',
+  'a0000001-0000-0000-0000-000000000002',
+  'a0000001-0000-0000-0000-000000000003',
+  'a0000001-0000-0000-0000-000000000004',
+  'a0000001-0000-0000-0000-000000000005',
+  'a0000001-0000-0000-0000-000000000006',
+  'a0000001-0000-0000-0000-000000000007'
+);
 
 -- Also insert into auth.identities (required by Supabase auth)
 INSERT INTO auth.identities (
@@ -661,7 +686,7 @@ ON CONFLICT (id) DO UPDATE SET
   published_outputs = EXCLUDED.published_outputs,
   created_by = EXCLUDED.created_by;
 
--- ── Sprint 03 media placeholder seeds ────────────────────────────────────
+-- ── Sprint 04 media library + recovery seeds ─────────────────────────────
 INSERT INTO public.media_assets (
   id,
   title,
@@ -670,28 +695,76 @@ INSERT INTO public.media_assets (
   sharepoint_url,
   contributed_by,
   event_id,
-  tags
+  session_id,
+  initiative_id,
+  tags,
+  usage_count
 )
 VALUES
   (
     'c0000001-0000-0000-0000-000000000501',
-    'Congress photo recovery placeholder',
-    'document',
-    'needs_clearance',
-    'SharePoint: /world-campus/congress/recovery-needed',
+    'GUIDE.MRD Amsterdam photo set',
+    'photo',
+    'approved_for_publication',
+    'https://sharepoint.example.org/world-campus/guide-mrd/amsterdam-photo-set',
     'a0000001-0000-0000-0000-000000000007',
-    'c0000001-0000-0000-0000-000000000202',
-    ARRAY['media-recovery', 'congress']
+    'c0000001-0000-0000-0000-000000000201',
+    null,
+    (SELECT id FROM public.initiatives ORDER BY title LIMIT 1),
+    ARRAY['guide-mrd', 'photos', 'event-recap'],
+    1
   ),
   (
     'c0000001-0000-0000-0000-000000000502',
-    'GUIDE.MRD image package placeholder',
-    'photo',
-    'needs_clearance',
-    'SharePoint: /world-campus/guide-mrd/general-assembly-photos',
-    'a0000001-0000-0000-0000-000000000007',
+    'GUIDE.MRD keynote clip',
+    'video',
+    'internal_only',
+    'https://sharepoint.example.org/world-campus/guide-mrd/keynote-clip',
+    'a0000001-0000-0000-0000-000000000003',
     'c0000001-0000-0000-0000-000000000201',
-    ARRAY['event-report', 'guide-mrd']
+    null,
+    (SELECT id FROM public.initiatives ORDER BY title LIMIT 1),
+    ARRAY['guide-mrd', 'video', 'keynote'],
+    0
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000503',
+    'World Campus welcome session slides',
+    'slides',
+    'approved_for_publication',
+    'https://sharepoint.example.org/world-campus/welcomes/session-slides',
+    'a0000001-0000-0000-0000-000000000006',
+    null,
+    'c0000001-0000-0000-0000-000000000302',
+    null,
+    ARRAY['world-campus', 'member-welcome', 'slides'],
+    1
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000504',
+    'GUIDE.MRD follow-up session recording',
+    'recording',
+    'internal_only',
+    'https://sharepoint.example.org/world-campus/guide-mrd/follow-up-recording',
+    'a0000001-0000-0000-0000-000000000007',
+    null,
+    'c0000001-0000-0000-0000-000000000301',
+    (SELECT id FROM public.initiatives ORDER BY title LIMIT 1),
+    ARRAY['guide-mrd', 'recording', 'world-campus'],
+    1
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000505',
+    'Annual Congress speaker gallery',
+    'photo',
+    'approved_for_publication',
+    'https://sharepoint.example.org/world-campus/congress/speaker-gallery',
+    'a0000001-0000-0000-0000-000000000007',
+    'c0000001-0000-0000-0000-000000000202',
+    null,
+    null,
+    ARRAY['congress', 'photos', 'recovered'],
+    1
   )
 ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
@@ -700,7 +773,89 @@ ON CONFLICT (id) DO UPDATE SET
   sharepoint_url = EXCLUDED.sharepoint_url,
   contributed_by = EXCLUDED.contributed_by,
   event_id = EXCLUDED.event_id,
-  tags = EXCLUDED.tags;
+  session_id = EXCLUDED.session_id,
+  initiative_id = EXCLUDED.initiative_id,
+  tags = EXCLUDED.tags,
+  usage_count = EXCLUDED.usage_count;
+
+INSERT INTO public.media_recovery_requests (
+  id,
+  title,
+  summary,
+  request_intake_id,
+  requested_by,
+  event_id,
+  status,
+  resolution_notes,
+  resolved_asset_id,
+  created_at,
+  resolved_at
+)
+VALUES
+  (
+    'c0000001-0000-0000-0000-000000000601',
+    'Congress Photos WhatsApp group or SharePoint folder',
+    'Atefeh is trying to recover the latest Annual Congress photos so the team can finish follow-up publishing.',
+    'b0000001-0000-0000-0000-000000000005',
+    'a0000001-0000-0000-0000-000000000007',
+    'c0000001-0000-0000-0000-000000000202',
+    'open',
+    null,
+    null,
+    now() - interval '22 hours',
+    null
+  ),
+  (
+    'c0000001-0000-0000-0000-000000000602',
+    'Annual Congress highlight photo recovery',
+    'Resolved recovery thread for the congress highlight set now stored in SharePoint and linked back into the media library.',
+    'c0000001-0000-0000-0000-000000000016',
+    'a0000001-0000-0000-0000-000000000007',
+    'c0000001-0000-0000-0000-000000000202',
+    'resolved',
+    'Resolved after the congress photographer uploaded the final gallery to SharePoint.',
+    'c0000001-0000-0000-0000-000000000505',
+    now() - interval '3 days',
+    now() - interval '2 days'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  title = EXCLUDED.title,
+  summary = EXCLUDED.summary,
+  request_intake_id = EXCLUDED.request_intake_id,
+  requested_by = EXCLUDED.requested_by,
+  event_id = EXCLUDED.event_id,
+  status = EXCLUDED.status,
+  resolution_notes = EXCLUDED.resolution_notes,
+  resolved_asset_id = EXCLUDED.resolved_asset_id,
+  created_at = EXCLUDED.created_at,
+  resolved_at = EXCLUDED.resolved_at;
+
+INSERT INTO public.media_recovery_offers (
+  id,
+  recovery_request_id,
+  intake_item_id,
+  offered_by,
+  notes,
+  sharepoint_url,
+  created_at
+)
+VALUES
+  (
+    'c0000001-0000-0000-0000-000000000701',
+    'c0000001-0000-0000-0000-000000000601',
+    'b0000001-0000-0000-0000-000000000006',
+    'Jeff Waldron',
+    'Jeff can share congress videos plus a folder with speaker clips for the comms wrap-up.',
+    'https://sharepoint.example.org/world-campus/congress/jeff-speaker-clips',
+    now() - interval '20 hours'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  recovery_request_id = EXCLUDED.recovery_request_id,
+  intake_item_id = EXCLUDED.intake_item_id,
+  offered_by = EXCLUDED.offered_by,
+  notes = EXCLUDED.notes,
+  sharepoint_url = EXCLUDED.sharepoint_url,
+  created_at = EXCLUDED.created_at;
 
 -- ── Sprint 03 routed intake verification seeds ───────────────────────────
 INSERT INTO public.intake_items (
@@ -739,7 +894,7 @@ VALUES
     now() - interval '9 days',
     'manual',
     'Jeff Waldron',
-    'The GUIDE.MRD image package still needs a media placeholder entry so the comms team can recover the final files.',
+    'The GUIDE.MRD keynote clip still needs to be moved into the media library so the comms team can reuse it later.',
     'event_report',
     'medium',
     false,
@@ -799,13 +954,13 @@ VALUES
     now() - interval '2 days',
     'manual',
     'Atefeh Rahimi',
-    'We still need a placeholder for congress media recovery while the real library lands in Sprint 04.',
+    'The Annual Congress highlight photo set still needs a single cleaned-up SharePoint destination for the publishing team.',
     'media_request',
     'medium',
     false,
     'routed',
     'media_asset',
-    'c0000001-0000-0000-0000-000000000501',
+    'c0000001-0000-0000-0000-000000000602',
     'a0000001-0000-0000-0000-000000000007',
     now() - interval '2 days'
   )
@@ -831,16 +986,36 @@ SET
   reviewed_at = now() - interval '2 days'
 WHERE id = 'b0000001-0000-0000-0000-000000000008';
 
+UPDATE public.intake_items
+SET
+  status = 'routed',
+  routed_to_type = 'media_asset',
+  routed_to_id = 'c0000001-0000-0000-0000-000000000601',
+  reviewed_by = 'a0000001-0000-0000-0000-000000000007',
+  reviewed_at = now() - interval '22 hours'
+WHERE id = 'b0000001-0000-0000-0000-000000000005';
+
+UPDATE public.intake_items
+SET
+  status = 'routed',
+  routed_to_type = 'media_asset',
+  routed_to_id = 'c0000001-0000-0000-0000-000000000601',
+  reviewed_by = 'a0000001-0000-0000-0000-000000000007',
+  reviewed_at = now() - interval '20 hours'
+WHERE id = 'b0000001-0000-0000-0000-000000000006';
+
 INSERT INTO public.content_calendar (
   id,
   title,
   channels,
   status,
   scheduled_at,
+  published_at,
   body_draft,
   author_id,
   source_intake_id,
   source_event_id,
+  attached_media_refs,
   tags
 )
 VALUES
@@ -850,22 +1025,78 @@ VALUES
     ARRAY['linkedin', 'newsletter'],
     'draft',
     now() + interval '3 days',
+    null,
     'Short welcome note introducing Michael from Austria and tying his policy background into the World Campus community story.',
     'a0000001-0000-0000-0000-000000000007',
     'c0000001-0000-0000-0000-000000000013',
     null,
+    ARRAY['c0000001-0000-0000-0000-000000000503']::uuid[],
     ARRAY['member-spotlight', 'michael-from-austria']
+  ),
+  (
+    'b0000001-0000-0000-0000-000000000107',
+    'Annual Congress visual follow-up',
+    ARRAY['linkedin', 'wordpress'],
+    'published',
+    now() - interval '1 day',
+    now() - interval '18 hours',
+    'Published congress follow-up using the recovered speaker gallery and a short recap for both LinkedIn and WordPress.',
+    'a0000001-0000-0000-0000-000000000006',
+    'c0000001-0000-0000-0000-000000000016',
+    'c0000001-0000-0000-0000-000000000202',
+    ARRAY['c0000001-0000-0000-0000-000000000505']::uuid[],
+    ARRAY['congress', 'media-follow-up']
   )
 ON CONFLICT (id) DO UPDATE SET
   title = EXCLUDED.title,
   channels = EXCLUDED.channels,
   status = EXCLUDED.status,
   scheduled_at = EXCLUDED.scheduled_at,
+  published_at = EXCLUDED.published_at,
   body_draft = EXCLUDED.body_draft,
   author_id = EXCLUDED.author_id,
   source_intake_id = EXCLUDED.source_intake_id,
   source_event_id = EXCLUDED.source_event_id,
+  attached_media_refs = EXCLUDED.attached_media_refs,
   tags = EXCLUDED.tags;
+
+UPDATE public.content_calendar
+SET attached_media_refs = ARRAY['c0000001-0000-0000-0000-000000000501']::uuid[]
+WHERE id = 'b0000001-0000-0000-0000-000000000102';
+
+UPDATE public.content_calendar
+SET attached_media_refs = ARRAY['c0000001-0000-0000-0000-000000000504']::uuid[]
+WHERE id = 'b0000001-0000-0000-0000-000000000105';
+
+INSERT INTO public.notifications (
+  id,
+  user_id,
+  type,
+  title,
+  body,
+  link_url,
+  is_read,
+  created_at
+)
+VALUES
+  (
+    'c0000001-0000-0000-0000-000000000801',
+    'a0000001-0000-0000-0000-000000000007',
+    'media_recovery_offer',
+    'New media recovery offer',
+    'Jeff Waldron linked a Congress media offer to the open recovery request.',
+    '/app/comms/media',
+    false,
+    now() - interval '20 hours'
+  )
+ON CONFLICT (id) DO UPDATE SET
+  user_id = EXCLUDED.user_id,
+  type = EXCLUDED.type,
+  title = EXCLUDED.title,
+  body = EXCLUDED.body,
+  link_url = EXCLUDED.link_url,
+  is_read = EXCLUDED.is_read,
+  created_at = EXCLUDED.created_at;
 
 -- ============================================================
 -- INSTRUCTIONS:

@@ -1,6 +1,9 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { saveCampusSession } from '@/app/app/comms/campus-log/actions'
+import { triggerSessionTeamsStub } from '@/app/app/comms/integration-actions'
+import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
+import { getIntegrationStubFlags } from '@/lib/comms-integrations'
 import { createClient } from '@/lib/supabase/server'
 
 const CAMPUS_SESSION_DETAIL_SELECT =
@@ -33,6 +36,7 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
   const hubSet = new Set(session.participating_hub_ids ?? [])
   const initiativeSet = new Set(session.initiative_ids ?? [])
   const outputSet = new Set(session.published_outputs ?? [])
+  const stubFlags = getIntegrationStubFlags()
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">
@@ -88,6 +92,23 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
             {slidesAsset && <span className="text-xs text-neutral-500">Current slide asset: {slidesAsset.title}</span>}
           </label>
         </div>
+
+        {stubFlags.teams && (
+          <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
+            <p className="text-sm font-semibold text-neutral-900">Teams meeting stub</p>
+            <p className="mt-1 text-sm text-neutral-500">
+              Phase 1 keeps Teams as a logged intent only. Phase 2 swaps this for a real connector.
+            </p>
+            <div className="mt-3">
+              <IntegrationStubForm
+                action={triggerSessionTeamsStub}
+                entityId={session.id}
+                buttonLabel="Log Teams meeting intent"
+                className="rounded-xl border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-100"
+              />
+            </div>
+          </div>
+        )}
 
         <fieldset className="space-y-3">
           <legend className="text-sm font-semibold text-neutral-800">Participating hubs</legend>

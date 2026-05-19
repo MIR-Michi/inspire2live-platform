@@ -11,6 +11,7 @@ import {
   type CalendarStatus,
   type IntakeContentType,
 } from '@/lib/comms-workflow'
+import { syncMediaUsageCounts } from '@/lib/comms-media'
 
 const PROMOTABLE_INTAKE_SELECT =
   'id, sender_name, content_type, raw_content, source_url, attached_media_ref, is_peter_kapitein'
@@ -70,6 +71,17 @@ export async function saveCalendarEntry(
       return { ok: false, error: 'Title, at least one channel, and status are required.' }
     }
 
+    const previousRefs =
+      entryId
+        ? (
+            await supabase
+              .from('content_calendar')
+              .select('attached_media_refs')
+              .eq('id', entryId)
+              .maybeSingle()
+          ).data?.attached_media_refs ?? []
+        : []
+
     const payload = {
       title,
       channels,
@@ -82,12 +94,22 @@ export async function saveCalendarEntry(
       author_id: authorId,
     }
 
-    const query = entryId
-      ? supabase.from('content_calendar').update(payload).eq('id', entryId)
-      : supabase.from('content_calendar').insert(payload)
+    const { data: savedEntry, error } = entryId
+      ? await supabase
+          .from('content_calendar')
+          .update(payload)
+          .eq('id', entryId)
+          .select('id, attached_media_refs')
+          .maybeSingle()
+      : await supabase
+          .from('content_calendar')
+          .insert(payload)
+          .select('id, attached_media_refs')
+          .maybeSingle()
 
-    const { error } = await query
     if (error) throw new Error(error.message)
+
+    await syncMediaUsageCounts(supabase, [...previousRefs, ...(savedEntry?.attached_media_refs ?? [])])
 
     revalidatePath('/app/comms/calendar')
     return { ok: true, message: entryId ? 'Calendar entry updated.' : 'Calendar draft created.' }

@@ -44,6 +44,11 @@ type InitiativeOption = {
   label: string
 }
 
+type RecoveryOption = {
+  id: string
+  label: string
+}
+
 const INITIAL_STATE: CommsFormState = { ok: false }
 
 function formatTimestamp(input: string) {
@@ -56,9 +61,11 @@ function formatTimestamp(input: string) {
 function RouteModal({
   item,
   initiatives,
+  recoveryRequests,
 }: {
   item: IntakeItem
   initiatives: InitiativeOption[]
+  recoveryRequests: RecoveryOption[]
 }) {
   const [open, setOpen] = useState(false)
   const [destination, setDestination] = useState<RouteDestination | ''>(
@@ -150,6 +157,27 @@ function RouteModal({
                   </option>
                 ))}
               </select>
+            </label>
+          )}
+
+          {destination === 'media_asset' && item.content_type === 'media_request' && (
+            <label className="block space-y-2">
+              <span className="text-sm font-semibold text-neutral-800">Attach to recovery request</span>
+              <select
+                name="media_recovery_request_id"
+                defaultValue=""
+                className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+              >
+                <option value="">Create a new media recovery request</option>
+                {recoveryRequests.map((request) => (
+                  <option key={request.id} value={request.id}>
+                    {request.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-neutral-500">
+                Choose an open recovery request when this message is an offer or follow-up. Leave blank to open a new request.
+              </p>
             </label>
           )}
 
@@ -499,9 +527,11 @@ function DigestButton() {
 function IntakeItemCard({
   item,
   initiatives,
+  recoveryRequests,
 }: {
   item: IntakeItem
   initiatives: InitiativeOption[]
+  recoveryRequests: RecoveryOption[]
 }) {
   const meta = getIntakeTypeMeta(item.content_type)
   const suggested = getSuggestedDestination(item.content_type as IntakeContentType)
@@ -573,7 +603,9 @@ function IntakeItemCard({
       </div>
 
       <footer className="flex flex-wrap items-center gap-2">
-        {item.status !== 'dismissed' && <RouteModal item={item} initiatives={initiatives} />}
+        {item.status !== 'dismissed' && (
+          <RouteModal item={item} initiatives={initiatives} recoveryRequests={recoveryRequests} />
+        )}
         {item.status !== 'dismissed' && <ClassificationModal item={item} />}
         <DismissModal item={item} />
       </footer>
@@ -586,11 +618,13 @@ export function IntakeQueueShell({
   filter,
   unreviewedCount,
   initiatives,
+  recoveryRequests,
 }: {
   items: IntakeItem[]
   filter: IntakeFilter
   unreviewedCount: number
   initiatives: InitiativeOption[]
+  recoveryRequests: RecoveryOption[]
 }) {
   return (
     <section className="space-y-6">
@@ -651,7 +685,12 @@ export function IntakeQueueShell({
       ) : (
         <div className="space-y-4">
           {items.map((item) => (
-            <IntakeItemCard key={item.id} item={item} initiatives={initiatives} />
+            <IntakeItemCard
+              key={item.id}
+              item={item}
+              initiatives={initiatives}
+              recoveryRequests={recoveryRequests}
+            />
           ))}
         </div>
       )}

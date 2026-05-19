@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `docs/PLATFORM_CONCEPT_UPDATE_v1.md` — full Concept Update v1.0 specification.
 - `sprints/` directory with Sprint 01 through Sprint 04 covering the Communications MVP (Weeks 1–8).
+- Sprint 04 media library surfaces for `/app/comms/media`, including list/detail pages, manual SharePoint-link asset creation, rights badges, and asset usage log linking.
+- Media recovery workflow with tracked requests, linked offers, resolution into `media_assets`, and `media_recovery_offer` notifications.
+- Feature-flagged communications integration stubs for WordPress, LinkedIn, Mailchimp, SharePoint, and Teams, backed by explicit `comms_integration_intents` logging.
+- Sprint 04 demo pack additions: media/recovery seed scenarios, `comms-media` unit coverage, and a Playwright happy path for comms coordinator login → intake → route → publish.
+- Draft Phase 2 placeholder sprint backlogs for Sprint 05 through Sprint 07.
 - Invitation system for initiatives and congress (invite by email or platform user)
 - Notification system with in-app notification feed
 - Password reset flow with dedicated `/reset-password` page

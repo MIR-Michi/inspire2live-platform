@@ -19,12 +19,11 @@ export default async function CommsIntakePage({
   searchParams?: Promise<{ filter?: string }>
 }) {
   const params = (await searchParams) ?? {}
-  const filter = VALID_FILTERS.has((params.filter ?? 'all') as IntakeFilter)
-    ? (params.filter as IntakeFilter)
-    : 'all'
+  const requestedFilter = (params.filter ?? 'all') as IntakeFilter
+  const filter = VALID_FILTERS.has(requestedFilter) ? requestedFilter : 'all'
 
   const supabase = await createClient()
-  const [{ data }, { data: initiatives }] = await Promise.all([
+  const [{ data }, { data: initiatives }, { data: recoveryRequests }] = await Promise.all([
     supabase
       .from('intake_items')
       .select(
@@ -33,6 +32,11 @@ export default async function CommsIntakePage({
       .order('captured_at', { ascending: false })
       .limit(200),
     supabase.from('initiatives').select('id, title').order('title'),
+    supabase
+      .from('media_recovery_requests')
+      .select('id, title, status')
+      .eq('status', 'open')
+      .order('created_at', { ascending: false }),
   ])
 
   const items = ((data ?? []) as Array<{
@@ -59,6 +63,10 @@ export default async function CommsIntakePage({
       initiatives={(initiatives ?? []).map((initiative) => ({
         id: initiative.id,
         label: initiative.title,
+      }))}
+      recoveryRequests={(recoveryRequests ?? []).map((request) => ({
+        id: request.id,
+        label: request.title,
       }))}
     />
   )

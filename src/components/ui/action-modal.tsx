@@ -1,7 +1,5 @@
 'use client'
 
-import { useEffect, useRef } from 'react'
-
 interface ActionModalProps {
   title: string
   open: boolean
@@ -10,18 +8,18 @@ interface ActionModalProps {
 }
 
 export function ActionModal({ title, open, onClose, children }: ActionModalProps) {
-  const dialogRef = useRef<HTMLDialogElement>(null)
-
-  useEffect(() => {
-    if (open) dialogRef.current?.showModal()
-    else dialogRef.current?.close()
-  }, [open])
-
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm" onClick={onClose}>
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm"
+      onClick={onClose}
+      role="presentation"
+    >
       <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={title}
         className="w-full max-w-lg rounded-xl border border-neutral-200 bg-white p-6 shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >

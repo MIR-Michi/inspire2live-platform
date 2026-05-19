@@ -6,7 +6,10 @@ import {
   toggleEventOutputItem,
   transitionEventStage,
 } from '@/app/app/comms/events/actions'
+import { triggerEventTeamsStub } from '@/app/app/comms/integration-actions'
+import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
 import { StatusBadge } from '@/components/ui/status-badge'
+import { getIntegrationStubFlags } from '@/lib/comms-integrations'
 import { EVENT_STAGE_META, type EventStage } from '@/lib/comms-workflow'
 import { createClient } from '@/lib/supabase/server'
 
@@ -47,6 +50,7 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
   const representativeSet = new Set(event.i2l_representatives ?? [])
   const linkedInitiativeSet = new Set(event.initiative_ids ?? [])
   const linkedInitiatives = (initiatives ?? []).filter((initiative) => linkedInitiativeSet.has(initiative.id))
+  const stubFlags = getIntegrationStubFlags()
 
   return (
     <div className="mx-auto max-w-6xl space-y-6">
@@ -176,6 +180,16 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
                 </form>
               ))}
             </div>
+            {stubFlags.teams && (
+              <div className="mt-4">
+                <IntegrationStubForm
+                  action={triggerEventTeamsStub}
+                  entityId={event.id}
+                  buttonLabel="Teams meeting stub"
+                  className="rounded-xl border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+                />
+              </div>
+            )}
           </section>
 
           <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">

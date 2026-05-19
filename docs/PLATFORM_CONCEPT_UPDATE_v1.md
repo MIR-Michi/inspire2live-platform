@@ -686,11 +686,11 @@ create index idx_media_rights on public.media_assets(rights_status);
 | Integration | Phase 1 approach | Phase 2 target |
 |---|---|---|
 | WhatsApp channel | Manual form submission by coordinator | WhatsApp Business API webhook |
-| SharePoint | Coordinator pastes SharePoint URL into media library | Microsoft Graph API browse-and-link |
-| Teams | Manual link references in event and session records | Teams API for meeting links and recordings |
-| WordPress | Manual "published" status update in content calendar | WordPress REST API direct publish |
-| LinkedIn | Manual "published" status update | LinkedIn API scheduled post |
-| Newsletter tool | Manual status tracking | Mailchimp / Brevo API |
+| SharePoint | Coordinator pastes SharePoint URL into media library; optional "+ from SharePoint" stub logs integration intent only | Microsoft Graph API browse-and-link |
+| Teams | Feature-flagged Teams stub on event and session detail logs intent only | Teams API for meeting links and recordings |
+| WordPress | Admin-only publish stub on content calendar logs intent only | WordPress REST API direct publish |
+| LinkedIn | Schedule stub on content calendar logs intent only | LinkedIn API scheduled post |
+| Newsletter tool | Mailchimp/newsletter draft stub logs intent only | Mailchimp / Brevo API |
 
 ### Phase 2 WhatsApp webhook architecture
 

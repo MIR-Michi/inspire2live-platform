@@ -3,7 +3,7 @@
 Maps design requirements to implementation status and code locations.  
 **Source of truth for requirement IDs:** `docs/IMPLEMENTATION_GUIDE.md` §5  
 **Benchmark:** `PLATFORM_DESIGN_DOCUMENT.md` v2.0  
-**Last updated:** 2026-05-18
+**Last updated:** 2026-05-19
 
 ---
 
@@ -77,6 +77,11 @@ Format: `REQ-[DOMAIN]-[NNN]` — see `docs/IMPLEMENTATION_GUIDE.md` §5 for doma
 | REQ-COMMS-PETER-001 | Peter Kapitein signal detection, elevated confidence, founder badge, and intake filter | Concept Update §8 | `done` | `src/lib/comms-constants.ts`, `src/lib/comms-routing.ts`, `src/lib/comms-workflow.ts`, `src/components/comms/founder-badge.tsx`, `src/components/comms/intake-queue-shell.tsx` | 2026-05-18 | Verified by unit tests and local seeded Peter signal counts after `seed-demo.sql` load |
 | REQ-COMMS-PETER-002 | Peter-origin member welcomes propagate `welcomed_by_peter` into the campus log | Concept Update §8 | `done` | `src/app/app/comms/intake/actions.ts`, `src/lib/comms-routing.ts`, `src/app/app/comms/campus-log/members/[id]/page.tsx` | 2026-05-18 | Routing uses parsed welcome signals to set `welcomed_by_peter = true`; founder indicator is visible in campus member views |
 | REQ-COMMS-SEED-001 | Sprint 03 demo seeds cover events, campus sessions, members, and routed signal paths | Concept Update §4, §6, §7, §8 | `done` | `supabase/seed-demo.sql` | 2026-05-18 | Loaded cleanly into the local Supabase DB container; verification counts: 5 events, 3 sessions, 12 members, routed items for calendar/campus_member/event/media_asset |
+| REQ-COMMS-MEDIA-001 | Media library list/detail/create flows with rights badges, SharePoint reference links, and asset filters | Concept Update §6.5 | `done` | `src/app/app/comms/media/page.tsx`, `src/app/app/comms/media/[id]/page.tsx`, `src/components/comms/media-library-shell.tsx`, `src/components/comms/rights-status-badge.tsx`, `src/app/app/comms/media/actions.ts` | 2026-05-19 | Verified with `pnpm lint`, `pnpm exec tsc --noEmit`, `pnpm test`, `pnpm build`, local `db lint`, and replayed `seed-demo.sql` into local Supabase |
+| REQ-COMMS-MEDIA-002 | Media usage syncing plus media recovery requests, offers, resolution, and recovery notifications | Concept Update §6.5, §7.3 | `done` | `supabase/migrations/00037_comms_sprint04_media_and_integrations.sql`, `src/lib/comms-media.ts`, `src/app/app/comms/intake/actions.ts`, `src/app/app/notifications/page.tsx`, `src/app/app/dashboard/page.tsx` | 2026-05-19 | Verified via schema lint, local migration push, and seeded recovery counts: 5 assets, 2 recovery requests, 1 offer, 1 recovery notification |
+| REQ-COMMS-INTEG-001 | Feature-flagged WordPress, LinkedIn, Mailchimp, SharePoint, and Teams integration stubs with intent logging | Concept Update §12 | `done` | `src/app/app/comms/integration-actions.ts`, `src/lib/comms-integrations.ts`, `src/lib/comms-integration-intents.ts`, `src/components/comms/integration-stub-form.tsx`, `src/app/app/comms/calendar/page.tsx`, `src/app/app/comms/events/[id]/page.tsx`, `src/app/app/comms/campus-log/sessions/[id]/page.tsx` | 2026-05-19 | Stub contracts are additive and no-op by design; verified in static checks and production build |
+| REQ-COMMS-PILOT-001 | Sprint 04 demo seed pack and E2E happy path cover media, recovery, and comms publish flow | Concept Update §4, §6.5, MVP verification | `done` | `supabase/seed-demo.sql`, `src/test/e2e/comms-happy-path.spec.ts`, `src/test/unit/comms-media.test.ts` | 2026-05-19 | Demo seed pack verified locally. The seeded local password mismatch for the demo comms accounts was fixed in `seed-demo.sql`, and the Playwright happy path now passes against the local Supabase stack. |
+| REQ-COMMS-PILOT-002 | Real pilot onboarding, digest scheduling, kickoff, pilot week metrics, and feedback capture | Sprint 04 acceptance criteria | `blocked` | `sprints/sprint-04-media-and-pilot-launch/description.md`, `sprints/sprint-04-media-and-pilot-launch/tasks.md`, `sprints/sprint-04-media-and-pilot-launch/feedback.md` | 2026-05-19 | Requires real comms users and human-run pilot activity; cannot be completed autonomously |
 
 ### L1: Core Continuity
 

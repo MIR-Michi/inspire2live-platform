@@ -1,5 +1,6 @@
 import { createClient } from '@/lib/supabase/server'
 import { ContentCalendarShell } from '@/components/comms/content-calendar-shell'
+import { getIntegrationStubFlags } from '@/lib/comms-integrations'
 import type { CalendarStatus } from '@/lib/comms-workflow'
 
 const VALID_VIEWS = new Set(['month', 'list'])
@@ -20,8 +21,11 @@ export default async function CommsCalendarPage({
         : 'all'
 
   const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  const [{ data: entriesData }, { data: authorsData }, { data: intakeCandidatesData }] = await Promise.all([
+  const [{ data: entriesData }, { data: authorsData }, { data: intakeCandidatesData }, { data: currentProfile }] = await Promise.all([
     supabase
       .from('content_calendar')
       .select('id, title, channels, status, scheduled_at, published_at, body_draft, author_id, source_intake_id, source_link, attached_media_refs, tags, created_at')
@@ -39,6 +43,9 @@ export default async function CommsCalendarPage({
       .in('content_type', ['article_share', 'event_report'])
       .order('captured_at', { ascending: false })
       .limit(12),
+    user
+      ? supabase.from('profiles').select('role, comms_team').eq('id', user.id).maybeSingle()
+      : Promise.resolve({ data: null }),
   ])
 
   const authors = ((authorsData ?? []) as Array<{
@@ -82,6 +89,8 @@ export default async function CommsCalendarPage({
       }>}
       view={view}
       statusFilter={statusFilter}
+      canUseWordpressStub={currentProfile?.role === 'PlatformAdmin'}
+      stubFlags={getIntegrationStubFlags()}
     />
   )
 }

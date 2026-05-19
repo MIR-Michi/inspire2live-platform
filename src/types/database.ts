@@ -429,6 +429,61 @@ export type Database = {
           },
         ]
       }
+      comms_integration_intents: {
+        Row: {
+          action_name: string
+          created_at: string
+          entity_id: string
+          entity_type: string
+          id: string
+          integration_target: string
+          payload: Json
+          requested_by: string
+        }
+        Insert: {
+          action_name: string
+          created_at?: string
+          entity_id: string
+          entity_type: string
+          id?: string
+          integration_target: string
+          payload?: Json
+          requested_by: string
+        }
+        Update: {
+          action_name?: string
+          created_at?: string
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          integration_target?: string
+          payload?: Json
+          requested_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comms_integration_intents_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "comms_integration_intents_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comms_integration_intents_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+        ]
+      }
       congress_decisions: {
         Row: {
           id: string
@@ -1810,6 +1865,177 @@ export type Database = {
           },
           {
             foreignKeyName: "media_assets_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "campus_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_recovery_offers: {
+        Row: {
+          created_at: string
+          id: string
+          intake_item_id: string
+          notes: string
+          offered_by: string
+          recovery_request_id: string
+          sharepoint_url: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          intake_item_id: string
+          notes: string
+          offered_by: string
+          recovery_request_id: string
+          sharepoint_url?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          intake_item_id?: string
+          notes?: string
+          offered_by?: string
+          recovery_request_id?: string
+          sharepoint_url?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_recovery_offers_intake_item_id_fkey"
+            columns: ["intake_item_id"]
+            isOneToOne: true
+            referencedRelation: "intake_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_recovery_offers_recovery_request_id_fkey"
+            columns: ["recovery_request_id"]
+            isOneToOne: false
+            referencedRelation: "media_recovery_requests"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      media_recovery_requests: {
+        Row: {
+          created_at: string
+          event_id: string | null
+          id: string
+          initiative_id: string | null
+          request_intake_id: string
+          requested_by: string | null
+          resolution_notes: string | null
+          resolved_asset_id: string | null
+          resolved_at: string | null
+          session_id: string | null
+          status: string
+          summary: string
+          title: string
+        }
+        Insert: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          initiative_id?: string | null
+          request_intake_id: string
+          requested_by?: string | null
+          resolution_notes?: string | null
+          resolved_asset_id?: string | null
+          resolved_at?: string | null
+          session_id?: string | null
+          status?: string
+          summary: string
+          title: string
+        }
+        Update: {
+          created_at?: string
+          event_id?: string | null
+          id?: string
+          initiative_id?: string | null
+          request_intake_id?: string
+          requested_by?: string | null
+          resolution_notes?: string | null
+          resolved_asset_id?: string | null
+          resolved_at?: string | null
+          session_id?: string | null
+          status?: string
+          summary?: string
+          title?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "media_recovery_requests_event_id_fkey"
+            columns: ["event_id"]
+            isOneToOne: false
+            referencedRelation: "events"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "decision_pipeline"
+            referencedColumns: ["initiative_id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "initiative_health"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "initiatives"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_initiative_id_fkey"
+            columns: ["initiative_id"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["initiative_id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_request_intake_id_fkey"
+            columns: ["request_intake_id"]
+            isOneToOne: true
+            referencedRelation: "intake_items"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_requested_by_fkey"
+            columns: ["requested_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_resolved_asset_id_fkey"
+            columns: ["resolved_asset_id"]
+            isOneToOne: false
+            referencedRelation: "media_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "media_recovery_requests_session_id_fkey"
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "campus_sessions"
