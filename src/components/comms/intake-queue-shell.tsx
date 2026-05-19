@@ -8,6 +8,7 @@ import { StatusBadge } from '@/components/ui/status-badge'
 import {
   dismissIntakeItem,
   editIntakeClassification,
+  replayIntakeClassification,
   routeIntakeItem,
   sendDailyDigestNow,
   type CommsFormState,
@@ -27,12 +28,23 @@ import {
 
 type IntakeItem = {
   id: string
+  capture_method: string
   sender_name: string
+  sender_whatsapp_id: string | null
   raw_content: string
   source_url: string | null
   attached_media_ref?: string | null
   content_type: string
   classification_confidence: string | null
+  classifier_status: string
+  classifier_version: string | null
+  classifier_reasoning: Array<{
+    ruleId: string
+    label: string
+    evidence: string
+    effect: 'type' | 'confidence' | 'founder_signal'
+  }>
+  classifier_rule_ids: string[]
   status: string
   captured_at: string
   is_peter_kapitein: boolean
@@ -361,7 +373,9 @@ function RouteModal({
 function ClassificationModal({ item }: { item: IntakeItem }) {
   const [open, setOpen] = useState(false)
   const [state, setState] = useState<CommsFormState>(INITIAL_STATE)
+  const [replayState, setReplayState] = useState<CommsFormState>(INITIAL_STATE)
   const [pending, startTransition] = useTransition()
+  const [replayPending, startReplayTransition] = useTransition()
 
   const handleSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
@@ -369,6 +383,16 @@ function ClassificationModal({ item }: { item: IntakeItem }) {
     startTransition(async () => {
       const result = await editIntakeClassification(INITIAL_STATE, formData)
       setState(result)
+      if (result.ok) setOpen(false)
+    })
+  }
+
+  const handleReplay = () => {
+    const formData = new FormData()
+    formData.set('intake_item_id', item.id)
+    startReplayTransition(async () => {
+      const result = await replayIntakeClassification(INITIAL_STATE, formData)
+      setReplayState(result)
       if (result.ok) setOpen(false)
     })
   }
@@ -386,6 +410,23 @@ function ClassificationModal({ item }: { item: IntakeItem }) {
       <ActionModal title="Edit classification" open={open} onClose={() => setOpen(false)}>
         <form onSubmit={handleSubmit} className="space-y-4">
           <input type="hidden" name="intake_item_id" value={item.id} />
+          <div className="rounded-xl border border-blue-200 bg-blue-50 px-3 py-3 text-xs text-blue-900">
+            <p className="font-semibold">Automation review</p>
+            <p className="mt-1">
+              Status: <span className="font-medium">{item.classifier_status.replace(/_/g, ' ')}</span>
+              {item.classifier_version ? ` · ${item.classifier_version}` : ''}
+            </p>
+            {item.classifier_reasoning.length > 0 && (
+              <ul className="mt-2 space-y-1">
+                {item.classifier_reasoning.map((reason) => (
+                  <li key={`${item.id}-${reason.ruleId}`} className="rounded-lg bg-white/80 px-2 py-1">
+                    <span className="font-medium">{reason.label}</span>: {reason.evidence}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <label className="block space-y-2">
             <span className="text-sm font-semibold text-neutral-800">Content type</span>
             <select
@@ -402,16 +443,31 @@ function ClassificationModal({ item }: { item: IntakeItem }) {
           </label>
 
           <p className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-600">
-            Manual corrections are logged so the later classifier can learn from real coordinator decisions.
+            Manual corrections are logged so the classifier can reuse them as training examples. You can also promote the sender into an exact reusable rule.
           </p>
 
-          {state.error && (
+          <label className="flex items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-700">
+            <input type="checkbox" name="promote_as_sender_rule" value="true" className="mt-0.5" />
+            <span>
+              Create a reusable sender rule for <span className="font-semibold">{item.sender_name}</span> when this correction is saved.
+            </span>
+          </label>
+
+          {(state.error || replayState.error) && (
             <p className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-              {state.error}
+              {state.error ?? replayState.error}
             </p>
           )}
 
           <div className="flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={handleReplay}
+              disabled={replayPending}
+              className="rounded-xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 disabled:opacity-60"
+            >
+              {replayPending ? 'Replaying…' : 'Replay classifier'}
+            </button>
             <button
               type="button"
               onClick={() => setOpen(false)}
@@ -546,6 +602,11 @@ function IntakeItemCard({
             {item.classification_confidence && (
               <StatusBadge label={`Confidence: ${item.classification_confidence}`} tone="neutral" />
             )}
+            <StatusBadge
+              label={item.capture_method === 'webhook' ? 'Webhook' : 'Manual'}
+              tone={item.capture_method === 'webhook' ? 'blue' : 'neutral'}
+            />
+            <StatusBadge label={item.classifier_status.replace(/_/g, ' ')} tone="neutral" />
           </div>
           <div>
             <h3 className="text-base font-semibold text-neutral-900">{item.sender_name}</h3>
@@ -580,6 +641,11 @@ function IntakeItemCard({
       </details>
 
       <div className="flex flex-wrap gap-2 text-xs">
+        {item.sender_whatsapp_id && (
+          <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
+            WhatsApp: {item.sender_whatsapp_id}
+          </span>
+        )}
         {item.source_url && (
           <a
             href={item.source_url}
@@ -601,6 +667,21 @@ function IntakeItemCard({
           </span>
         )}
       </div>
+
+      {item.classifier_reasoning.length > 0 && (
+        <div className="rounded-xl border border-neutral-100 bg-neutral-50 px-4 py-3">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">
+            Classifier reasoning
+          </p>
+          <ul className="mt-2 space-y-2 text-sm text-neutral-700">
+            {item.classifier_reasoning.slice(0, 3).map((reason) => (
+              <li key={`${item.id}-${reason.ruleId}`} className="rounded-lg bg-white px-3 py-2">
+                <span className="font-medium">{reason.label}</span>: {reason.evidence}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <footer className="flex flex-wrap items-center gap-2">
         {item.status !== 'dismissed' && (

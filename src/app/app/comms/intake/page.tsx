@@ -27,7 +27,7 @@ export default async function CommsIntakePage({
     supabase
       .from('intake_items')
       .select(
-        'id, sender_name, raw_content, source_url, attached_media_ref, content_type, classification_confidence, status, captured_at, is_peter_kapitein, dismissed_reason'
+        'id, capture_method, sender_name, sender_whatsapp_id, raw_content, source_url, attached_media_ref, content_type, classification_confidence, classifier_status, classifier_version, classifier_reasoning, classifier_rule_ids, status, captured_at, is_peter_kapitein, dismissed_reason'
       )
       .order('captured_at', { ascending: false })
       .limit(200),
@@ -41,12 +41,23 @@ export default async function CommsIntakePage({
 
   const items = ((data ?? []) as Array<{
     id: string
+    capture_method: string
     sender_name: string
+    sender_whatsapp_id: string | null
     raw_content: string
     source_url: string | null
     attached_media_ref?: string | null
     content_type: string
     classification_confidence: string | null
+    classifier_status: string
+    classifier_version: string | null
+    classifier_reasoning: Array<{
+      ruleId: string
+      label: string
+      evidence: string
+      effect: 'type' | 'confidence' | 'founder_signal'
+    }>
+    classifier_rule_ids: string[]
     status: string
     captured_at: string
     is_peter_kapitein: boolean

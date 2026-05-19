@@ -18,6 +18,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - `docs/PLATFORM_CONCEPT_UPDATE_v1.md` — full Concept Update v1.0 specification.
 - `sprints/` directory with Sprint 01 through Sprint 04 covering the Communications MVP (Weeks 1–8).
+- Sprint 05 intake automation groundwork: WhatsApp webhook ingestion, explainable classifier reasoning, reusable classifier rules/training examples, and queue-level replay/correction flow.
+- Outlook draft stub added to the communications integration layer so WordPress, Outlook, WhatsApp, and SharePoint all have explicit integration elements in the platform.
 - Sprint 04 media library surfaces for `/app/comms/media`, including list/detail pages, manual SharePoint-link asset creation, rights badges, and asset usage log linking.
 - Media recovery workflow with tracked requests, linked offers, resolution into `media_assets`, and `media_recovery_offer` notifications.
 - Feature-flagged communications integration stubs for WordPress, LinkedIn, Mailchimp, SharePoint, and Teams, backed by explicit `comms_integration_intents` logging.

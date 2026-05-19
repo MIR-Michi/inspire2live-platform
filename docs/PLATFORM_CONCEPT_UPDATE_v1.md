@@ -691,6 +691,7 @@ create index idx_media_rights on public.media_assets(rights_status);
 | WordPress | Admin-only publish stub on content calendar logs intent only | WordPress REST API direct publish |
 | LinkedIn | Schedule stub on content calendar logs intent only | LinkedIn API scheduled post |
 | Newsletter tool | Mailchimp/newsletter draft stub logs intent only | Mailchimp / Brevo API |
+| Outlook | Outlook draft stub on content calendar logs intent only | Microsoft Graph mail / draft API |
 
 ### Phase 2 WhatsApp webhook architecture
 
