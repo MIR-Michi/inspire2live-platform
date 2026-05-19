@@ -12,6 +12,9 @@ import {
   type IntakeContentType,
 } from '@/lib/comms-workflow'
 
+const PROMOTABLE_INTAKE_SELECT =
+  'id, sender_name, content_type, raw_content, source_url, attached_media_ref, is_peter_kapitein'
+
 export interface CalendarFormState {
   ok: boolean
   message?: string
@@ -67,8 +70,6 @@ export async function saveCalendarEntry(
       return { ok: false, error: 'Title, at least one channel, and status are required.' }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any
     const payload = {
       title,
       channels,
@@ -82,8 +83,8 @@ export async function saveCalendarEntry(
     }
 
     const query = entryId
-      ? sb.from('content_calendar').update(payload).eq('id', entryId)
-      : sb.from('content_calendar').insert(payload)
+      ? supabase.from('content_calendar').update(payload).eq('id', entryId)
+      : supabase.from('content_calendar').insert(payload)
 
     const { error } = await query
     if (error) throw new Error(error.message)
@@ -105,9 +106,7 @@ export async function updateCalendarStatus(formData: FormData): Promise<Calendar
       return { ok: false, error: 'Entry and target status are required.' }
     }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any
-    const { data: current, error: loadError } = await sb
+    const { data: current, error: loadError } = await supabase
       .from('content_calendar')
       .select('status')
       .eq('id', entryId)
@@ -122,7 +121,7 @@ export async function updateCalendarStatus(formData: FormData): Promise<Calendar
     if (nextStatus === 'published') patch.published_at = new Date().toISOString()
     if (nextStatus === 'archived' && current.status === 'published') patch.updated_at = new Date().toISOString()
 
-    const { error } = await sb.from('content_calendar').update(patch).eq('id', entryId)
+    const { error } = await supabase.from('content_calendar').update(patch).eq('id', entryId)
     if (error) throw new Error(error.message)
 
     revalidatePath('/app/comms/calendar')
@@ -147,11 +146,9 @@ export async function promoteIntakeCandidate(
 
     if (!intakeItemId) return { ok: false, error: 'Intake item is required.' }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const sb = supabase as any
-    const { data: item, error: loadError } = await sb
+    const { data: item, error: loadError } = await supabase
       .from('intake_items')
-      .select('*')
+      .select(PROMOTABLE_INTAKE_SELECT)
       .eq('id', intakeItemId)
       .maybeSingle()
 
@@ -159,7 +156,7 @@ export async function promoteIntakeCandidate(
     if (!item) throw new Error('Intake item not found.')
 
     const draft = buildCalendarDraftFromIntake(item)
-    const { data: created, error: createError } = await sb
+    const { data: created, error: createError } = await supabase
       .from('content_calendar')
       .insert({
         ...draft,
@@ -182,7 +179,10 @@ export async function promoteIntakeCandidate(
             reviewed_at: new Date().toISOString(),
           }
 
-    const { error: updateError } = await sb.from('intake_items').update(updatePatch).eq('id', intakeItemId)
+    const { error: updateError } = await supabase
+      .from('intake_items')
+      .update(updatePatch)
+      .eq('id', intakeItemId)
     if (updateError) throw new Error(updateError.message)
 
     revalidatePath('/app/comms/calendar')

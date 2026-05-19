@@ -6,6 +6,9 @@ import { CONTENT_TYPE_META, getDigestTime, getDigestWindowLabel } from '@/lib/co
 type AdminClient = SupabaseClient<Database>
 type IntakeRow = Database['public']['Tables']['intake_items']['Row']
 type ProfileRow = Database['public']['Tables']['profiles']['Row']
+type DigestItem = Pick<IntakeRow, 'id' | 'sender_name' | 'content_type' | 'raw_content' | 'source_url' | 'captured_at'>
+
+const DIGEST_ITEM_SELECT = 'id, sender_name, content_type, raw_content, source_url, captured_at'
 
 type DigestRecipient = Pick<
   ProfileRow,
@@ -28,7 +31,7 @@ interface DigestRunResult {
 
 function buildDigestEmailHtml(params: {
   recipientName: string
-  items: IntakeRow[]
+  items: DigestItem[]
   reviewUrl: string
   breakdown: Array<{ label: string; count: number }>
   generatedAt: string
@@ -142,7 +145,7 @@ async function attemptDigestDelivery(params: {
   return { sent: false, error: 'No email provider configured (RESEND_API_KEY missing).' }
 }
 
-function buildBreakdown(items: IntakeRow[]) {
+function buildBreakdown(items: DigestItem[]) {
   return Object.entries(
     items.reduce<Record<string, number>>((acc, item) => {
       acc[item.content_type] = (acc[item.content_type] ?? 0) + 1
@@ -175,7 +178,7 @@ async function loadPendingItems(
 
   let query = supabase
     .from('intake_items')
-    .select('*')
+    .select(DIGEST_ITEM_SELECT)
     .neq('status', 'dismissed')
     .order('captured_at', { ascending: false })
 

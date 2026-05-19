@@ -9,6 +9,7 @@ const VALID_FILTERS = new Set<IntakeFilter>([
   'members',
   'initiative_updates',
   'media_requests',
+  'peter_messages',
   'dismissed',
 ])
 
@@ -23,11 +24,16 @@ export default async function CommsIntakePage({
     : 'all'
 
   const supabase = await createClient()
-  const { data } = await supabase
-    .from('intake_items')
-    .select('id, sender_name, raw_content, source_url, attached_media_ref, content_type, classification_confidence, status, captured_at, is_peter_kapitein, dismissed_reason')
-    .order('captured_at', { ascending: false })
-    .limit(200)
+  const [{ data }, { data: initiatives }] = await Promise.all([
+    supabase
+      .from('intake_items')
+      .select(
+        'id, sender_name, raw_content, source_url, attached_media_ref, content_type, classification_confidence, status, captured_at, is_peter_kapitein, dismissed_reason'
+      )
+      .order('captured_at', { ascending: false })
+      .limit(200),
+    supabase.from('initiatives').select('id, title').order('title'),
+  ])
 
   const items = ((data ?? []) as Array<{
     id: string
@@ -45,5 +51,15 @@ export default async function CommsIntakePage({
 
   const unreviewedCount = (data ?? []).filter((item) => item.status === 'unreviewed').length
 
-  return <IntakeQueueShell items={items} filter={filter} unreviewedCount={unreviewedCount} />
+  return (
+    <IntakeQueueShell
+      items={items}
+      filter={filter}
+      unreviewedCount={unreviewedCount}
+      initiatives={(initiatives ?? []).map((initiative) => ({
+        id: initiative.id,
+        label: initiative.title,
+      }))}
+    />
+  )
 }
