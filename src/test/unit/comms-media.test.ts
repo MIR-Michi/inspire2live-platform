@@ -14,7 +14,7 @@ describe('comms-media helpers', () => {
     expect(
       buildRecoveryTitle(
         'Congress photos are still missing from the shared folder. Jeff might have them in Teams.',
-        'Atefeh Rahimi'
+        'Sophie van der Berg'
       )
     ).toBe('Congress photos are still missing from the shared folder')
   })

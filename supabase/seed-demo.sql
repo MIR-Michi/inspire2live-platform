@@ -76,16 +76,6 @@ INSERT INTO auth.users (
     '{"name":"Platform Admin","role":"PlatformAdmin","country":"NL"}'::jsonb,
     'authenticated', 'authenticated', now(), now(),
     '', '', '', '', '', '', '', '', false
-  ),
-  (
-    'a0000001-0000-0000-0000-000000000007',
-    '00000000-0000-0000-0000-000000000000',
-    'atefeh@inspire2live.org',
-    crypt('demo1234', gen_salt('bf', 10)),
-    now(),
-    '{"name":"Atefeh Rahimi","role":"Moderator","country":"NL","comms_team":true}'::jsonb,
-    'authenticated', 'authenticated', now(), now(),
-    '', '', '', '', '', '', '', '', false
   )
 ON CONFLICT (id) DO NOTHING;
 
@@ -108,8 +98,7 @@ WHERE id IN (
   'a0000001-0000-0000-0000-000000000003',
   'a0000001-0000-0000-0000-000000000004',
   'a0000001-0000-0000-0000-000000000005',
-  'a0000001-0000-0000-0000-000000000006',
-  'a0000001-0000-0000-0000-000000000007'
+  'a0000001-0000-0000-0000-000000000006'
 );
 
 -- Also insert into auth.identities (required by Supabase auth)
@@ -133,10 +122,7 @@ INSERT INTO auth.identities (
    'email', 'a0000001-0000-0000-0000-000000000005', now(), now(), now()),
   ('a0000001-0000-0000-0000-000000000006', 'a0000001-0000-0000-0000-000000000006',
    '{"sub":"a0000001-0000-0000-0000-000000000006","email":"admin@inspire2live.org"}'::jsonb,
-   'email', 'a0000001-0000-0000-0000-000000000006', now(), now(), now()),
-  ('a0000001-0000-0000-0000-000000000007', 'a0000001-0000-0000-0000-000000000007',
-   '{"sub":"a0000001-0000-0000-0000-000000000007","email":"atefeh@inspire2live.org"}'::jsonb,
-   'email', 'a0000001-0000-0000-0000-000000000007', now(), now(), now())
+   'email', 'a0000001-0000-0000-0000-000000000006', now(), now(), now())
 ON CONFLICT (id) DO NOTHING;
 
 -- ── Profiles (trigger may auto-create, but we ensure completeness) ──────
@@ -160,8 +146,7 @@ VALUES
   ('a0000001-0000-0000-0000-000000000003', 'Peter Lindqvist', 'peter@inspire2live.org', 'BoardMember', 'Nordic Oncology Foundation', 'SE', 'Stockholm', ARRAY['governance','funding','strategy'], 'Board member focused on sustainable funding for patient-led research.', true, now() - interval '10 days', false),
   ('a0000001-0000-0000-0000-000000000004', 'Dr. Kai Bergmann', 'kai@inspire2live.org', 'Researcher', 'Charite Berlin', 'DE', 'Berlin', ARRAY['molecular-diagnostics','liquid-biopsy','MCED'], 'Translational researcher specialising in multi-cancer early detection technologies.', true, now() - interval '2 days', false),
   ('a0000001-0000-0000-0000-000000000005', 'Dr. Nadia Rousseau', 'nadia@inspire2live.org', 'Clinician', 'Institut Gustave Roussy', 'FR', 'Paris', ARRAY['clinical-trials','outcomes-research','breast-cancer'], 'Oncologist and clinical trialist with focus on patient-reported outcomes.', true, now() - interval '1 day', false),
-  ('a0000001-0000-0000-0000-000000000006', 'Platform Admin', 'admin@inspire2live.org', 'PlatformAdmin', 'Inspire2Live', 'NL', 'Amsterdam', ARRAY['platform-admin','user-management'], 'Platform administrator with full access to all features.', true, now(), false),
-  ('a0000001-0000-0000-0000-000000000007', 'Atefeh Rahimi', 'atefeh@inspire2live.org', 'Moderator', 'Inspire2Live Communications', 'NL', 'Amsterdam', ARRAY['moderation','communications','story-distribution'], 'Moderator supporting the communications workspace and community publishing flow.', true, now() - interval '4 hours', true)
+  ('a0000001-0000-0000-0000-000000000006', 'Platform Admin', 'admin@inspire2live.org', 'PlatformAdmin', 'Inspire2Live', 'NL', 'Amsterdam', ARRAY['platform-admin','user-management'], 'Platform administrator with full access to all features.', true, now(), false)
 ON CONFLICT (id) DO UPDATE SET
   name = EXCLUDED.name,
   role = EXCLUDED.role,
@@ -177,8 +162,7 @@ ON CONFLICT (id) DO UPDATE SET
 UPDATE public.profiles
 SET notification_prefs = jsonb_set(notification_prefs, '{digestDeliveryTime}', '"08:00"', true)
 WHERE id IN (
-  'a0000001-0000-0000-0000-000000000006',
-  'a0000001-0000-0000-0000-000000000007'
+  'a0000001-0000-0000-0000-000000000006'
 );
 
 -- ── Sprint 02 intake queue seeds ─────────────────────────────────────────
@@ -257,7 +241,7 @@ VALUES
     'b0000001-0000-0000-0000-000000000005',
     now() - interval '1 day',
     'manual',
-    'Atefeh Rahimi',
+    'Sophie van der Berg',
     'Does anyone have the Congress Photos WhatsApp group or a SharePoint folder with the latest Congress media? We need it for follow-up publishing.',
     null,
     'Requested asset: Congress photos group / SharePoint folder',
@@ -373,7 +357,7 @@ VALUES
     now() + interval '1 day',
     null,
     'Short curator note for the newsletter: why this Tempus update matters for access, education, and patient decision-making.',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'b0000001-0000-0000-0000-000000000002',
     'https://www.tempus.com/news/precision-oncology-update',
     ARRAY[]::text[],
@@ -387,7 +371,7 @@ VALUES
     now() + interval '2 days',
     null,
     'Draft a concise event recap anchored in the patient-advocate perspective and pair it with 3-5 image highlights from the General Assembly.',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'b0000001-0000-0000-0000-000000000001',
     'https://guide-mrd.example.org/general-assembly',
     ARRAY['SharePoint: /world-campus/guide-mrd/general-assembly-photos'],
@@ -429,7 +413,7 @@ VALUES
     now() - interval '5 days',
     now() - interval '4 days',
     'Archived pilot draft kept as a reference for future repurposing.',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'b0000001-0000-0000-0000-000000000007',
     'https://guide-mrd.example.org/workshop-update',
     ARRAY[]::text[],
@@ -480,7 +464,7 @@ VALUES
     'Netherlands',
     'GUIDE.MRD consortium',
     'post_event',
-    ARRAY['a0000001-0000-0000-0000-000000000007', 'a0000001-0000-0000-0000-000000000006']::uuid[],
+    ARRAY['a0000001-0000-0000-0000-000000000001', 'a0000001-0000-0000-0000-000000000006']::uuid[],
     (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title LIMIT 1) initiative_rows),
     true,
     false,
@@ -518,7 +502,7 @@ VALUES
     'United Kingdom',
     'World Campus coordination',
     'attending',
-    ARRAY['a0000001-0000-0000-0000-000000000007']::uuid[],
+    ARRAY['a0000001-0000-0000-0000-000000000001']::uuid[],
     (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title OFFSET 1 LIMIT 1) initiative_rows),
     false,
     false,
@@ -537,7 +521,7 @@ VALUES
     'Germany',
     'Precision Oncology Alliance',
     'in_progress',
-    ARRAY['a0000001-0000-0000-0000-000000000007']::uuid[],
+    ARRAY['a0000001-0000-0000-0000-000000000001']::uuid[],
     (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title OFFSET 2 LIMIT 1) initiative_rows),
     false,
     false,
@@ -603,7 +587,6 @@ INSERT INTO public.campus_members (
   last_channel_activity
 )
 VALUES
-  ('c0000001-0000-0000-0000-000000000401', 'Atefeh Rahimi', 'Netherlands', 'Inspire2Live Communications', 'Moderator and communications lead', CURRENT_DATE - 80, false, null, 'Operational owner of the communications shell.', now() - interval '4 hours'),
   ('c0000001-0000-0000-0000-000000000402', 'Stephen Rowley', 'United Kingdom', 'GUIDE.MRD', 'Patient advocate and partner liaison', CURRENT_DATE - 120, false, null, 'Regular source for GUIDE.MRD updates and event follow-up.', now() - interval '1 day'),
   ('c0000001-0000-0000-0000-000000000403', 'Jeff Waldron', 'United States', 'World Campus', 'Media and partnerships contributor', CURRENT_DATE - 115, false, null, 'Often helps recover videos and speaker clips.', now() - interval '2 days'),
   ('c0000001-0000-0000-0000-000000000404', 'Michael from Austria', 'Austria', 'Independent advocacy network', 'Cross-border policy advocate', CURRENT_DATE - 3, true, null, 'Welcomed into the World Campus by Peter Kapitein.', now() - interval '8 hours'),
@@ -649,7 +632,7 @@ VALUES
     'https://example.org/world-campus/guide-mrd-recording',
     (SELECT array_agg(id) FROM (SELECT id FROM public.initiatives ORDER BY title LIMIT 1) initiative_rows),
     ARRAY['b0000001-0000-0000-0000-000000000102']::uuid[],
-    'a0000001-0000-0000-0000-000000000007'
+    'a0000001-0000-0000-0000-000000000001'
   ),
   (
     'c0000001-0000-0000-0000-000000000302',
@@ -661,7 +644,7 @@ VALUES
     'https://example.org/world-campus/welcomes-recording',
     null,
     ARRAY['b0000001-0000-0000-0000-000000000106']::uuid[],
-    'a0000001-0000-0000-0000-000000000007'
+    'a0000001-0000-0000-0000-000000000001'
   ),
   (
     'c0000001-0000-0000-0000-000000000303',
@@ -707,7 +690,7 @@ VALUES
     'photo',
     'approved_for_publication',
     'https://sharepoint.example.org/world-campus/guide-mrd/amsterdam-photo-set',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'c0000001-0000-0000-0000-000000000201',
     null,
     (SELECT id FROM public.initiatives ORDER BY title LIMIT 1),
@@ -746,7 +729,7 @@ VALUES
     'recording',
     'internal_only',
     'https://sharepoint.example.org/world-campus/guide-mrd/follow-up-recording',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     null,
     'c0000001-0000-0000-0000-000000000301',
     (SELECT id FROM public.initiatives ORDER BY title LIMIT 1),
@@ -759,7 +742,7 @@ VALUES
     'photo',
     'approved_for_publication',
     'https://sharepoint.example.org/world-campus/congress/speaker-gallery',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'c0000001-0000-0000-0000-000000000202',
     null,
     null,
@@ -795,9 +778,9 @@ VALUES
   (
     'c0000001-0000-0000-0000-000000000601',
     'Congress Photos WhatsApp group or SharePoint folder',
-    'Atefeh is trying to recover the latest Annual Congress photos so the team can finish follow-up publishing.',
+    'Sophie is trying to recover the latest Annual Congress photos so the team can finish follow-up publishing.',
     'b0000001-0000-0000-0000-000000000005',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'c0000001-0000-0000-0000-000000000202',
     'open',
     null,
@@ -810,7 +793,7 @@ VALUES
     'Annual Congress highlight photo recovery',
     'Resolved recovery thread for the congress highlight set now stored in SharePoint and linked back into the media library.',
     'c0000001-0000-0000-0000-000000000016',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'c0000001-0000-0000-0000-000000000202',
     'resolved',
     'Resolved after the congress photographer uploaded the final gallery to SharePoint.',
@@ -886,7 +869,7 @@ VALUES
     'routed',
     'event',
     'c0000001-0000-0000-0000-000000000201',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     now() - interval '10 days'
   ),
   (
@@ -901,7 +884,7 @@ VALUES
     'routed',
     'media_asset',
     'c0000001-0000-0000-0000-000000000502',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     now() - interval '8 days'
   ),
   (
@@ -916,7 +899,7 @@ VALUES
     'routed',
     'campus_member',
     'c0000001-0000-0000-0000-000000000404',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     now() - interval '3 days'
   ),
   (
@@ -931,7 +914,7 @@ VALUES
     'routed',
     'event',
     'c0000001-0000-0000-0000-000000000203',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     now() - interval '5 days'
   ),
   (
@@ -946,14 +929,14 @@ VALUES
     'routed',
     'campus_member',
     'c0000001-0000-0000-0000-000000000405',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     now() - interval '4 days'
   ),
   (
     'c0000001-0000-0000-0000-000000000016',
     now() - interval '2 days',
     'manual',
-    'Atefeh Rahimi',
+    'Sophie van der Berg',
     'The Annual Congress highlight photo set still needs a single cleaned-up SharePoint destination for the publishing team.',
     'media_request',
     'medium',
@@ -961,7 +944,7 @@ VALUES
     'routed',
     'media_asset',
     'c0000001-0000-0000-0000-000000000602',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     now() - interval '2 days'
   )
 ON CONFLICT (id) DO UPDATE SET
@@ -982,7 +965,7 @@ SET
   status = 'routed',
   routed_to_type = 'calendar',
   routed_to_id = 'b0000001-0000-0000-0000-000000000104',
-  reviewed_by = 'a0000001-0000-0000-0000-000000000007',
+  reviewed_by = 'a0000001-0000-0000-0000-000000000001',
   reviewed_at = now() - interval '2 days'
 WHERE id = 'b0000001-0000-0000-0000-000000000008';
 
@@ -991,7 +974,7 @@ SET
   status = 'routed',
   routed_to_type = 'media_asset',
   routed_to_id = 'c0000001-0000-0000-0000-000000000601',
-  reviewed_by = 'a0000001-0000-0000-0000-000000000007',
+  reviewed_by = 'a0000001-0000-0000-0000-000000000001',
   reviewed_at = now() - interval '22 hours'
 WHERE id = 'b0000001-0000-0000-0000-000000000005';
 
@@ -1000,7 +983,7 @@ SET
   status = 'routed',
   routed_to_type = 'media_asset',
   routed_to_id = 'c0000001-0000-0000-0000-000000000601',
-  reviewed_by = 'a0000001-0000-0000-0000-000000000007',
+  reviewed_by = 'a0000001-0000-0000-0000-000000000001',
   reviewed_at = now() - interval '20 hours'
 WHERE id = 'b0000001-0000-0000-0000-000000000006';
 
@@ -1027,7 +1010,7 @@ VALUES
     now() + interval '3 days',
     null,
     'Short welcome note introducing Michael from Austria and tying his policy background into the World Campus community story.',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'c0000001-0000-0000-0000-000000000013',
     null,
     ARRAY['c0000001-0000-0000-0000-000000000503']::uuid[],
@@ -1081,7 +1064,7 @@ INSERT INTO public.notifications (
 VALUES
   (
     'c0000001-0000-0000-0000-000000000801',
-    'a0000001-0000-0000-0000-000000000007',
+    'a0000001-0000-0000-0000-000000000001',
     'media_recovery_offer',
     'New media recovery offer',
     'Jeff Waldron linked a Congress media offer to the open recovery request.',
