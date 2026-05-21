@@ -1,17 +1,15 @@
 import { test, expect } from '@playwright/test'
 
+// Auth is provided via storageState set up in global-setup.ts.
+// The session belongs to admin@inspire2live.org (PlatformAdmin) which
+// has unrestricted access to the communications workspace.
+
 test.describe('Communications happy path', () => {
   test('coordinator can submit intake, route to calendar, and publish', async ({ page }) => {
     const uniqueSuffix = Date.now().toString().slice(-6)
     const senderName = `Sprint 04 E2E ${uniqueSuffix}`
     const draftTitle = `Sprint 04 E2E Draft ${uniqueSuffix}`
 
-    await page.goto('/login')
-    await page.getByLabel(/email/i).fill('admin@inspire2live.org')
-    await page.getByLabel(/^password$/i).fill('demo1234')
-    await page.locator('form').getByRole('button', { name: /^sign in$/i }).click()
-
-    await expect(page).toHaveURL(/\/app\/(dashboard|comms\/intake)/)
     await page.goto('/app/comms/intake')
     await expect(page).toHaveURL(/\/app\/comms\/intake/)
 
