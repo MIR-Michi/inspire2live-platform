@@ -584,14 +584,6 @@ export const DEMO_PARTNERS = [
   { id: 'p2', partner: 'WHO Africa Region', initiative: 'Palliative Care Access', contribution: 'Policy support + training coordination', neutrality_status: 'declared', contact: 'Amina Osei', since: '2025-09-15' },
 ]
 
-export const DEMO_USERS = [
-  { id: 'u1', name: 'Sophie van der Berg', email: 'sophie@inspire2live.org', role: 'HubCoordinator', country: 'NL', last_active: new Date(Date.now() - 1 * 86400000).toISOString(), status: 'active', onboarding_completed: true },
-  { id: 'u2', name: 'Maria Santos', email: 'maria@inspire2live.org', role: 'PatientAdvocate', country: 'PT', last_active: new Date(Date.now() - 2 * 86400000).toISOString(), status: 'active', onboarding_completed: true },
-  { id: 'u3', name: 'Kai Tanaka', email: 'kai@inspire2live.org', role: 'Researcher', country: 'JP', last_active: new Date(Date.now() - 3 * 86400000).toISOString(), status: 'active', onboarding_completed: true },
-  { id: 'u4', name: 'Nadia Al-Rashid', email: 'nadia@inspire2live.org', role: 'Clinician', country: 'NL', last_active: new Date(Date.now() - 5 * 86400000).toISOString(), status: 'active', onboarding_completed: true },
-  { id: 'u5', name: 'Peter de Groot', email: 'peter@inspire2live.org', role: 'BoardMember', country: 'NL', last_active: new Date(Date.now() - 7 * 86400000).toISOString(), status: 'active', onboarding_completed: true },
-  { id: 'u6', name: 'Admin User', email: 'admin@inspire2live.org', role: 'PlatformAdmin', country: 'NL', last_active: new Date().toISOString(), status: 'active', onboarding_completed: true },
-]
 
 // ─── Congress assignments (responsibility layer) ─────────────────────────────
 

@@ -33,7 +33,7 @@ export function ManualIntakeForm() {
             <input
               name="sender_name"
               required
-              placeholder="e.g. Sophie van der Berg, Peter Kapitein, Stephen Rowley"
+              placeholder="e.g. Maryana Sukhorukova, Peter Kapitein, Stephen Rowley"
               className="w-full rounded-xl border border-neutral-200 px-4 py-3 text-sm text-neutral-900 outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
             />
           </label>

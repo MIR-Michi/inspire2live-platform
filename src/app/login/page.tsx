@@ -380,47 +380,6 @@ function LoginContent() {
           </form>
         )}
 
-        {/* ── Demo Accounts ── */}
-        {(tab === 'signin' || tab === 'signup') && (
-          <div className="mt-6 border-t border-neutral-200 pt-4">
-            <p className="mb-3 text-xs font-semibold uppercase tracking-wide text-neutral-400">
-              Demo Accounts
-            </p>
-            <div className="grid grid-cols-2 gap-2">
-              {[
-                { name: 'Sophie', role: 'HubCoordinator', email: 'sophie@inspire2live.org', initials: 'SB', color: 'bg-orange-100 text-orange-700' },
-                { name: 'Maria', role: 'PatientAdvocate', email: 'maria@inspire2live.org', initials: 'MH', color: 'bg-rose-100 text-rose-700' },
-                { name: 'Dr. Kai', role: 'Researcher', email: 'kai@inspire2live.org', initials: 'KB', color: 'bg-blue-100 text-blue-700' },
-                { name: 'Dr. Nadia', role: 'Clinician', email: 'nadia@inspire2live.org', initials: 'NR', color: 'bg-emerald-100 text-emerald-700' },
-                { name: 'Peter', role: 'BoardMember', email: 'peter@inspire2live.org', initials: 'PL', color: 'bg-violet-100 text-violet-700' },
-                { name: 'Admin', role: 'PlatformAdmin', email: 'admin@inspire2live.org', initials: 'AD', color: 'bg-red-100 text-red-700' },
-              ].map((demo) => (
-                <button
-                  key={demo.email}
-                  type="button"
-                  onClick={() => {
-                    setEmail(demo.email)
-                    setPassword('demo1234')
-                    setTab('signin')
-                    setStatus(null)
-                  }}
-                  className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left hover:bg-neutral-100 transition-colors"
-                >
-                  <div className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-bold ${demo.color}`}>
-                    {demo.initials}
-                  </div>
-                  <div className="min-w-0">
-                    <p className="text-xs font-semibold text-neutral-800 truncate">{demo.name}</p>
-                    <p className="text-xs text-neutral-400 truncate">{demo.role}</p>
-                  </div>
-                </button>
-              ))}
-            </div>
-            <p className="mt-2 text-xs text-neutral-400 text-center">
-              Click any account above · password: <code className="rounded bg-neutral-100 px-1 font-mono">demo1234</code>
-            </p>
-          </div>
-        )}
 
         {/* ── Forgot password ── */}
         {tab === 'forgot' && (

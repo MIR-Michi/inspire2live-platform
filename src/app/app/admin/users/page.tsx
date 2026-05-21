@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { DEMO_USERS } from '@/lib/demo-data'
 import { EditRoleButton, InviteUserButton, AssignCongressRolesButton } from '@/components/ui/client-buttons'
 import { fetchLatestWorkspaceEvent } from '@/lib/congress-workspace/current-event'
 import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
@@ -27,7 +26,7 @@ export default async function AdminUsersPage() {
 
   const users = (dbUsers ?? []).length > 0
     ? dbUsers!.map(u => ({ id: u.id, name: u.name ?? 'Unnamed', email: u.email ?? '', role: u.role, country: u.country ?? '', last_active: u.updated_at, status: 'active' as const, onboarding_completed: u.onboarding_completed }))
-    : DEMO_USERS
+    : []
 
   const totalActive = users.filter(u => u.status === 'active').length
 
