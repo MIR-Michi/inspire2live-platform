@@ -147,6 +147,8 @@ jobs:
       - name: Run E2E smoke tests
         run: pnpm test:e2e
         timeout-minutes: 10
+        env:
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
 
       - name: Upload Playwright report on failure
         uses: actions/upload-artifact@v4

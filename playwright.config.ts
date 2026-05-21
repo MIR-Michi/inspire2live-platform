@@ -1,7 +1,9 @@
 import { defineConfig, devices } from '@playwright/test'
+import { AUTH_STATE_PATH } from './src/test/e2e/global-setup'
 
 export default defineConfig({
   testDir: './src/test/e2e',
+  globalSetup: './src/test/e2e/global-setup',
   fullyParallel: true,
   forbidOnly: !!process.env.CI,
   retries: process.env.CI ? 1 : 0,
@@ -16,9 +18,20 @@ export default defineConfig({
 
   // Smoke tests use Chromium only — fast and reliable for MVP phase
   projects: [
+    // Unauthenticated tests (auth smoke, redirects)
     {
       name: 'chromium',
+      testIgnore: '**/comms-happy-path.spec.ts',
       use: { ...devices['Desktop Chrome'] },
+    },
+    // Authenticated tests — reuse the session saved by globalSetup
+    {
+      name: 'chromium-auth',
+      testMatch: '**/comms-happy-path.spec.ts',
+      use: {
+        ...devices['Desktop Chrome'],
+        storageState: AUTH_STATE_PATH,
+      },
     },
   ],
 
