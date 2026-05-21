@@ -7,7 +7,7 @@ test.describe('Communications happy path', () => {
     const draftTitle = `Sprint 04 E2E Draft ${uniqueSuffix}`
 
     await page.goto('/login')
-    await page.getByLabel(/email/i).fill('sophie@inspire2live.org')
+    await page.getByLabel(/email/i).fill('admin@inspire2live.org')
     await page.getByLabel(/^password$/i).fill('demo1234')
     await page.locator('form').getByRole('button', { name: /^sign in$/i }).click()
 
