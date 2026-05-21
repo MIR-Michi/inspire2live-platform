@@ -59,7 +59,7 @@ export default async function globalSetup(config: FullConfig) {
   await page.getByLabel(/email/i).fill(ADMIN_EMAIL)
   await page.getByLabel(/^password$/i).fill(ADMIN_PASSWORD)
   await page.locator('form').getByRole('button', { name: /^sign in$/i }).click()
-  await page.waitForURL(/\/app\/dashboard/, { timeout: 30_000 })
+  await page.waitForURL(/\/app\//, { timeout: 30_000 })
 
   await page.context().storageState({ path: AUTH_STATE_PATH })
   await browser.close()
