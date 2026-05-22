@@ -6,6 +6,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import {
+  CONTENT_TYPE_META,
   buildCalendarDraftFromIntake,
   buildTagsFromIntake,
   getRoutingOptions,
@@ -23,6 +24,12 @@ import {
   parseCampusMemberDraft,
   type ParsedCampusMemberDraft,
 } from '@/lib/comms-routing'
+import {
+  COMMS_CLASSIFIER_VERSION,
+  classifyIntakeItem,
+  type PersistedClassifierReason,
+  toClassifierRules,
+} from '@/lib/comms-classifier'
 import { sendDailyCommsDigest } from '@/lib/comms-digest'
 import { buildRecoveryTitle } from '@/lib/comms-media'
 import type { Database } from '@/types/database'
@@ -37,6 +44,7 @@ const INITIAL_STATE: CommsFormState = { ok: false }
 
 type AppSupabaseClient = SupabaseClient<Database>
 type IntakeItemRow = Database['public']['Tables']['intake_items']['Row']
+type ClassifierRuleRow = Database['public']['Tables']['intake_classifier_rules']['Row']
 type EventDraftInput = {
   name: string
   eventType: string
@@ -85,6 +93,56 @@ async function requireCommsOperator() {
   }
 
   return { supabase, user, profile }
+}
+
+async function loadEnabledClassifierRules(supabase: AppSupabaseClient) {
+  const { data, error } = await supabase
+    .from('intake_classifier_rules')
+    .select(
+      'id, rule_name, description, match_field, match_type, pattern, suggested_content_type, suggested_confidence, marks_peter, priority'
+    )
+    .eq('is_enabled', true)
+    .order('priority', { ascending: false })
+
+  if (error) throw new Error(error.message)
+  return toClassifierRules((data ?? []) as ClassifierRuleRow[])
+}
+
+function buildCorrectedClassifierMetadata({
+  senderName,
+  previousType,
+  nextType,
+  promotedRuleId,
+}: {
+  senderName: string
+  previousType: IntakeContentType
+  nextType: IntakeContentType
+  promotedRuleId?: string | null
+}) {
+  const reasoning: PersistedClassifierReason[] = [
+    {
+      ruleId: 'manual:coordinator-correction',
+      label: 'Coordinator correction',
+      evidence: `Updated from ${CONTENT_TYPE_META[previousType].label} to ${CONTENT_TYPE_META[nextType].label}.`,
+      effect: 'type' as const,
+    },
+  ]
+
+  if (isPeterKapiteinSignal(senderName)) {
+    reasoning.unshift({
+      ruleId: 'manual:founder-preserved',
+      label: 'Founder signal preserved',
+      evidence: senderName,
+      effect: 'founder_signal' as const,
+    })
+  }
+
+  return {
+    classifierVersion: `${COMMS_CLASSIFIER_VERSION}:manual-correction`,
+    classifierReasoning: reasoning,
+    classifierRuleIds: promotedRuleId ? ['manual:coordinator-correction', promotedRuleId] : ['manual:coordinator-correction'],
+    isPeterKapitein: isPeterKapiteinSignal(senderName),
+  }
 }
 
 function mergeTextBlocks(existing: string | null | undefined, addition: string) {
@@ -385,6 +443,17 @@ export async function submitManualIntake(
       content_type: contentType,
       classification_confidence: getPeterAwareClassificationConfidence(senderName),
       is_peter_kapitein: peterSignal,
+      classifier_version: COMMS_CLASSIFIER_VERSION,
+      classifier_status: 'manual',
+      classifier_reasoning: [
+        {
+          ruleId: 'manual:coordinator-entry',
+          label: 'Manual coordinator classification',
+          evidence: 'Captured directly by the communications team.',
+          effect: 'type',
+        },
+      ],
+      classifier_rule_ids: ['manual:coordinator-entry'],
       status: 'unreviewed',
     })
 
@@ -419,7 +488,7 @@ export async function routeIntakeItem(
     const { data: item, error: loadError } = await supabase
       .from('intake_items')
       .select(
-        'id, capture_method, captured_at, classification_confidence, content_type, created_at, dismissed_reason, attached_media_ref, is_peter_kapitein, raw_content, reviewed_at, reviewed_by, routed_to_id, routed_to_type, sender_name, sender_whatsapp_id, source_url, status'
+        'id, capture_method, captured_at, classifier_reasoning, classifier_rule_ids, classifier_status, classifier_version, classification_confidence, content_type, created_at, dismissed_reason, attached_media_ref, is_peter_kapitein, provider_message_id, raw_content, reviewed_at, reviewed_by, routed_to_id, routed_to_type, sender_name, sender_whatsapp_id, source_url, status'
       )
       .eq('id', intakeItemId)
       .maybeSingle()
@@ -513,6 +582,7 @@ export async function editIntakeClassification(
     const { supabase, user } = await requireCommsOperator()
     const intakeItemId = asText(formData.get('intake_item_id'))
     const nextType = asText(formData.get('content_type')) as IntakeContentType
+    const promoteAsRule = asText(formData.get('promote_as_sender_rule')) === 'true'
 
     if (!intakeItemId || !nextType) {
       return { ok: false, error: 'Item and updated content type are required.' }
@@ -520,28 +590,86 @@ export async function editIntakeClassification(
 
     const { data: item, error: loadError } = await supabase
       .from('intake_items')
-      .select('id, content_type')
+      .select(
+        'id, sender_name, raw_content, content_type, classifier_version, classifier_reasoning, classification_confidence'
+      )
       .eq('id', intakeItemId)
       .maybeSingle()
 
     if (loadError) throw new Error(loadError.message)
     if (!item) throw new Error('Intake item not found.')
 
+    let promotedRuleId: string | null = null
+
     if (item.content_type !== nextType) {
-      const { error: logError } = await supabase.from('intake_classification_corrections').insert({
+      const { data: correction, error: logError } = await supabase
+        .from('intake_classification_corrections')
+        .insert({
+          intake_item_id: intakeItemId,
+          previous_content_type: item.content_type,
+          corrected_content_type: nextType,
+          corrected_by: user.id,
+        })
+        .select('id')
+        .maybeSingle()
+      if (logError) throw new Error(logError.message)
+
+      const { error: exampleError } = await supabase.from('intake_classifier_training_examples').insert({
         intake_item_id: intakeItemId,
+        correction_id: correction?.id ?? null,
+        sender_name: item.sender_name,
+        raw_content: item.raw_content,
         previous_content_type: item.content_type,
         corrected_content_type: nextType,
-        corrected_by: user.id,
+        classifier_snapshot: {
+          classifierVersion: item.classifier_version,
+          reasoning: item.classifier_reasoning,
+          previousConfidence: item.classification_confidence,
+        },
+        created_by: user.id,
       })
-      if (logError) throw new Error(logError.message)
+      if (exampleError) throw new Error(exampleError.message)
+
+      if (promoteAsRule) {
+        const { data: rule, error: ruleError } = await supabase
+          .from('intake_classifier_rules')
+          .insert({
+            rule_name: `Sender rule: ${item.sender_name}`,
+            description: 'Promoted from a coordinator correction in the intake queue.',
+            match_field: 'sender_name',
+            match_type: 'exact',
+            pattern: item.sender_name,
+            suggested_content_type: nextType,
+            suggested_confidence: 'high',
+            marks_peter: isPeterKapiteinSignal(item.sender_name),
+            priority: 280,
+            created_from_correction_id: correction?.id ?? null,
+            created_by: user.id,
+          })
+          .select('id')
+          .maybeSingle()
+        if (ruleError) throw new Error(ruleError.message)
+        promotedRuleId = rule?.id ?? null
+      }
     }
+
+    const correctedMetadata = buildCorrectedClassifierMetadata({
+      senderName: item.sender_name,
+      previousType: item.content_type as IntakeContentType,
+      nextType,
+      promotedRuleId,
+    })
 
     const { error: updateError } = await supabase
       .from('intake_items')
       .update({
         content_type: nextType,
         classification_confidence: 'high',
+        is_peter_kapitein: correctedMetadata.isPeterKapitein,
+        classifier_version: correctedMetadata.classifierVersion,
+        classifier_status: 'corrected',
+        classifier_reasoning: correctedMetadata.classifierReasoning,
+        classifier_rule_ids: correctedMetadata.classifierRuleIds,
       })
       .eq('id', intakeItemId)
 
@@ -551,6 +679,58 @@ export async function editIntakeClassification(
     return { ok: true, message: 'Classification updated.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not update classification.' }
+  }
+}
+
+export async function replayIntakeClassification(
+  _prevState: CommsFormState = INITIAL_STATE,
+  formData: FormData
+): Promise<CommsFormState> {
+  try {
+    const { supabase } = await requireCommsOperator()
+    const intakeItemId = asText(formData.get('intake_item_id'))
+
+    if (!intakeItemId) return { ok: false, error: 'Item is required.' }
+
+    const { data: item, error: loadError } = await supabase
+      .from('intake_items')
+      .select('id, sender_name, raw_content, source_url, attached_media_ref')
+      .eq('id', intakeItemId)
+      .maybeSingle()
+
+    if (loadError) throw new Error(loadError.message)
+    if (!item) throw new Error('Intake item not found.')
+
+    const rules = await loadEnabledClassifierRules(supabase)
+    const result = classifyIntakeItem(
+      {
+        senderName: item.sender_name,
+        rawContent: item.raw_content,
+        sourceUrl: item.source_url,
+        attachedMediaRef: item.attached_media_ref,
+      },
+      rules
+    )
+
+    const { error: updateError } = await supabase
+      .from('intake_items')
+      .update({
+        content_type: result.contentType,
+        classification_confidence: result.confidence,
+        is_peter_kapitein: result.isPeterKapitein,
+        classifier_version: result.classifierVersion,
+        classifier_status: 'replayed',
+        classifier_reasoning: result.reasoning,
+        classifier_rule_ids: result.matchedRuleIds,
+      })
+      .eq('id', intakeItemId)
+
+    if (updateError) throw new Error(updateError.message)
+
+    revalidatePath('/app/comms/intake')
+    return { ok: true, message: 'Classifier replayed.' }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not replay classifier.' }
   }
 }
 

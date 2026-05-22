@@ -124,6 +124,19 @@ export async function triggerMailchimpDraftStub(
   })
 }
 
+export async function triggerOutlookDraftStub(
+  prevState: StubActionState = INITIAL_STATE,
+  formData: FormData
+) {
+  return triggerStub(prevState, formData, {
+    target: 'outlook',
+    entityType: 'content_calendar',
+    actionName: 'email_draft_stub',
+    successMessage: 'Outlook draft intent logged.',
+    revalidatePathname: '/app/comms/calendar',
+  })
+}
+
 export async function triggerSharePointBrowseStub(
   prevState: StubActionState = INITIAL_STATE,
   formData: FormData

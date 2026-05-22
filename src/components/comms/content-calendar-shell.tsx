@@ -12,6 +12,7 @@ import {
   type CalendarFormState,
 } from '@/app/app/comms/calendar/actions'
 import {
+  triggerOutlookDraftStub,
   triggerLinkedInScheduleStub,
   triggerMailchimpDraftStub,
   triggerWordpressPublishStub,
@@ -364,6 +365,14 @@ function CalendarListCard({
             entityId={entry.id}
             buttonLabel="Mailchimp stub"
             className="rounded-full border border-neutral-200 px-3 py-1 text-[11px] font-semibold text-neutral-700 transition hover:bg-neutral-50"
+          />
+        )}
+        {stubFlags.outlook && (
+          <IntegrationStubForm
+            action={triggerOutlookDraftStub}
+            entityId={entry.id}
+            buttonLabel="Outlook stub"
+            className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 text-[11px] font-semibold text-sky-700 transition hover:bg-sky-100"
           />
         )}
         {stubFlags.wordpress && canUseWordpressStub && (
