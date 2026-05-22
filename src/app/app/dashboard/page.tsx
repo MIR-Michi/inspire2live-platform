@@ -3,7 +3,6 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { buildDashboardGreeting, resolveDashboardVariant } from '@/lib/dashboard-view'
-import { DEMO_NOTIFICATIONS, DEMO_NEWSFEED } from '@/lib/demo-data'
 
 type InitiativeHealth = Tables<'initiative_health'>
 type MemberActivity = Tables<'member_activity_summary'>
@@ -424,7 +423,6 @@ export default async function DashboardPage() {
 
   const greeting = buildDashboardGreeting(profile?.name)
 
-  // Notifications: try DB, fallback to demo
   const { data: dbNotifications } = await supabase
     .from('notifications')
     .select('id, type, title, body, is_read, created_at')
@@ -432,10 +430,10 @@ export default async function DashboardPage() {
     .order('created_at', { ascending: false })
     .limit(8)
 
-  const notifications = (dbNotifications && dbNotifications.length > 0) ? dbNotifications : DEMO_NOTIFICATIONS
+  const notifications = dbNotifications ?? []
   const unreadCount = notifications.filter(n => !n.is_read).length
 
-  const newsfeed = DEMO_NEWSFEED
+  const newsfeed: { id: string; category: string; headline: string; summary: string; source: string; region: string; published: string }[] = []
 
   const NOTIF_META: Record<string, { icon: string; color: string }> = {
     task_assigned:    { icon: '✅', color: 'bg-blue-100 text-blue-700' },
@@ -523,6 +521,11 @@ export default async function DashboardPage() {
                 </div>
               )
             })}
+            {notifications.length === 0 && (
+              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-400">
+                No notifications yet.
+              </p>
+            )}
           </div>
         </section>
 
@@ -530,9 +533,6 @@ export default async function DashboardPage() {
         <section>
           <div className="mb-3 flex items-center justify-between">
             <h2 className="text-base font-semibold text-neutral-900">Field Newsfeed</h2>
-            <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[10px] font-medium text-neutral-500">
-              Curated · non-live
-            </span>
           </div>
           <div className="space-y-2">
             {newsfeed.map(nf => {
@@ -556,6 +556,11 @@ export default async function DashboardPage() {
                 </div>
               )
             })}
+            {newsfeed.length === 0 && (
+              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-400">
+                No newsfeed items available.
+              </p>
+            )}
           </div>
         </section>
       </div>

@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { DEMO_INITIATIVES, DEMO_BOARD_ACTIVITY } from '@/lib/demo-data'
 import type { Tables } from '@/types/database'
 
 type InitiativeHealth = Tables<'initiative_health'>
@@ -68,37 +67,14 @@ export default async function BoardPage() {
     .order('title')
 
   const initiatives: InitiativeHealth[] = allInitiatives ?? []
-  const usingDemo = initiatives.length === 0
 
-  // Use demo for metrics if no DB data
-  const demoInits = DEMO_INITIATIVES
-  const active = usingDemo
-    ? demoInits.filter(i => i.status === 'active').length
-    : initiatives.filter(i => i.status === 'active').length
-
-  const totalMilestonesDone = usingDemo
-    ? demoInits.reduce((s, i) => s + i.completed_milestones, 0)
-    : initiatives.reduce((s, i) => s + (i.completed_milestones ?? 0), 0)
-
-  const totalMilestonesAll = usingDemo
-    ? demoInits.reduce((s, i) => s + i.total_milestones, 0)
-    : initiatives.reduce((s, i) => s + (i.total_milestones ?? 0), 0)
-
-  const totalMembers = usingDemo
-    ? demoInits.reduce((s, i) => s + i.member_count, 0)
-    : initiatives.reduce((s, i) => s + (i.member_count ?? 0), 0)
-
-  const totalBlocked = usingDemo
-    ? demoInits.reduce((s, i) => s + i.blocked_tasks, 0)
-    : initiatives.reduce((s, i) => s + (i.blocked_tasks ?? 0), 0)
-
-  const countries = usingDemo
-    ? new Set(demoInits.flatMap(i => i.countries)).size
-    : new Set(initiatives.flatMap(i => i.countries ?? [])).size
-
-  const atRisk = usingDemo
-    ? demoInits.filter(i => i.overdue_milestones > 0 || i.blocked_tasks >= 3).length
-    : initiatives.filter(i => computeRag(i) === 'red').length
+  const active = initiatives.filter(i => i.status === 'active').length
+  const totalMilestonesDone = initiatives.reduce((s, i) => s + (i.completed_milestones ?? 0), 0)
+  const totalMilestonesAll = initiatives.reduce((s, i) => s + (i.total_milestones ?? 0), 0)
+  const totalMembers = initiatives.reduce((s, i) => s + (i.member_count ?? 0), 0)
+  const totalBlocked = initiatives.reduce((s, i) => s + (i.blocked_tasks ?? 0), 0)
+  const countries = new Set(initiatives.flatMap(i => i.countries ?? [])).size
+  const atRisk = initiatives.filter(i => computeRag(i) === 'red').length
 
   // Initiative table data
   type TableRow = {
@@ -107,32 +83,20 @@ export default async function BoardPage() {
     rag: 'green' | 'amber' | 'red'; lastActivity: string | null;
   }
 
-  const tableData: TableRow[] = usingDemo
-    ? demoInits.map(i => ({
-        id: i.id,
-        title: i.title,
-        phase: i.phase,
-        lead: i.lead.name,
-        milestonesPct: i.total_milestones > 0 ? Math.round((i.completed_milestones / i.total_milestones) * 100) : 0,
-        milestonesDone: i.completed_milestones,
-        milestonesTotal: i.total_milestones,
-        rag: i.overdue_milestones > 0 || i.blocked_tasks >= 3 ? 'red' : i.blocked_tasks > 0 ? 'amber' : 'green',
-        lastActivity: i.last_activity_at,
-      }))
-    : initiatives.map(i => ({
-        id: i.id!,
-        title: i.title ?? '—',
-        phase: i.phase ?? '—',
-        lead: i.lead_name ?? '—',
-        milestonesPct: (i.total_milestones ?? 0) > 0 ? Math.round(((i.completed_milestones ?? 0) / (i.total_milestones ?? 1)) * 100) : 0,
-        milestonesDone: i.completed_milestones ?? 0,
-        milestonesTotal: i.total_milestones ?? 0,
-        rag: computeRag(i),
-        lastActivity: i.last_activity_at ?? null,
-      }))
+  const tableData: TableRow[] = initiatives.map(i => ({
+    id: i.id!,
+    title: i.title ?? '—',
+    phase: i.phase ?? '—',
+    lead: i.lead_name ?? '—',
+    milestonesPct: (i.total_milestones ?? 0) > 0 ? Math.round(((i.completed_milestones ?? 0) / (i.total_milestones ?? 1)) * 100) : 0,
+    milestonesDone: i.completed_milestones ?? 0,
+    milestonesTotal: i.total_milestones ?? 0,
+    rag: computeRag(i),
+    lastActivity: i.last_activity_at ?? null,
+  }))
 
   const nowMs = new Date().getTime()
-  const activityFeed = DEMO_BOARD_ACTIVITY
+  const activityFeed: { id: string; type: string; title: string; detail: string; date: string }[] = []
 
   // Governance reminders
   const GOVERNANCE = [
@@ -150,12 +114,6 @@ export default async function BoardPage() {
           Organizational transparency · Real-time portfolio overview
         </p>
       </div>
-
-      {usingDemo && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-2.5 text-xs text-amber-700">
-          📋 Showing representative portfolio data — live data will appear once initiatives are seeded
-        </div>
-      )}
 
       {/* ── KPI Strip ── */}
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
@@ -274,6 +232,11 @@ export default async function BoardPage() {
                 </div>
               )
             })}
+            {activityFeed.length === 0 && (
+              <div className="rounded-xl border border-dashed border-neutral-300 py-8 text-center text-neutral-400 text-sm">
+                No recent activity recorded yet.
+              </div>
+            )}
           </div>
         </section>
 

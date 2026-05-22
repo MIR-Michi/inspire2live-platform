@@ -1,6 +1,5 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { DEMO_EMAIL_THREADS, DEMO_TEAM_CHAT } from '@/lib/demo-data'
 
 const THREAD_TYPE_META: Record<string, { color: string; label: string }> = {
   update:         { color: 'bg-blue-100 text-blue-700',    label: 'Update' },

@@ -1,9 +1,11 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { DEMO_INITIATIVES } from '@/lib/demo-data'
+import type { Tables } from '@/types/database'
 
-function computeRag(i: typeof DEMO_INITIATIVES[0]): 'green' | 'amber' | 'red' {
+type InitiativeHealth = Tables<'initiative_health'>
+
+function computeRag(i: InitiativeHealth): 'green' | 'amber' | 'red' {
   const overdue = i.overdue_milestones ?? 0
   const blocked = i.blocked_tasks ?? 0
   const approaching = i.approaching_milestones ?? 0
@@ -22,8 +24,7 @@ export default async function BureauPage() {
   if (!user) redirect('/login')
 
   const { data: dbInits } = await supabase.from('initiative_health').select('*').order('title')
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const initiatives: any[] = (dbInits ?? []).length > 0 ? dbInits! : DEMO_INITIATIVES
+  const initiatives: InitiativeHealth[] = dbInits ?? []
 
   const green = initiatives.filter(i => computeRag(i) === 'green').length
   const amber = initiatives.filter(i => computeRag(i) === 'amber').length
