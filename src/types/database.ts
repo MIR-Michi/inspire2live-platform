@@ -1624,12 +1624,17 @@ export type Database = {
           attached_media_ref: string | null
           capture_method: string
           captured_at: string
+          classifier_reasoning: Json
+          classifier_rule_ids: string[]
+          classifier_status: string
+          classifier_version: string | null
           classification_confidence: string | null
           content_type: string
           created_at: string
           dismissed_reason: string | null
           id: string
           is_peter_kapitein: boolean
+          provider_message_id: string | null
           raw_content: string
           reviewed_at: string | null
           reviewed_by: string | null
@@ -1644,12 +1649,17 @@ export type Database = {
           attached_media_ref?: string | null
           capture_method: string
           captured_at?: string
+          classifier_reasoning?: Json
+          classifier_rule_ids?: string[]
+          classifier_status?: string
+          classifier_version?: string | null
           classification_confidence?: string | null
           content_type: string
           created_at?: string
           dismissed_reason?: string | null
           id?: string
           is_peter_kapitein?: boolean
+          provider_message_id?: string | null
           raw_content: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1664,12 +1674,17 @@ export type Database = {
           attached_media_ref?: string | null
           capture_method?: string
           captured_at?: string
+          classifier_reasoning?: Json
+          classifier_rule_ids?: string[]
+          classifier_status?: string
+          classifier_version?: string | null
           classification_confidence?: string | null
           content_type?: string
           created_at?: string
           dismissed_reason?: string | null
           id?: string
           is_peter_kapitein?: boolean
+          provider_message_id?: string | null
           raw_content?: string
           reviewed_at?: string | null
           reviewed_by?: string | null
@@ -1753,6 +1768,161 @@ export type Database = {
           },
           {
             foreignKeyName: "intake_classification_corrections_intake_item_id_fkey"
+            columns: ["intake_item_id"]
+            isOneToOne: false
+            referencedRelation: "intake_items"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intake_classifier_rules: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          created_from_correction_id: string | null
+          description: string | null
+          id: string
+          is_enabled: boolean
+          marks_peter: boolean
+          match_field: string
+          match_type: string
+          pattern: string
+          priority: number
+          rule_name: string
+          suggested_confidence: string
+          suggested_content_type: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          created_from_correction_id?: string | null
+          description?: string | null
+          id?: string
+          is_enabled?: boolean
+          marks_peter?: boolean
+          match_field: string
+          match_type: string
+          pattern: string
+          priority?: number
+          rule_name: string
+          suggested_confidence?: string
+          suggested_content_type: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          created_from_correction_id?: string | null
+          description?: string | null
+          id?: string
+          is_enabled?: boolean
+          marks_peter?: boolean
+          match_field?: string
+          match_type?: string
+          pattern?: string
+          priority?: number
+          rule_name?: string
+          suggested_confidence?: string
+          suggested_content_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_classifier_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "intake_classifier_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_classifier_rules_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+          {
+            foreignKeyName: "intake_classifier_rules_created_from_correction_id_fkey"
+            columns: ["created_from_correction_id"]
+            isOneToOne: false
+            referencedRelation: "intake_classification_corrections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      intake_classifier_training_examples: {
+        Row: {
+          classifier_snapshot: Json
+          corrected_content_type: string
+          correction_id: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          intake_item_id: string
+          previous_content_type: string
+          raw_content: string
+          sender_name: string
+        }
+        Insert: {
+          classifier_snapshot?: Json
+          corrected_content_type: string
+          correction_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intake_item_id: string
+          previous_content_type: string
+          raw_content: string
+          sender_name: string
+        }
+        Update: {
+          classifier_snapshot?: Json
+          corrected_content_type?: string
+          correction_id?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          intake_item_id?: string
+          previous_content_type?: string
+          raw_content?: string
+          sender_name?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "intake_classifier_training_examples_correction_id_fkey"
+            columns: ["correction_id"]
+            isOneToOne: true
+            referencedRelation: "intake_classification_corrections"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_classifier_training_examples_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "member_activity_summary"
+            referencedColumns: ["user_id"]
+          },
+          {
+            foreignKeyName: "intake_classifier_training_examples_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "intake_classifier_training_examples_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "resource_library"
+            referencedColumns: ["uploader_id"]
+          },
+          {
+            foreignKeyName: "intake_classifier_training_examples_intake_item_id_fkey"
             columns: ["intake_item_id"]
             isOneToOne: false
             referencedRelation: "intake_items"
@@ -2039,6 +2209,56 @@ export type Database = {
             columns: ["session_id"]
             isOneToOne: false
             referencedRelation: "campus_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      whatsapp_webhook_events: {
+        Row: {
+          failure_reason: string | null
+          id: string
+          intake_item_id: string | null
+          payload: Json
+          processed_at: string | null
+          processing_status: string
+          provider: string
+          provider_message_id: string
+          received_at: string
+          sender_name: string | null
+          sender_whatsapp_id: string | null
+        }
+        Insert: {
+          failure_reason?: string | null
+          id?: string
+          intake_item_id?: string | null
+          payload: Json
+          processed_at?: string | null
+          processing_status?: string
+          provider?: string
+          provider_message_id: string
+          received_at?: string
+          sender_name?: string | null
+          sender_whatsapp_id?: string | null
+        }
+        Update: {
+          failure_reason?: string | null
+          id?: string
+          intake_item_id?: string | null
+          payload?: Json
+          processed_at?: string | null
+          processing_status?: string
+          provider?: string
+          provider_message_id?: string
+          received_at?: string
+          sender_name?: string | null
+          sender_whatsapp_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_webhook_events_intake_item_id_fkey"
+            columns: ["intake_item_id"]
+            isOneToOne: false
+            referencedRelation: "intake_items"
             referencedColumns: ["id"]
           },
         ]

@@ -72,6 +72,8 @@ function LoginContent() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [status, setStatus] = useState<{ type: 'error' | 'success'; msg: string } | null>(null)
   const [loading, setLoading] = useState(false)
+  const nextPath = searchParams.get('next')
+  const redirectTarget = nextPath && nextPath.startsWith('/app/') ? nextPath : '/app/dashboard'
 
   const authError = searchParams.get('error')
   const resetStatus = searchParams.get('reset')
@@ -98,7 +100,7 @@ function LoginContent() {
     if (error) {
       setStatus({ type: 'error', msg: 'Invalid email or password. Please try again.' })
     } else {
-      router.push('/app/dashboard')
+      router.push(redirectTarget)
       router.refresh()
     }
     setLoading(false)
@@ -379,6 +381,8 @@ function LoginContent() {
             </button>
           </form>
         )}
+
+
 
 
         {/* ── Forgot password ── */}
