@@ -1,4 +1,4 @@
-# Cline Git Workflow
+# Codex/Cline Git Workflow
 
 This document defines the safe commit/push protocol for Cline sessions in this repo.
 
