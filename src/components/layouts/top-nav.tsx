@@ -197,7 +197,7 @@ export function TopNav({
 
         {/* Right: notifications + profile */}
         <div className="flex items-center gap-2">
-          <RoleChips compact />
+          <RoleChips compact workspaceLabel={workspaceLabel} />
 
           {notificationsAccessible ? (
             <Link
