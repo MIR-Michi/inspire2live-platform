@@ -79,7 +79,7 @@ export default async function CommsCampusPage({
       const monthIntake = (intakeItems ?? []).filter((item) => monthKey(item.captured_at) === key)
       const unreviewedCount = monthIntake.filter((item) => item.status === 'unreviewed').length
       const articleCount = monthIntake.filter((item) => item.content_type === 'article_share').length
-      const mediaCount = monthIntake.filter((item) => item.content_type === 'media_asset').length
+      const mediaCount = monthIntake.filter((item) => item.content_type === 'media_request').length
       const memberCount = (members ?? []).filter((member) => member.date_welcomed && monthKey(member.date_welcomed) === key).length
       const latestSession = monthSessions[0]
       const [year, month] = key.split('-')

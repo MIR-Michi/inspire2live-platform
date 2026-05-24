@@ -29,10 +29,8 @@ function typeLabel(value: string) {
 
 function categoryFor(value: string) {
   if (value === 'article_share') return 'Articles and research'
-  if (value === 'media_asset') return 'Media'
-  if (value === 'linkedin_post') return 'LinkedIn'
-  if (value === 'campus_session') return 'Campus sessions'
-  if (value === 'member_update') return 'Members'
+  if (value === 'media_request') return 'Media'
+  if (value === 'member_intro') return 'Members'
   return 'Other incoming'
 }
 
