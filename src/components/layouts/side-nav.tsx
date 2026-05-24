@@ -169,18 +169,17 @@ export function SideNav({
   if (showCommsWorkspace) {
     return (
       <aside
-        className="hidden w-60 shrink-0 border-r border-neutral-200 bg-white lg:flex lg:flex-col"
+        className="hidden w-60 shrink-0 bg-[#202133] text-slate-200 lg:flex lg:flex-col"
         role="complementary"
         aria-label="Communications navigation"
       >
-        <div className="border-b border-neutral-100 px-4 py-4">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-700">{workspaceLabel}</p>
-          <p className="mt-1 text-sm font-semibold text-neutral-900">Focused workspace</p>
+        <div className="px-4 pb-3 pt-8">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">{workspaceLabel}</p>
         </div>
-        <nav className="flex flex-1 flex-col gap-5 p-3 pt-4" aria-label="Communications workspace navigation">
+        <nav className="flex flex-1 flex-col gap-5 px-3 py-2" aria-label="Communications workspace navigation">
           {COMMS_NAV_SECTIONS.map((section) => (
             <div key={section.label} className="space-y-1.5">
-              <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+              <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
                 {section.label}
               </p>
               {section.items.map((item) => {
@@ -191,14 +190,14 @@ export function SideNav({
                     key={item.href}
                     href={item.href}
                     className={[
-                      'flex items-center justify-between rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors',
+                      'flex items-center justify-between rounded-md px-3 py-2 text-sm font-medium transition-colors',
                       active
                         ? item.priority
-                          ? 'border-l-2 border-orange-700 bg-orange-50 text-orange-800'
-                          : 'border-l-2 border-neutral-900 bg-neutral-100 text-neutral-950'
+                          ? 'bg-[#343449] text-orange-300'
+                          : 'bg-[#343449] text-white'
                         : item.priority
-                          ? 'text-orange-800 hover:bg-orange-50'
-                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950',
+                          ? 'text-orange-300 hover:bg-white/5'
+                          : 'text-slate-300 hover:bg-white/5 hover:text-white',
                     ].join(' ')}
                     aria-current={active ? 'page' : undefined}
                   >
@@ -214,8 +213,8 @@ export function SideNav({
             </div>
           ))}
         </nav>
-        <div className="border-t border-neutral-100 p-4 text-xs leading-5 text-neutral-500">
-          Provider-dependent publishing remains manual until credentials and ownership are verified.
+        <div className="border-t border-white/5 p-4 text-xs leading-5 text-slate-500">
+          Other sections via profile menu
         </div>
       </aside>
     )

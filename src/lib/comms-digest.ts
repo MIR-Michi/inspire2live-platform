@@ -267,12 +267,12 @@ export async function sendDailyCommsDigest(options: SendDigestOptions): Promise<
 export async function sendScheduledCommsDigests(supabase: AdminClient, baseUrl: string, now = new Date()) {
   const { data: recipientRows, error } = await supabase
     .from('profiles')
-    .select('id, email, name, role, timezone, notification_prefs, comms_team')
+    .select('id, email, name, role, timezone, notification_prefs, comms_team, user_type')
 
   if (error) throw new Error(error.message)
 
   const recipients = (recipientRows ?? []).filter(
-    (recipient) => canAccessCommsWorkspace(recipient.role, recipient.comms_team)
+    (recipient) => canAccessCommsWorkspace(recipient.role, recipient.comms_team, recipient.user_type)
   )
 
   const results: Array<{ email: string; sent: boolean; itemCount: number; error?: string }> = []

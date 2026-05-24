@@ -38,12 +38,12 @@ async function requireCommsOperator() {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('role, comms_team')
+    .select('role, comms_team, user_type')
     .eq('id', user.id)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
-  if (!profile || !canAccessCommsWorkspace(profile.role, profile.comms_team)) {
+  if (!profile || !canAccessCommsWorkspace(profile.role, profile.comms_team, profile.user_type)) {
     throw new Error('Not authorized for the communications workspace')
   }
 

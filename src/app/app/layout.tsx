@@ -5,7 +5,7 @@ import { SideNav } from '@/components/layouts/side-nav'
 import { canAccessAppPath, normalizeRole } from '@/lib/role-access'
 import { resolveAllSpaces } from '@/lib/permissions'
 import type { AccessLevel } from '@/lib/permissions'
-import { getViewAsRole } from '@/lib/view-as'
+import { getViewAsRole, getViewAsUserType } from '@/lib/view-as'
 import { switchPerspective } from './admin/view-as-action'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
@@ -65,7 +65,15 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Admin perspective switching: read cookie
   const viewAsRole = isAdmin ? await getViewAsRole() : null
+  const viewAsUserType = isAdmin ? await getViewAsUserType() : null
   const effectiveRole = viewAsRole ?? actualRole
+  const effectiveProfile = profile
+    ? {
+        ...profile,
+        user_type: viewAsUserType ?? profile.user_type,
+        comms_team: profile.comms_team || viewAsUserType === 'comms',
+      }
+    : profile
 
   const currentAllowed = canAccessAppPath(actualRole, '/app/dashboard')
   if (!currentAllowed) {
@@ -76,9 +84,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Uses effectiveRole (view-as aware) so preview mode reflects the target role's defaults,
   // but DB overrides are looked up by the actual user's id.
   const effectiveSpaces = await resolveAllSpaces(user.id, effectiveRole, supabase)
-  const canUseCommsWorkspace = canAccessCommsWorkspace(actualRole, profile?.comms_team, profile?.user_type)
-  const showCommsWorkspace = isCommsUser(profile)
-  const workspaceLabel = getUserWorkspaceLabel(profile)
+  const canUseCommsWorkspace = canAccessCommsWorkspace(actualRole, effectiveProfile?.comms_team, effectiveProfile?.user_type)
+  const showCommsWorkspace = isCommsUser(effectiveProfile)
+  const workspaceLabel = getUserWorkspaceLabel(effectiveProfile)
   const effectiveSpacesWithComms = canUseCommsWorkspace
     ? {
         ...effectiveSpaces,
@@ -102,11 +110,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <RoleLayersProvider platformRole={effectiveRole}>
       <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
         {/* Admin preview banner */}
-        {isAdmin && viewAsRole && viewAsRole !== 'PlatformAdmin' && (
+        {isAdmin && ((viewAsRole && viewAsRole !== 'PlatformAdmin') || viewAsUserType) && (
           <div className="flex items-center justify-center gap-3 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 border-b border-amber-200">
-            <span>👁 Admin preview — viewing as <strong>{viewAsRole}</strong></span>
+            <span>
+              Admin preview — role <strong>{viewAsRole ?? 'PlatformAdmin'}</strong>, workspace <strong>{workspaceLabel}</strong>
+            </span>
             <form action={switchPerspective}>
               <input type="hidden" name="role" value="PlatformAdmin" />
+              <input type="hidden" name="user_type" value="default" />
               <button
                 type="submit"
                 className="rounded bg-amber-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-800"
@@ -124,6 +135,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           unreadCount={unread ?? 0}
           isAdmin={isAdmin}
           viewAsRole={viewAsRole}
+          viewAsUserType={viewAsUserType}
           showCommsNav={showCommsWorkspace}
           workspaceLabel={workspaceLabel}
         />

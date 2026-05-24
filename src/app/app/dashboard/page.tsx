@@ -5,6 +5,7 @@ import type { Tables } from '@/types/database'
 import { getDashboardConfig } from '@/lib/dashboard-config'
 import { buildDashboardGreeting, resolveDashboardVariant } from '@/lib/dashboard-view'
 import { applyCanonicalCommsFallback, isCommsUser } from '@/lib/user-workspace'
+import { getViewAsRole, getViewAsUserType } from '@/lib/view-as'
 
 type InitiativeHealth = Tables<'initiative_health'>
 type MemberActivity = Tables<'member_activity_summary'>
@@ -432,9 +433,22 @@ export default async function DashboardPage() {
 
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
-  const role = profile?.role ?? 'PatientAdvocate'
-  const dashboardConfig = getDashboardConfig(profile?.user_type)
-  const showCommsBlocks = isCommsUser(profile)
+  const actualRole = profile?.role ?? 'PatientAdvocate'
+  const isAdmin = actualRole === 'PlatformAdmin'
+  const viewAsRole = isAdmin ? await getViewAsRole() : null
+  const viewAsUserType = isAdmin ? await getViewAsUserType() : null
+  const effectiveProfile = profile
+    ? {
+        ...profile,
+        role: viewAsRole ?? profile.role,
+        user_type: viewAsUserType ?? profile.user_type,
+        comms_team: profile.comms_team || viewAsUserType === 'comms',
+      }
+    : profile
+
+  const role = effectiveProfile?.role ?? 'PatientAdvocate'
+  const dashboardConfig = getDashboardConfig(effectiveProfile?.user_type)
+  const showCommsBlocks = isCommsUser(effectiveProfile)
   const dashboardVariant = resolveDashboardVariant(role)
   const isCoordinator = dashboardVariant === 'coordinator'
   const isBoard = dashboardVariant === 'board'
