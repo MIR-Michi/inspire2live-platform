@@ -56,6 +56,8 @@ type IntakeCandidate = {
   captured_at: string
 }
 
+type PlannerView = 'month' | 'list' | 'drafts' | 'my_items'
+
 const INITIAL_STATE: CalendarFormState = { ok: false }
 
 function toDateTimeLocal(value: string | null) {
@@ -394,14 +396,18 @@ export function ContentCalendarShell({
   intakeCandidates,
   view,
   statusFilter,
+  currentUserId,
+  basePath = '/app/comms/calendar',
   canUseWordpressStub,
   stubFlags,
 }: {
   entries: CalendarEntry[]
   authors: AuthorOption[]
   intakeCandidates: IntakeCandidate[]
-  view: 'month' | 'list'
+  view: PlannerView
   statusFilter: 'all' | CalendarStatus
+  currentUserId?: string | null
+  basePath?: string
   canUseWordpressStub: boolean
   stubFlags: IntegrationStubFlags
 }) {
@@ -409,10 +415,16 @@ export function ContentCalendarShell({
   const [editingEntry, setEditingEntry] = useState<CalendarEntry | null>(null)
   const [promotionState, promoteAction] = useActionState(promoteIntakeCandidate, INITIAL_STATE)
 
-  const filteredEntries =
+  const statusFilteredEntries =
     statusFilter === 'all' ? entries : entries.filter((entry) => entry.status === statusFilter)
+  const filteredEntries = statusFilteredEntries.filter((entry) => {
+    if (view === 'drafts') return entry.status === 'draft'
+    if (view === 'my_items') return Boolean(currentUserId) && entry.author_id === currentUserId
+    return true
+  })
   const groupedEntries = useMemo(() => groupCalendarEntriesByDay(filteredEntries), [filteredEntries])
   const monthGrid = useMemo(() => buildMonthGrid(), [])
+  const monthStrip = monthGrid.filter((date) => date.getMonth() === new Date().getMonth()).slice(0, 7)
 
   const openCreateModal = () => {
     setEditingEntry(null)
@@ -429,12 +441,12 @@ export function ContentCalendarShell({
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">
-            Publication planning
+            Planner
           </p>
-          <h2 className="text-2xl font-semibold text-neutral-900">Content calendar</h2>
+          <h2 className="text-2xl font-semibold text-neutral-900">Content planner</h2>
           <p className="max-w-3xl text-sm text-neutral-600">
             Plan newsletter, social, WordPress, podcast, and YouTube output from one place. Intake
-            items can promote directly into draft cards, and publishing stays manual in Sprint 02.
+            items can promote directly into draft cards, and publishing stays manual until providers are verified.
           </p>
         </div>
 
@@ -490,22 +502,34 @@ export function ContentCalendarShell({
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/app/comms/calendar?view=month"
+            href={`${basePath}?view=month`}
             className={`rounded-full px-3 py-1.5 text-sm font-semibold ${view === 'month' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700'}`}
           >
             Monthly grid
           </Link>
           <Link
-            href="/app/comms/calendar?view=list"
+            href={`${basePath}?view=list`}
             className={`rounded-full px-3 py-1.5 text-sm font-semibold ${view === 'list' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700'}`}
           >
             List view
+          </Link>
+          <Link
+            href={`${basePath}?view=drafts`}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${view === 'drafts' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700'}`}
+          >
+            Drafts
+          </Link>
+          <Link
+            href={`${basePath}?view=my_items`}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${view === 'my_items' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700'}`}
+          >
+            My items
           </Link>
         </div>
 
         <div className="flex flex-wrap gap-2">
           <Link
-            href={`/app/comms/calendar?view=${view}&status=all`}
+            href={`${basePath}?view=${view}&status=all`}
             className={`rounded-full px-3 py-1.5 text-sm font-semibold ${statusFilter === 'all' ? 'bg-orange-100 text-orange-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
           >
             All statuses
@@ -513,13 +537,24 @@ export function ContentCalendarShell({
           {Object.entries(CALENDAR_STATUS_META).map(([value, meta]) => (
             <Link
               key={value}
-              href={`/app/comms/calendar?view=${view}&status=${value}`}
+              href={`${basePath}?view=${view}&status=${value}`}
               className={`rounded-full px-3 py-1.5 text-sm font-semibold ${statusFilter === value ? 'bg-orange-100 text-orange-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
             >
               {meta.label}
             </Link>
           ))}
         </div>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+        {monthStrip.map((date) => (
+          <div key={date.toISOString()} className="min-w-20 rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2 text-center">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-400">
+              {new Intl.DateTimeFormat('en-GB', { weekday: 'short' }).format(date)}
+            </p>
+            <p className="text-lg font-semibold text-neutral-900">{date.getDate()}</p>
+          </div>
+        ))}
       </div>
 
       {view === 'month' ? (

@@ -14,6 +14,8 @@ import { EVENT_STAGE_META, type EventStage } from '@/lib/comms-workflow'
 import { createClient } from '@/lib/supabase/server'
 
 const EVENT_DETAIL_SELECT =
+  'id, name, event_type, start_date, end_date, location_city, location_country, organiser, stage, is_annual_congress, is_i2l_organised, initiative_ids, i2l_representatives, output_report_drafted, output_linkedin_published, output_newsletter_mentioned, output_media_stored, notes'
+const EVENT_DETAIL_FALLBACK_SELECT =
   'id, name, event_type, start_date, end_date, location_city, location_country, organiser, stage, is_annual_congress, initiative_ids, i2l_representatives, output_report_drafted, output_linkedin_published, output_newsletter_mentioned, output_media_stored, notes'
 
 function formatDateRange(startDate: string, endDate: string | null) {
@@ -33,11 +35,20 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: event } = await supabase
+  const { data: eventWithOwnership, error: eventWithOwnershipError } = await supabase
     .from('events')
     .select(EVENT_DETAIL_SELECT)
     .eq('id', id)
     .maybeSingle()
+  let event = eventWithOwnership
+  if (eventWithOwnershipError) {
+    const { data: fallbackEvent } = await supabase
+      .from('events')
+      .select(EVENT_DETAIL_FALLBACK_SELECT)
+      .eq('id', id)
+      .maybeSingle()
+    event = fallbackEvent ? { ...fallbackEvent, is_i2l_organised: false } : null
+  }
 
   if (!event) notFound()
 
@@ -78,6 +89,7 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge label={EVENT_STAGE_META[event.stage as EventStage]?.label ?? event.stage} tone={EVENT_STAGE_META[event.stage as EventStage]?.tone ?? 'neutral'} />
             <StatusBadge label={event.event_type} tone="blue" />
+            <StatusBadge label={event.is_i2l_organised ? 'I2L own' : 'Networking'} tone={event.is_i2l_organised ? 'green' : 'neutral'} />
           </div>
           <div>
             <h1 className="text-3xl font-semibold text-neutral-900">{event.name}</h1>
@@ -136,6 +148,11 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
           <label className="flex items-center gap-2 rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-medium text-violet-900">
             <input type="checkbox" name="is_annual_congress" value="true" defaultChecked={event.is_annual_congress} />
             Annual Congress event
+          </label>
+
+          <label className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
+            <input type="checkbox" name="is_i2l_organised" value="true" defaultChecked={event.is_i2l_organised} />
+            I2L-organised event
           </label>
 
           <fieldset className="space-y-3">

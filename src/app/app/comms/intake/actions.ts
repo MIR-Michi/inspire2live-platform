@@ -358,11 +358,10 @@ async function createDestinationRecord(
             await sb
               .from('profiles')
               .select('id, role, comms_team')
-              .in('role', ['PlatformAdmin', 'Moderator'])
           ).data
             ?.filter(
               (profile) =>
-                profile.role === 'PlatformAdmin' || (profile.role === 'Moderator' && profile.comms_team)
+                canAccessCommsWorkspace(profile.role, profile.comms_team)
             )
             .map((profile) => profile.id) ?? []
 

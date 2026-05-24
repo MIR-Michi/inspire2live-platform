@@ -64,6 +64,7 @@ export async function createEvent(formData: FormData) {
       location_country: asText(formData.get('location_country')) || null,
       notes: asText(formData.get('notes')) || null,
       is_annual_congress: asText(formData.get('is_annual_congress')) === 'true',
+      is_i2l_organised: asText(formData.get('is_i2l_organised')) === 'true',
       stage: 'announced',
     })
     .select('id')
@@ -91,6 +92,7 @@ export async function saveEventDetails(formData: FormData) {
     location_country: asText(formData.get('location_country')) || null,
     notes: asText(formData.get('notes')) || null,
     is_annual_congress: asText(formData.get('is_annual_congress')) === 'true',
+    is_i2l_organised: asText(formData.get('is_i2l_organised')) === 'true',
     i2l_representatives: parseValues(formData, 'i2l_representatives'),
   }
 

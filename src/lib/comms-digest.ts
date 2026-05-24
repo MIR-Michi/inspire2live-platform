@@ -1,6 +1,7 @@
 import { formatInTimeZone } from 'date-fns-tz'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
+import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { CONTENT_TYPE_META, getDigestTime, getDigestWindowLabel } from '@/lib/comms-workflow'
 
 type AdminClient = SupabaseClient<Database>
@@ -267,12 +268,11 @@ export async function sendScheduledCommsDigests(supabase: AdminClient, baseUrl: 
   const { data: recipientRows, error } = await supabase
     .from('profiles')
     .select('id, email, name, role, timezone, notification_prefs, comms_team')
-    .in('role', ['PlatformAdmin', 'Moderator'])
 
   if (error) throw new Error(error.message)
 
   const recipients = (recipientRows ?? []).filter(
-    (recipient) => recipient.role === 'PlatformAdmin' || (recipient.role === 'Moderator' && recipient.comms_team)
+    (recipient) => canAccessCommsWorkspace(recipient.role, recipient.comms_team)
   )
 
   const results: Array<{ email: string; sent: boolean; itemCount: number; error?: string }> = []

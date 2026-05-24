@@ -44,6 +44,7 @@ After Sprint 04 ships the MVP, Phase 2 begins: WhatsApp Business API webhook, ru
 - [`sprint-05-intake-automation-and-classification/`](sprint-05-intake-automation-and-classification/description.md)
 - [`sprint-06-publishing-connectors-and-distribution/`](sprint-06-publishing-connectors-and-distribution/description.md)
 - [`sprint-07-media-graph-and-pilot-hardening/`](sprint-07-media-graph-and-pilot-hardening/description.md)
+- [`sprint-08-comms-user-type-and-workspace-restructure/`](sprint-08-comms-user-type-and-workspace-restructure/description.md)
 
 These remain planning placeholders until the Sprint 04 pilot review is complete.
 

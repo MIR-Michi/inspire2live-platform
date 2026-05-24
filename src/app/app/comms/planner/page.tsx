@@ -7,7 +7,7 @@ import type { CalendarStatus } from '@/lib/comms-workflow'
 const VALID_VIEWS = new Set(['month', 'list', 'drafts', 'my_items'])
 const VALID_STATUSES = new Set<CalendarStatus>(['draft', 'in_review', 'scheduled', 'published', 'archived'])
 
-export default async function CommsCalendarPage({
+export default async function CommsPlannerPage({
   searchParams,
 }: {
   searchParams?: Promise<{ view?: string; status?: string }>
@@ -90,6 +90,7 @@ export default async function CommsCalendarPage({
       view={view}
       statusFilter={statusFilter}
       currentUserId={user?.id ?? null}
+      basePath="/app/comms/planner"
       canUseWordpressStub={currentProfile?.role === 'PlatformAdmin'}
       stubFlags={getIntegrationStubFlags()}
     />

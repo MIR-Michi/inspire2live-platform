@@ -21,23 +21,24 @@ type RoutingInput = {
   onboardingCompleted: boolean | null
   role?: string | null
   commsTeam?: boolean | null
+  userType?: string | null
   pathname: string
 }
 
 function resolveRedirect(input: RoutingInput): string | null {
-  const { user, onboardingCompleted, pathname, role = null, commsTeam = null } = input
+  const { user, onboardingCompleted, pathname, role = null, commsTeam = null, userType = null } = input
 
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
   const isOnboardingPage = pathname.startsWith('/onboarding')
   const isProtected = pathname.startsWith('/app')
 
   if (!user && isProtected) return '/login'
-  if (user && isAuthPage) return getPostLoginLandingPath(role, commsTeam)
+  if (user && isAuthPage) return getPostLoginLandingPath(role, commsTeam, userType)
   if (user && !isOnboardingPage && !isAuthPage && onboardingCompleted === false && isProtected) {
     return '/onboarding'
   }
   if (user && onboardingCompleted && pathname.startsWith('/app/comms')) {
-    return canAccessCommsWorkspace(role, commsTeam) ? null : '/app/dashboard'
+    return canAccessCommsWorkspace(role, commsTeam, userType) ? null : '/app/dashboard'
   }
   return null
 }
@@ -76,7 +77,7 @@ describe('Middleware routing logic', () => {
       ).toBe('/app/dashboard')
     })
 
-    it('redirects comms-team users away from /login to /app/comms/intake', () => {
+    it('redirects comms-team users away from /login to the shared dashboard', () => {
       expect(
         resolveRedirect({
           user: true,
@@ -85,7 +86,7 @@ describe('Middleware routing logic', () => {
           commsTeam: true,
           pathname: '/login',
         })
-      ).toBe('/app/comms/intake')
+      ).toBe('/app/dashboard')
     })
 
     it('passes through to /app/dashboard without redirect', () => {
@@ -141,6 +142,19 @@ describe('Middleware routing logic', () => {
           role: 'Moderator',
           commsTeam: true,
           pathname: '/app/comms/intake',
+        })
+      ).toBeNull()
+    })
+
+    it('allows user_type comms users to access /app/comms routes without role promotion', () => {
+      expect(
+        resolveRedirect({
+          user: true,
+          onboardingCompleted: true,
+          role: 'PatientAdvocate',
+          commsTeam: false,
+          userType: 'comms',
+          pathname: '/app/comms/planner',
         })
       ).toBeNull()
     })

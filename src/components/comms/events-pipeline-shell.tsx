@@ -14,6 +14,7 @@ type EventCard = {
   organiser: string | null
   stage: string
   is_annual_congress: boolean
+  is_i2l_organised: boolean
   initiativeLabels: string[]
   representativeLabels: string[]
   outputs: Array<{ label: string; done: boolean }>
@@ -30,6 +31,13 @@ const EVENT_FILTERS: Array<{ key: 'all' | EventStage; label: string }> = [
   { key: 'archived', label: 'Archived' },
 ]
 
+const EVENT_SCOPE_FILTERS: Array<{ key: 'all' | 'i2l' | 'networking' | 'past'; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'i2l', label: 'I2L own' },
+  { key: 'networking', label: 'Networking' },
+  { key: 'past', label: 'Past' },
+]
+
 function formatDateRange(startDate: string, endDate: string | null) {
   const formatter = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' })
   if (!endDate || endDate === startDate) return formatter.format(new Date(startDate))
@@ -43,10 +51,16 @@ function formatLocation(city: string | null, country: string | null) {
 export function EventsPipelineShell({
   events,
   stageFilter,
+  scopeFilter,
+  eventTypeFilter,
+  eventTypes,
   initiatives,
 }: {
   events: EventCard[]
   stageFilter: 'all' | EventStage
+  scopeFilter: 'all' | 'i2l' | 'networking' | 'past'
+  eventTypeFilter: string
+  eventTypes: string[]
   initiatives: Option[]
 }) {
   return (
@@ -61,7 +75,7 @@ export function EventsPipelineShell({
             </span>
           </div>
           <p className="text-sm text-neutral-600">
-            Track conferences, workshops, and congresses from announcement through follow-up outputs.
+            Track I2L-organised events separately from networking attendance while keeping congress links visible.
           </p>
         </div>
       </header>
@@ -117,6 +131,11 @@ export function EventsPipelineShell({
             Annual Congress event
           </label>
 
+          <label className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-medium text-emerald-900">
+            <input type="checkbox" name="is_i2l_organised" value="true" />
+            I2L-organised event
+          </label>
+
           {initiatives.length > 0 && (
             <div className="md:col-span-2 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
               <p className="text-sm font-semibold text-neutral-800">Reference initiatives</p>
@@ -139,13 +158,31 @@ export function EventsPipelineShell({
         </form>
       </details>
 
-      <nav className="flex flex-wrap gap-2">
+      <nav className="flex flex-wrap gap-2" aria-label="Event ownership filters">
+        {EVENT_SCOPE_FILTERS.map((item) => {
+          const isActive = item.key === scopeFilter
+          return (
+            <Link
+              key={item.key}
+              href={item.key === 'all' ? '/app/comms/events' : `/app/comms/events?scope=${item.key}`}
+              className={[
+                'rounded-full px-3 py-1.5 text-sm font-semibold transition',
+                isActive ? 'bg-orange-100 text-orange-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
+              ].join(' ')}
+            >
+              {item.label}
+            </Link>
+          )
+        })}
+      </nav>
+
+      <nav className="flex flex-wrap gap-2" aria-label="Event stage filters">
         {EVENT_FILTERS.map((item) => {
           const isActive = item.key === stageFilter
           return (
             <Link
               key={item.key}
-              href={item.key === 'all' ? '/app/comms/events' : `/app/comms/events?stage=${item.key}`}
+              href={item.key === 'all' ? `/app/comms/events?scope=${scopeFilter}` : `/app/comms/events?scope=${scopeFilter}&stage=${item.key}`}
               className={[
                 'rounded-full px-3 py-1.5 text-sm font-semibold transition',
                 isActive ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
@@ -157,6 +194,26 @@ export function EventsPipelineShell({
         })}
       </nav>
 
+      {eventTypes.length > 0 && (
+        <nav className="flex flex-wrap gap-2" aria-label="Event type filters">
+          <Link
+            href={`/app/comms/events?scope=${scopeFilter}`}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${eventTypeFilter === 'all' ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
+          >
+            All types
+          </Link>
+          {eventTypes.map((eventType) => (
+            <Link
+              key={eventType}
+              href={`/app/comms/events?scope=${scopeFilter}&event_type=${eventType}`}
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${eventTypeFilter === eventType ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
+            >
+              {eventType}
+            </Link>
+          ))}
+        </nav>
+      )}
+
       <div className="space-y-4">
         {events.map((event) => (
           <article key={event.id} className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
@@ -165,6 +222,7 @@ export function EventsPipelineShell({
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge label={EVENT_STAGE_META[event.stage as EventStage]?.label ?? event.stage} tone={EVENT_STAGE_META[event.stage as EventStage]?.tone ?? 'neutral'} />
                   <StatusBadge label={event.event_type} tone="blue" />
+                  <StatusBadge label={event.is_i2l_organised || event.is_annual_congress ? 'I2L own' : 'Networking'} tone={event.is_i2l_organised || event.is_annual_congress ? 'green' : 'neutral'} />
                   {event.is_annual_congress && <StatusBadge label="Annual Congress" tone="violet" />}
                 </div>
                 <div>

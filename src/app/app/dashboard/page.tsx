@@ -2,7 +2,9 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
+import { getDashboardConfig } from '@/lib/dashboard-config'
 import { buildDashboardGreeting, resolveDashboardVariant } from '@/lib/dashboard-view'
+import { applyCanonicalCommsFallback, isCommsUser } from '@/lib/user-workspace'
 
 type InitiativeHealth = Tables<'initiative_health'>
 type MemberActivity = Tables<'member_activity_summary'>
@@ -351,6 +353,57 @@ function BoardDashboard({ initiatives }: { initiatives: InitiativeHealth[] }) {
   )
 }
 
+function CommsDashboardPanel({
+  todayCount,
+  weekCount,
+  attentionCount,
+  readyCount,
+}: {
+  todayCount: number
+  weekCount: number
+  attentionCount: number
+  readyCount: number
+}) {
+  return (
+    <section className="space-y-4 rounded-2xl border border-orange-200 bg-orange-50/70 p-5 shadow-sm">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Communications workspace</p>
+          <h2 className="mt-1 text-xl font-semibold text-neutral-950">Today&apos;s comms control room</h2>
+          <p className="mt-1 text-sm text-orange-900/80">
+            A shared dashboard slice for planning, campus signals, review queues, and safe manual publishing.
+          </p>
+        </div>
+        <Link
+          href="/app/comms/planner"
+          className="rounded-xl bg-neutral-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800"
+        >
+          Open planner
+        </Link>
+      </div>
+
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <StatCard label="What's Up Today" value={todayCount} sub="scheduled or captured today" />
+        <StatCard label="This Week" value={weekCount} sub="planned content cards" />
+        <StatCard label="Needs Attention" value={attentionCount} sub="unreviewed intake" />
+        <StatCard label="Content Ready" value={readyCount} sub="scheduled or approved assets" />
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-3">
+        <Link href="/app/comms/campus" className="rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-900 shadow-sm hover:border-orange-400">
+          Campus feed and month view
+        </Link>
+        <Link href="/app/comms/events" className="rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-900 shadow-sm hover:border-orange-400">
+          Events and Annual Congress follow-up
+        </Link>
+        <Link href="/app/comms/library" className="rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-900 shadow-sm hover:border-orange-400">
+          Library search and rights checks
+        </Link>
+      </div>
+    </section>
+  )
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 export default async function DashboardPage() {
   const supabase = await createClient()
@@ -359,15 +412,29 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
+  const { data: profileWithUserType, error: profileWithUserTypeError } = await supabase
     .from('profiles')
-    .select('name, role, onboarding_completed')
+    .select('name, role, onboarding_completed, comms_team, user_type')
     .eq('id', user.id)
     .maybeSingle()
+  let profile = profileWithUserType
+
+  if (profileWithUserTypeError) {
+    const { data: fallbackProfile } = await supabase
+      .from('profiles')
+      .select('name, role, onboarding_completed, comms_team')
+      .eq('id', user.id)
+      .maybeSingle()
+    profile = fallbackProfile ? { ...fallbackProfile, user_type: 'default' } : null
+  }
+
+  profile = applyCanonicalCommsFallback(profile, user.email)
 
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
   const role = profile?.role ?? 'PatientAdvocate'
+  const dashboardConfig = getDashboardConfig(profile?.user_type)
+  const showCommsBlocks = isCommsUser(profile)
   const dashboardVariant = resolveDashboardVariant(role)
   const isCoordinator = dashboardVariant === 'coordinator'
   const isBoard = dashboardVariant === 'board'
@@ -423,6 +490,60 @@ export default async function DashboardPage() {
 
   const greeting = buildDashboardGreeting(profile?.name)
 
+  let commsTodayCount = 0
+  let commsWeekCount = 0
+  let commsAttentionCount = 0
+  let commsReadyCount = 0
+
+  if (showCommsBlocks) {
+    const today = new Date()
+    const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate()).toISOString()
+    const tomorrowStart = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 1).toISOString()
+    const weekEnd = new Date(today.getFullYear(), today.getMonth(), today.getDate() + 7).toISOString()
+
+    const [
+      { count: scheduledToday },
+      { count: capturedToday },
+      { count: plannedWeek },
+      { count: unreviewed },
+      { count: scheduledReady },
+      { count: approvedAssets },
+    ] = await Promise.all([
+      supabase
+        .from('content_calendar')
+        .select('id', { count: 'exact', head: true })
+        .gte('scheduled_at', todayStart)
+        .lt('scheduled_at', tomorrowStart),
+      supabase
+        .from('intake_items')
+        .select('id', { count: 'exact', head: true })
+        .gte('captured_at', todayStart)
+        .lt('captured_at', tomorrowStart),
+      supabase
+        .from('content_calendar')
+        .select('id', { count: 'exact', head: true })
+        .gte('scheduled_at', todayStart)
+        .lt('scheduled_at', weekEnd),
+      supabase
+        .from('intake_items')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'unreviewed'),
+      supabase
+        .from('content_calendar')
+        .select('id', { count: 'exact', head: true })
+        .eq('status', 'scheduled'),
+      supabase
+        .from('media_assets')
+        .select('id', { count: 'exact', head: true })
+        .eq('rights_status', 'approved_for_publication'),
+    ])
+
+    commsTodayCount = (scheduledToday ?? 0) + (capturedToday ?? 0)
+    commsWeekCount = plannedWeek ?? 0
+    commsAttentionCount = unreviewed ?? 0
+    commsReadyCount = (scheduledReady ?? 0) + (approvedAssets ?? 0)
+  }
+
   const { data: dbNotifications } = await supabase
     .from('notifications')
     .select('id, type, title, body, is_read, created_at')
@@ -466,15 +587,26 @@ export default async function DashboardPage() {
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div>
-        <h1 className="text-2xl font-bold text-neutral-900">Dashboard</h1>
-        <p className="mt-1 text-sm text-neutral-500">{greeting}</p>
+        <h1 className="text-2xl font-bold text-neutral-900">{dashboardConfig.title}</h1>
+        <p className="mt-1 text-sm text-neutral-500">
+          {greeting} {dashboardConfig.subtitle}
+        </p>
       </div>
 
-      {isCoordinator && (
+      {showCommsBlocks && (
+        <CommsDashboardPanel
+          todayCount={commsTodayCount}
+          weekCount={commsWeekCount}
+          attentionCount={commsAttentionCount}
+          readyCount={commsReadyCount}
+        />
+      )}
+
+      {isCoordinator && !showCommsBlocks && (
         <CoordinatorDashboard initiatives={initiatives} inactive={inactiveMembers} />
       )}
-      {isBoard && <BoardDashboard initiatives={initiatives} />}
-      {!isCoordinator && !isBoard && (
+      {isBoard && !showCommsBlocks && <BoardDashboard initiatives={initiatives} />}
+      {!isCoordinator && !isBoard && !showCommsBlocks && (
         <AdvocateDashboard initiatives={myInitiatives} tasks={myTasks} />
       )}
 

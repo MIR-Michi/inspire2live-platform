@@ -265,6 +265,7 @@ export type Database = {
           tags: string[] | null
           title: string
           updated_at: string
+          whatsapp_groups: string[]
         }
         Insert: {
           attached_media_refs?: string[]
@@ -283,6 +284,7 @@ export type Database = {
           tags?: string[] | null
           title: string
           updated_at?: string
+          whatsapp_groups?: string[]
         }
         Update: {
           attached_media_refs?: string[]
@@ -301,6 +303,7 @@ export type Database = {
           tags?: string[] | null
           title?: string
           updated_at?: string
+          whatsapp_groups?: string[]
         }
         Relationships: [
           {
@@ -698,6 +701,7 @@ export type Database = {
           id: string
           initiative_ids: string[] | null
           is_annual_congress: boolean
+          is_i2l_organised: boolean
           location_city: string | null
           location_country: string | null
           name: string
@@ -719,6 +723,7 @@ export type Database = {
           id?: string
           initiative_ids?: string[] | null
           is_annual_congress?: boolean
+          is_i2l_organised?: boolean
           location_city?: string | null
           location_country?: string | null
           name: string
@@ -740,6 +745,7 @@ export type Database = {
           id?: string
           initiative_ids?: string[] | null
           is_annual_congress?: boolean
+          is_i2l_organised?: boolean
           location_city?: string | null
           location_country?: string | null
           name?: string
@@ -2616,6 +2622,7 @@ export type Database = {
           role: string
           timezone: string
           updated_at: string
+          user_type: string
         }
         Insert: {
           avatar_url?: string | null
@@ -2637,6 +2644,7 @@ export type Database = {
           role: string
           timezone?: string
           updated_at?: string
+          user_type?: string
         }
         Update: {
           avatar_url?: string | null
@@ -2658,6 +2666,7 @@ export type Database = {
           role?: string
           timezone?: string
           updated_at?: string
+          user_type?: string
         }
         Relationships: []
       }
@@ -3390,6 +3399,7 @@ export type Database = {
       }
     }
     Functions: {
+      current_user_context: { Args: never; Returns: Json }
       current_user_role: { Args: never; Returns: string }
       is_comms_team_or_admin: { Args: never; Returns: boolean }
       is_coordinator_or_admin: { Args: never; Returns: boolean }

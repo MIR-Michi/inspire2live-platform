@@ -3,6 +3,15 @@ import { createClient } from '@/lib/supabase/server'
 import { EditRoleButton, InviteUserButton, AssignCongressRolesButton } from '@/components/ui/client-buttons'
 import { fetchLatestWorkspaceEvent } from '@/lib/congress-workspace/current-event'
 import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
+import { assignUserWorkspace } from './actions'
+import { getUserWorkspaceLabel, normalizeUserType, type UserType } from '@/lib/user-workspace'
+
+const WORKSPACE_OPTIONS: Array<{ value: UserType; label: string }> = [
+  { value: 'default', label: 'Default' },
+  { value: 'comms', label: 'Comms' },
+  { value: 'board', label: 'Board' },
+  { value: 'partner', label: 'Partner' },
+]
 
 export default async function AdminUsersPage() {
   const supabase = await createClient()
@@ -21,11 +30,33 @@ export default async function AdminUsersPage() {
     )
   }
 
-  const { data: dbUsers } = await supabase.from('profiles').select('id, name, email, role, country, onboarding_completed, updated_at').order('name')
+  const { data: dbUsersWithUserType, error: dbUsersWithUserTypeError } = await supabase
+    .from('profiles')
+    .select('id, name, email, role, country, onboarding_completed, updated_at, user_type, comms_team')
+    .order('name')
+  let dbUsers = dbUsersWithUserType
+  if (dbUsersWithUserTypeError) {
+    const { data: fallbackUsers } = await supabase
+      .from('profiles')
+      .select('id, name, email, role, country, onboarding_completed, updated_at, comms_team')
+      .order('name')
+    dbUsers = (fallbackUsers ?? []).map((userRow) => ({ ...userRow, user_type: userRow.comms_team ? 'comms' : 'default' }))
+  }
   const { event: latestCongress } = await fetchLatestWorkspaceEvent(supabase)
 
   const users = (dbUsers ?? []).length > 0
-    ? dbUsers!.map(u => ({ id: u.id, name: u.name ?? 'Unnamed', email: u.email ?? '', role: u.role, country: u.country ?? '', last_active: u.updated_at, status: 'active' as const, onboarding_completed: u.onboarding_completed }))
+    ? dbUsers!.map(u => ({
+        id: u.id,
+        name: u.name ?? 'Unnamed',
+        email: u.email ?? '',
+        role: u.role,
+        country: u.country ?? '',
+        last_active: u.updated_at,
+        status: 'active' as const,
+        onboarding_completed: u.onboarding_completed,
+        user_type: normalizeUserType(u.user_type),
+        comms_team: u.comms_team,
+      }))
     : []
 
   const totalActive = users.filter(u => u.status === 'active').length
@@ -57,6 +88,7 @@ export default async function AdminUsersPage() {
             <tr>
               <th className="px-4 py-3 text-left">User</th>
               <th className="px-4 py-3 text-left">Role</th>
+              <th className="px-4 py-3 text-left">Workspace</th>
               <th className="px-4 py-3 text-left">Country</th>
               <th className="px-4 py-3 text-left">Onboarding</th>
               <th className="px-4 py-3 text-right">Actions</th>
@@ -80,6 +112,27 @@ export default async function AdminUsersPage() {
                   <span className={`rounded-full px-2 py-0.5 text-xs font-medium ${getRoleBadgeColor(u.role)}`}>
                     {getRoleLabel(u.role)}
                   </span>
+                </td>
+                <td className="px-4 py-3">
+                  <form action={assignUserWorkspace} className="flex items-center gap-2">
+                    <input type="hidden" name="user_id" value={u.id} />
+                    <select
+                      name="user_type"
+                      defaultValue={u.user_type}
+                      aria-label={`Workspace for ${u.name}`}
+                      className="rounded-lg border border-neutral-200 bg-white px-2 py-1 text-xs font-medium text-neutral-700"
+                    >
+                      {WORKSPACE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>
+                          {option.label}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="submit" className="rounded-lg border border-neutral-200 px-2 py-1 text-xs font-semibold text-neutral-700 hover:bg-neutral-50">
+                      Save
+                    </button>
+                  </form>
+                  <p className="mt-1 text-[11px] text-neutral-400">{getUserWorkspaceLabel(u)}</p>
                 </td>
                 <td className="px-4 py-3 text-neutral-600">{u.country}</td>
                 <td className="px-4 py-3">

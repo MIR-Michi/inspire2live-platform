@@ -26,6 +26,34 @@ const ALL_NAV_ITEMS: { key: PlatformSpace; label: string; href: string }[] = [
   { key: 'admin',       label: 'User Management',  href: '/app/admin/users' },
 ]
 
+const COMMS_NAV_SECTIONS: Array<{
+  label: string
+  items: Array<{ label: string; href: string; badge?: 'campus'; priority?: boolean }>
+}> = [
+  {
+    label: 'Overview',
+    items: [{ label: 'Dashboard', href: '/app/dashboard' }],
+  },
+  {
+    label: 'Workspace',
+    items: [
+      { label: 'Planner', href: '/app/comms/planner' },
+      { label: 'Campus', href: '/app/comms/campus', badge: 'campus' },
+    ],
+  },
+  {
+    label: 'Events',
+    items: [
+      { label: 'Annual Congress', href: '/app/congress', priority: true },
+      { label: 'All events', href: '/app/comms/events' },
+    ],
+  },
+  {
+    label: 'Content',
+    items: [{ label: 'Library', href: '/app/comms/library' }],
+  },
+]
+
 const iconClass = 'h-4 w-4 shrink-0'
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
@@ -124,10 +152,74 @@ interface SideNavProps {
    * When true the admin nav item is always shown, even during view-as mode.
    */
   isAdmin: boolean
+  showCommsWorkspace?: boolean
+  commsUnreadCount?: number
+  workspaceLabel?: string
 }
 
-export function SideNav({ effectiveSpaces, isAdmin }: SideNavProps) {
+export function SideNav({
+  effectiveSpaces,
+  isAdmin,
+  showCommsWorkspace = false,
+  commsUnreadCount = 0,
+  workspaceLabel = 'Platform',
+}: SideNavProps) {
   const pathname = usePathname()
+
+  if (showCommsWorkspace) {
+    return (
+      <aside
+        className="hidden w-60 shrink-0 border-r border-neutral-200 bg-white lg:flex lg:flex-col"
+        role="complementary"
+        aria-label="Communications navigation"
+      >
+        <div className="border-b border-neutral-100 px-4 py-4">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-orange-700">{workspaceLabel}</p>
+          <p className="mt-1 text-sm font-semibold text-neutral-900">Focused workspace</p>
+        </div>
+        <nav className="flex flex-1 flex-col gap-5 p-3 pt-4" aria-label="Communications workspace navigation">
+          {COMMS_NAV_SECTIONS.map((section) => (
+            <div key={section.label} className="space-y-1.5">
+              <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-neutral-400">
+                {section.label}
+              </p>
+              {section.items.map((item) => {
+                const active = pathname === item.href || pathname.startsWith(item.href + '/')
+                const badgeCount = item.badge === 'campus' ? commsUnreadCount : 0
+                return (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className={[
+                      'flex items-center justify-between rounded-lg px-2.5 py-2 text-sm font-semibold transition-colors',
+                      active
+                        ? item.priority
+                          ? 'border-l-2 border-orange-700 bg-orange-50 text-orange-800'
+                          : 'border-l-2 border-neutral-900 bg-neutral-100 text-neutral-950'
+                        : item.priority
+                          ? 'text-orange-800 hover:bg-orange-50'
+                          : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-950',
+                    ].join(' ')}
+                    aria-current={active ? 'page' : undefined}
+                  >
+                    <span>{item.label}</span>
+                    {badgeCount > 0 && (
+                      <span className="rounded-full bg-orange-600 px-2 py-0.5 text-[11px] font-bold text-white">
+                        {badgeCount > 99 ? '99+' : badgeCount}
+                      </span>
+                    )}
+                  </Link>
+                )
+              })}
+            </div>
+          ))}
+        </nav>
+        <div className="border-t border-neutral-100 p-4 text-xs leading-5 text-neutral-500">
+          Provider-dependent publishing remains manual until credentials and ownership are verified.
+        </div>
+      </aside>
+    )
+  }
 
   // Merge: admin always visible for PlatformAdmin users (even in view-as mode)
   const spaces: Record<PlatformSpace, AccessLevel> = isAdmin

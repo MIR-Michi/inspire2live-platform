@@ -3,7 +3,7 @@
 Maps design requirements to implementation status and code locations.  
 **Source of truth for requirement IDs:** `docs/IMPLEMENTATION_GUIDE.md` §5  
 **Benchmark:** `PLATFORM_DESIGN_DOCUMENT.md` v2.0  
-**Last updated:** 2026-05-19
+**Last updated:** 2026-05-24
 
 ---
 
@@ -85,6 +85,10 @@ Format: `REQ-[DOMAIN]-[NNN]` — see `docs/IMPLEMENTATION_GUIDE.md` §5 for doma
 | REQ-COMMS-AUTO-001 | WhatsApp webhook ingestion persists raw inbound payloads and creates additive intake queue records | Sprint 05 draft backlog | `done` | `src/app/api/comms/whatsapp/route.ts`, `src/lib/comms-webhook.ts`, `supabase/migrations/00038_comms_sprint05_intake_automation.sql` | 2026-05-19 | Verified by local migration apply, schema lint, and Playwright webhook-ingestion flow |
 | REQ-COMMS-AUTO-002 | Explainable intake classifier pre-fills content type, confidence, and founder signals with persisted reasoning | Sprint 05 draft backlog | `done` | `src/lib/comms-classifier.ts`, `src/app/app/comms/intake/actions.ts`, `src/app/app/comms/intake/page.tsx`, `src/components/comms/intake-queue-shell.tsx` | 2026-05-19 | Verified with unit tests, full `pnpm test`, and browser review of classifier reasoning in the intake queue |
 | REQ-COMMS-AUTO-003 | Coordinator corrections create reusable training examples, optional sender rules, and replayable classifier state | Sprint 05 draft backlog | `done` | `supabase/migrations/00038_comms_sprint05_intake_automation.sql`, `src/app/app/comms/intake/actions.ts`, `src/components/comms/intake-queue-shell.tsx`, `src/test/e2e/comms-webhook-ingestion.spec.ts` | 2026-05-19 | Verified by browser flow covering correction, sender-rule promotion, and replay in the same queue |
+| REQ-COMMS-WS-001 | Workspace context separates comms user type from platform role while preserving legacy comms fallback | Sprint 08 | `done` | `supabase/migrations/00042_comms_user_type_workspace_restructure.sql`, `src/lib/user-workspace.ts`, `src/lib/comms-access.ts`, `src/types/database.ts` | 2026-05-24 | Added `profiles.user_type`, `current_user_context()`, helper tests, and auth guard updates without replacing existing RLS |
+| REQ-COMMS-WS-002 | Comms users receive focused navigation, shared dashboard config, and default dashboard landing | Sprint 08 | `done` | `src/app/app/layout.tsx`, `src/components/layouts/side-nav.tsx`, `src/components/layouts/top-nav.tsx`, `src/lib/dashboard-config.ts`, `src/app/app/dashboard/page.tsx`, `middleware.ts`, `src/app/auth/callback/route.ts` | 2026-05-24 | Comms nav is text-only with current-month Campus badge; default nav and default dashboard behavior remain intact |
+| REQ-COMMS-WS-003 | Planner, Campus, Library, and Events restructure exposes existing comms data through new IA routes | Sprint 08 | `done` | `src/app/app/comms/planner/page.tsx`, `src/app/app/comms/campus/page.tsx`, `src/app/app/comms/campus/[year]/[month]/page.tsx`, `src/app/app/comms/library/page.tsx`, `src/app/app/comms/events/page.tsx`, `src/components/comms/events-pipeline-shell.tsx` | 2026-05-24 | Added Planner views, Campus monthly cards/raw feed, searchable Library tabs, I2L/networking event filters, and Annual Congress priority handling |
+| REQ-COMMS-WS-004 | PlatformAdmin can assign workspace type and comms users can capture local-only new item skeletons | Sprint 08 | `done` | `src/app/app/admin/users/page.tsx`, `src/app/app/admin/users/actions.ts`, `src/components/comms/new-item-modal.tsx` | 2026-05-24 | Workspace assignment is server-side and admin-gated; New item modal has local Type/Content/Send/Attachments steps with no provider calls |
 
 ### L1: Core Continuity
 

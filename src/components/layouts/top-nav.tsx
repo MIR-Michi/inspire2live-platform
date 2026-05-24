@@ -57,6 +57,15 @@ const ALL_PERSPECTIVE_ROLES = Object.entries(ROLE_LABELS).map(([value, label]) =
   label: value === 'PlatformAdmin' ? `${label} (default)` : label,
 }))
 
+const COMMS_MOBILE_NAV = [
+  { key: 'dashboard' as NavKey, label: 'Dashboard', href: '/app/dashboard' },
+  { key: 'comms' as NavKey, label: 'Planner', href: '/app/comms/planner' },
+  { key: 'comms' as NavKey, label: 'Campus', href: '/app/comms/campus' },
+  { key: 'comms' as NavKey, label: 'Annual Congress', href: '/app/congress' },
+  { key: 'comms' as NavKey, label: 'All events', href: '/app/comms/events' },
+  { key: 'resources' as NavKey, label: 'Library', href: '/app/comms/library' },
+]
+
 interface TopNavProps {
   userName: string
   userRole: string
@@ -65,6 +74,7 @@ interface TopNavProps {
   isAdmin?: boolean
   viewAsRole?: string | null
   showCommsNav?: boolean
+  workspaceLabel?: string
 }
 
 export function TopNav({
@@ -75,6 +85,7 @@ export function TopNav({
   isAdmin = false,
   viewAsRole,
   showCommsNav = false,
+  workspaceLabel = 'Platform',
 }: TopNavProps) {
   const router = useRouter()
   const pathname = usePathname()
@@ -115,7 +126,7 @@ export function TopNav({
 
 
   const notificationsAccessible = canAccessAppPath(userRole, '/app/notifications')
-  const navItems = getSideNavItems(userRole, { showComms: showCommsNav })
+  const navItems = showCommsNav ? COMMS_MOBILE_NAV : getSideNavItems(userRole, { showComms: showCommsNav })
 
   return (
     <>
@@ -149,7 +160,7 @@ export function TopNav({
               I2L
             </span>
             <span className="hidden text-sm font-semibold text-neutral-900 sm:block">
-              Inspire2Live Platform
+              {showCommsNav ? 'Comms' : 'Inspire2Live Platform'}
             </span>
           </Link>
         </div>
@@ -224,7 +235,7 @@ export function TopNav({
               <div className="absolute right-0 mt-1 w-52 rounded-lg border border-neutral-200 bg-white py-1 shadow-lg" role="menu">
                 <div className="border-b border-neutral-100 px-3 py-2">
                   <p className="text-xs font-medium text-neutral-900 truncate">{userName}</p>
-                  <p className="text-xs text-neutral-500">{getRoleLabel(userRole)}</p>
+                  <p className="text-xs text-neutral-500">{getRoleLabel(userRole)} · {workspaceLabel}</p>
                 </div>
 
                 <Link
@@ -317,7 +328,7 @@ export function TopNav({
                     ].join(' ')}
                     aria-current={active ? 'page' : undefined}
                   >
-                    <MobileNavIcon navKey={item.key} />
+                    {!showCommsNav && <MobileNavIcon navKey={item.key} />}
                     {item.label}
                   </Link>
                 )
@@ -326,7 +337,7 @@ export function TopNav({
             {/* Drawer footer: user info */}
             <div className="absolute bottom-0 left-0 right-0 border-t border-neutral-200 p-4">
               <p className="truncate text-sm font-medium text-neutral-900">{userName}</p>
-              <p className="text-xs text-neutral-500">{getRoleLabel(userRole)}</p>
+              <p className="text-xs text-neutral-500">{getRoleLabel(userRole)} · {workspaceLabel}</p>
             </div>
           </nav>
         </div>
