@@ -49,7 +49,7 @@ export const CONTENT_TYPE_META: Record<
   member_intro: { label: 'Member Introduction', shortLabel: 'Member', tone: 'green' },
   initiative_update: { label: 'Initiative Update', shortLabel: 'Initiative', tone: 'violet' },
   media_request: { label: 'Media Request', shortLabel: 'Media', tone: 'red' },
-  noise: { label: 'Noise', shortLabel: 'Noise', tone: 'neutral' },
+  noise: { label: 'Miscellaneous', shortLabel: 'Misc', tone: 'neutral' },
 }
 
 export const ROUTE_DESTINATION_META: Record<

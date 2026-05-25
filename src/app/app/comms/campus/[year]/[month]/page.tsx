@@ -1,6 +1,17 @@
 import Link from 'next/link'
-import { addCampusActionItem, addCampusAgendaItem } from '@/app/app/comms/campus-log/actions'
+import { addCampusActionItem, addCampusAgendaItem, addCampusDecisionItem, updateCampusDecisionItem } from '@/app/app/comms/campus-log/actions'
+import { deleteIntakeItem, markIntakeReviewed } from '@/app/app/comms/intake/actions'
 import { createClient } from '@/lib/supabase/server'
+
+async function markReviewedAction(formData: FormData) {
+  'use server'
+  await markIntakeReviewed(undefined, formData)
+}
+
+async function deleteIntakeAction(formData: FormData) {
+  'use server'
+  await deleteIntakeItem(undefined, formData)
+}
 
 function monthBounds(year: string, month: string) {
   const numericYear = Number(year)
@@ -32,6 +43,7 @@ function categoryFor(value: string) {
   if (value === 'article_share') return 'Articles and research'
   if (value === 'media_request') return 'Media'
   if (value === 'member_intro') return 'Members'
+  if (value === 'noise') return 'Miscellaneous'
   return 'Other incoming'
 }
 
@@ -57,6 +69,13 @@ function parseActionItem(value: string) {
   const owner = parts.find((part) => /^Owner:/i.test(part))?.replace(/^Owner:\s*/i, '').trim() || 'Comms team'
   const due = parts.find((part) => /^Due:/i.test(part))?.replace(/^Due:\s*/i, '').trim() || 'Before next meeting'
   return { action, owner, due }
+}
+
+function parseDecisionItem(value: string) {
+  const parts = value.split('|').map((part) => part.trim())
+  const decision = parts[0]?.replace(/^Decision:\s*/i, '').trim() || value
+  const owner = parts.find((part) => /^Owner:/i.test(part))?.replace(/^Owner:\s*/i, '').trim() || 'Unassigned'
+  return { decision, owner }
 }
 
 function filterKey(value: string | undefined) {
@@ -98,7 +117,7 @@ export default async function CampusMonthPage({
       .order('captured_at', { ascending: false }),
     supabase
       .from('campus_sessions')
-      .select('id, session_date, theme, summary, action_items_for_publication')
+      .select('id, session_date, theme, summary, action_items_for_publication, decisions_for_publication')
       .gte('session_date', startDate)
       .lt('session_date', endDate)
       .order('session_date', { ascending: false }),
@@ -129,7 +148,9 @@ export default async function CampusMonthPage({
     ...(primarySession?.action_items_for_publication ?? []).filter((item) => /^Action:/i.test(item)),
     ...ACTION_ITEM_EXAMPLES,
   ].slice(0, 8)
-  const decisions = (sessions ?? []).flatMap((session) => session.summary ? [session.summary] : [])
+  const decisions = (primarySession?.decisions_for_publication?.length
+    ? primarySession.decisions_for_publication
+    : (sessions ?? []).flatMap((session) => session.summary ? [`Decision: ${session.summary} | Owner: Session summary`] : []))
 
   return (
     <div className="mx-auto max-w-6xl space-y-4">
@@ -197,6 +218,15 @@ export default async function CampusMonthPage({
                       <p className="text-sm font-semibold text-neutral-950">{item.raw_content.slice(0, 90)}</p>
                       <p className="mt-1 line-clamp-3 text-sm leading-5 text-neutral-600">{item.raw_content}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
+                        {item.status === 'unreviewed' && (
+                          <form action={markReviewedAction}>
+                            <input type="hidden" name="intake_item_id" value={item.id} />
+                            <input type="hidden" name="return_path" value={returnPath} />
+                            <button type="submit" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+                              Review
+                            </button>
+                          </form>
+                        )}
                         {primarySession && (
                           <form action={addCampusAgendaItem}>
                             <input type="hidden" name="session_id" value={primarySession.id} />
@@ -217,6 +247,13 @@ export default async function CampusMonthPage({
                             Open link
                           </a>
                         )}
+                        <form action={deleteIntakeAction}>
+                          <input type="hidden" name="intake_item_id" value={item.id} />
+                          <input type="hidden" name="return_path" value={returnPath} />
+                          <button type="submit" className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">
+                            Delete
+                          </button>
+                        </form>
                       </div>
                     </div>
                   </article>
@@ -349,15 +386,65 @@ export default async function CampusMonthPage({
                 <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">{decisions.length} decisions</span>
               </div>
               <ul className="divide-y divide-neutral-100">
-                {decisions.slice(0, 5).map((decision, index) => (
-                  <li key={`${decision}-${index}`} className="px-4 py-3 text-sm leading-5 text-neutral-700">
-                    {decision}
-                  </li>
-                ))}
+                {decisions.slice(0, 5).map((decision, index) => {
+                  const parsedDecision = parseDecisionItem(decision)
+                  return (
+                    <li key={`${decision}-${index}`} className="px-4 py-3">
+                      <p className="text-sm leading-5 text-neutral-800">{parsedDecision.decision}</p>
+                      <p className="mt-1 text-xs font-medium text-neutral-500">Decided by: {parsedDecision.owner}</p>
+                      {primarySession && (
+                        <details className="mt-2">
+                          <summary className="cursor-pointer text-xs font-semibold text-blue-700">Edit decision</summary>
+                          <form action={updateCampusDecisionItem} className="mt-2 grid gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
+                            <input type="hidden" name="session_id" value={primarySession.id} />
+                            <input type="hidden" name="decision_index" value={String(index)} />
+                            <input type="hidden" name="return_path" value={returnPath} />
+                            <textarea
+                              name="decision_item"
+                              rows={3}
+                              defaultValue={parsedDecision.decision}
+                              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+                            />
+                            <input
+                              name="decision_owner"
+                              defaultValue={parsedDecision.owner}
+                              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+                            />
+                            <button type="submit" className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">
+                              Save decision
+                            </button>
+                          </form>
+                        </details>
+                      )}
+                    </li>
+                  )
+                })}
                 {decisions.length === 0 && (
                   <li className="px-4 py-8 text-center text-sm text-neutral-500">No decisions captured yet.</li>
                 )}
               </ul>
+              {primarySession && (
+                <form action={addCampusDecisionItem} className="grid gap-3 border-t border-neutral-200 p-4">
+                  <input type="hidden" name="session_id" value={primarySession.id} />
+                  <input type="hidden" name="return_path" value={returnPath} />
+                  <textarea
+                    name="decision_item"
+                    rows={3}
+                    required
+                    placeholder="Add one decision point"
+                    className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+                  />
+                  <input
+                    name="decision_owner"
+                    required
+                    placeholder="Who decided"
+                    className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+                  />
+                  <button type="submit" className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">
+                    Add decision
+                  </button>
+                </form>
+              )}
             </section>
           </div>
         </aside>

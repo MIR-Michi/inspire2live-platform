@@ -23,6 +23,10 @@ function parseLineList(raw: string) {
     .filter(Boolean)
 }
 
+function formatCampusDecision(decision: string, owner: string) {
+  return `Decision: ${decision.slice(0, 220)} | Owner: ${owner.slice(0, 80)}`
+}
+
 function safeReturnPath(formData: FormData) {
   const path = asText(formData.get('return_path'))
   return path.startsWith('/app/comms/') ? path : '/app/comms/campus'
@@ -63,6 +67,7 @@ export async function createCampusSession(formData: FormData) {
       session_date: sessionDate,
       theme: theme || null,
       summary: asText(formData.get('summary')) || null,
+      decisions_for_publication: parseLineList(asText(formData.get('decisions_for_publication'))),
       created_by: user.id,
       participating_hub_ids: parseValues(formData, 'participating_hub_ids'),
       initiative_ids: parseValues(formData, 'initiative_ids'),
@@ -87,6 +92,7 @@ export async function saveCampusSession(formData: FormData) {
       session_date: asText(formData.get('session_date')),
       theme: asText(formData.get('theme')) || null,
       summary: asText(formData.get('summary')) || null,
+      decisions_for_publication: parseLineList(asText(formData.get('decisions_for_publication'))),
       action_items_for_publication: parseLineList(asText(formData.get('action_items_for_publication'))),
       recording_url: asText(formData.get('recording_url')) || null,
       slides_media_id: asText(formData.get('slides_media_id')) || null,
@@ -126,6 +132,79 @@ export async function addCampusAgendaItem(formData: FormData) {
   const { error } = await supabase
     .from('campus_sessions')
     .update({ action_items_for_publication: actionItems })
+    .eq('id', sessionId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/app/comms/campus')
+  revalidatePath('/app/comms/campus-log')
+  revalidatePath(returnPath)
+}
+
+export async function addCampusDecisionItem(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const sessionId = asText(formData.get('session_id'))
+  const decision = asText(formData.get('decision_item'))
+  const owner = asText(formData.get('decision_owner'))
+  const returnPath = safeReturnPath(formData)
+
+  if (!sessionId || !decision || !owner) {
+    throw new Error('Decision and owner are required.')
+  }
+
+  const { data: session, error: loadError } = await supabase
+    .from('campus_sessions')
+    .select('decisions_for_publication')
+    .eq('id', sessionId)
+    .maybeSingle()
+
+  if (loadError) throw new Error(loadError.message)
+  if (!session) throw new Error('Campus session not found.')
+
+  const nextItem = formatCampusDecision(decision, owner)
+  const existingItems = session.decisions_for_publication ?? []
+  const decisions = existingItems.includes(nextItem) ? existingItems : [...existingItems, nextItem]
+
+  const { error } = await supabase
+    .from('campus_sessions')
+    .update({ decisions_for_publication: decisions })
+    .eq('id', sessionId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/app/comms/campus')
+  revalidatePath('/app/comms/campus-log')
+  revalidatePath(returnPath)
+}
+
+export async function updateCampusDecisionItem(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const sessionId = asText(formData.get('session_id'))
+  const decision = asText(formData.get('decision_item'))
+  const owner = asText(formData.get('decision_owner'))
+  const returnPath = safeReturnPath(formData)
+  const index = Number(asText(formData.get('decision_index')))
+
+  if (!sessionId || !decision || !owner || !Number.isInteger(index) || index < 0) {
+    throw new Error('Decision, owner, and valid index are required.')
+  }
+
+  const { data: session, error: loadError } = await supabase
+    .from('campus_sessions')
+    .select('decisions_for_publication')
+    .eq('id', sessionId)
+    .maybeSingle()
+
+  if (loadError) throw new Error(loadError.message)
+  if (!session) throw new Error('Campus session not found.')
+
+  const existingItems = [...(session.decisions_for_publication ?? [])]
+  if (index >= existingItems.length) throw new Error('Decision not found.')
+  existingItems[index] = formatCampusDecision(decision, owner)
+
+  const { error } = await supabase
+    .from('campus_sessions')
+    .update({ decisions_for_publication: existingItems })
     .eq('id', sessionId)
 
   if (error) throw new Error(error.message)

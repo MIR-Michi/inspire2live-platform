@@ -175,6 +175,7 @@ export type Database = {
           action_items_for_publication: string[] | null
           created_at: string
           created_by: string | null
+          decisions_for_publication: string[] | null
           id: string
           initiative_ids: string[] | null
           participating_hub_ids: string[] | null
@@ -190,6 +191,7 @@ export type Database = {
           action_items_for_publication?: string[] | null
           created_at?: string
           created_by?: string | null
+          decisions_for_publication?: string[] | null
           id?: string
           initiative_ids?: string[] | null
           participating_hub_ids?: string[] | null
@@ -205,6 +207,7 @@ export type Database = {
           action_items_for_publication?: string[] | null
           created_at?: string
           created_by?: string | null
+          decisions_for_publication?: string[] | null
           id?: string
           initiative_ids?: string[] | null
           participating_hub_ids?: string[] | null

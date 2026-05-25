@@ -7,7 +7,7 @@ import { getIntegrationStubFlags } from '@/lib/comms-integrations'
 import { createClient } from '@/lib/supabase/server'
 
 const CAMPUS_SESSION_DETAIL_SELECT =
-  'id, session_date, theme, summary, action_items_for_publication, recording_url, slides_media_id, participating_hub_ids, initiative_ids, published_outputs'
+  'id, session_date, theme, summary, decisions_for_publication, action_items_for_publication, recording_url, slides_media_id, participating_hub_ids, initiative_ids, published_outputs'
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(value))
@@ -68,6 +68,16 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
         <label className="block space-y-2">
           <span className="text-sm font-semibold text-neutral-800">Summary</span>
           <textarea name="summary" rows={6} defaultValue={session.summary ?? ''} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" />
+        </label>
+
+        <label className="block space-y-2">
+          <span className="text-sm font-semibold text-neutral-800">Decisions for publication</span>
+          <textarea
+            name="decisions_for_publication"
+            rows={5}
+            defaultValue={(session.decisions_for_publication ?? []).join('\n')}
+            className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
+          />
         </label>
 
         <label className="block space-y-2">

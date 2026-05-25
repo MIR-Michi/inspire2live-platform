@@ -42,6 +42,18 @@ export interface CommsFormState {
 
 const INITIAL_STATE: CommsFormState = { ok: false }
 
+function safeCommsReturnPath(formData: FormData) {
+  const path = asText(formData.get('return_path'))
+  return path.startsWith('/app/comms/') ? path : '/app/comms/intake'
+}
+
+function revalidateIntakeSurfaces(path?: string) {
+  revalidatePath('/app/comms/intake')
+  revalidatePath('/app/comms/campus')
+  revalidatePath('/app/comms/planner')
+  if (path) revalidatePath(path)
+}
+
 type AppSupabaseClient = SupabaseClient<Database>
 type IntakeItemRow = Database['public']['Tables']['intake_items']['Row']
 type ClassifierRuleRow = Database['public']['Tables']['intake_classifier_rules']['Row']
@@ -740,7 +752,7 @@ export async function dismissIntakeItem(
   try {
     const { supabase, user } = await requireCommsOperator()
     const intakeItemId = asText(formData.get('intake_item_id'))
-    const dismissedReason = asText(formData.get('dismissed_reason')) || 'Marked as noise'
+    const dismissedReason = asText(formData.get('dismissed_reason')) || 'Marked as miscellaneous'
 
     if (!intakeItemId) return { ok: false, error: 'Item is required.' }
 
@@ -756,10 +768,62 @@ export async function dismissIntakeItem(
 
     if (error) throw new Error(error.message)
 
-    revalidatePath('/app/comms/intake')
+    revalidateIntakeSurfaces(safeCommsReturnPath(formData))
     return { ok: true, message: 'Item moved to the 90-day archive.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not dismiss intake item.' }
+  }
+}
+
+export async function markIntakeReviewed(
+  _prevState: CommsFormState = INITIAL_STATE,
+  formData: FormData
+): Promise<CommsFormState> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const intakeItemId = asText(formData.get('intake_item_id'))
+
+    if (!intakeItemId) return { ok: false, error: 'Item is required.' }
+
+    const { error } = await supabase
+      .from('intake_items')
+      .update({
+        status: 'reviewed',
+        reviewed_by: user.id,
+        reviewed_at: new Date().toISOString(),
+      })
+      .eq('id', intakeItemId)
+
+    if (error) throw new Error(error.message)
+
+    revalidateIntakeSurfaces(safeCommsReturnPath(formData))
+    return { ok: true, message: 'Item marked as reviewed.' }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not mark item as reviewed.' }
+  }
+}
+
+export async function deleteIntakeItem(
+  _prevState: CommsFormState = INITIAL_STATE,
+  formData: FormData
+): Promise<CommsFormState> {
+  try {
+    const { supabase } = await requireCommsOperator()
+    const intakeItemId = asText(formData.get('intake_item_id'))
+
+    if (!intakeItemId) return { ok: false, error: 'Item is required.' }
+
+    const { error } = await supabase
+      .from('intake_items')
+      .delete()
+      .eq('id', intakeItemId)
+
+    if (error) throw new Error(error.message)
+
+    revalidateIntakeSurfaces(safeCommsReturnPath(formData))
+    return { ok: true, message: 'Item deleted.' }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not delete item.' }
   }
 }
 

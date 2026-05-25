@@ -6,8 +6,10 @@ import { FounderBadge } from '@/components/comms/founder-badge'
 import { ActionModal } from '@/components/ui/action-modal'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
+  deleteIntakeItem,
   dismissIntakeItem,
   editIntakeClassification,
+  markIntakeReviewed,
   replayIntakeClassification,
   routeIntakeItem,
   sendDailyDigestNow,
@@ -522,7 +524,7 @@ function DismissModal({ item }: { item: IntakeItem }) {
             <textarea
               name="dismissed_reason"
               rows={3}
-              defaultValue={item.dismissed_reason ?? 'Social/noise for the comms queue'}
+              defaultValue={item.dismissed_reason ?? 'Social/miscellaneous for the comms queue'}
               className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
             />
           </label>
@@ -556,6 +558,51 @@ function DismissModal({ item }: { item: IntakeItem }) {
         </form>
       </ActionModal>
     </>
+  )
+}
+
+function ReviewButton({ item }: { item: IntakeItem }) {
+  const [pending, startTransition] = useTransition()
+
+  if (item.status !== 'unreviewed') return null
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        startTransition(async () => {
+          const formData = new FormData()
+          formData.set('intake_item_id', item.id)
+          await markIntakeReviewed(INITIAL_STATE, formData)
+        })
+      }}
+      disabled={pending}
+      className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-60"
+    >
+      {pending ? 'Reviewing…' : 'Mark reviewed'}
+    </button>
+  )
+}
+
+function DeleteButton({ item }: { item: IntakeItem }) {
+  const [pending, startTransition] = useTransition()
+
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        if (!window.confirm('Delete this intake item? This removes the message from the intake queue only.')) return
+        startTransition(async () => {
+          const formData = new FormData()
+          formData.set('intake_item_id', item.id)
+          await deleteIntakeItem(INITIAL_STATE, formData)
+        })
+      }}
+      disabled={pending}
+      className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
+    >
+      {pending ? 'Deleting…' : 'Delete'}
+    </button>
   )
 }
 
@@ -684,11 +731,13 @@ function IntakeItemCard({
       )}
 
       <footer className="flex flex-wrap items-center gap-2">
+        <ReviewButton item={item} />
         {item.status !== 'dismissed' && (
           <RouteModal item={item} initiatives={initiatives} recoveryRequests={recoveryRequests} />
         )}
         {item.status !== 'dismissed' && <ClassificationModal item={item} />}
         <DismissModal item={item} />
+        <DeleteButton item={item} />
       </footer>
     </article>
   )

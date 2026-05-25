@@ -47,6 +47,14 @@ function formatShortDate(value: string | null) {
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
 }
 
+function parseCampusDecision(value: string) {
+  const parts = value.split('|').map((part) => part.trim())
+  return {
+    decision: parts[0]?.replace(/^Decision:\s*/i, '').trim() || value,
+    owner: parts.find((part) => /^Owner:/i.test(part))?.replace(/^Owner:\s*/i, '').trim() || 'Unassigned',
+  }
+}
+
 /* ─── Coordinator view ───────────────────────────────────────────────────── */
 function CoordinatorDashboard({
   initiatives,
@@ -365,12 +373,14 @@ function CommsDashboardPanel({
   contentItems,
   incomingItems,
   projectSummaries,
+  decisions,
 }: {
   name: string | null | undefined
   tasks: { id: string; title: string; status: string; priority: string; due_date: string | null; initiative_id: string }[]
   contentItems: { id: string; title: string; status: string; scheduled_at: string | null; source_link: string | null }[]
   incomingItems: { id: string; sender_name: string; content_type: string; raw_content: string; source_url: string | null; captured_at: string }[]
   projectSummaries: { id: string; title: string; summary: string; href: string; label: string }[]
+  decisions: { id: string; decision: string; owner: string; href: string; meeting: string }[]
 }) {
   const firstName = (name ?? 'Michael').split(' ')[0]
   const openTasks = tasks.filter((task) => task.status !== 'done')
@@ -496,6 +506,28 @@ function CommsDashboardPanel({
           {projectSummaries.length === 0 && (
             <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
               No campus or event summaries yet.
+            </p>
+          )}
+        </div>
+      </section>
+
+      <section className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
+        <div className="mb-3 flex items-center justify-between">
+          <h3 className="text-sm font-semibold text-neutral-900">Recent decisions</h3>
+          <Link href="/app/comms/campus" className="text-xs font-semibold text-orange-700 hover:underline">
+            Open meetings
+          </Link>
+        </div>
+        <div className="space-y-2">
+          {decisions.map((item) => (
+            <Link key={item.id} href={item.href} className="block rounded-lg border border-neutral-200 px-3 py-3 hover:bg-neutral-50">
+              <p className="text-sm font-medium text-neutral-900">{item.decision}</p>
+              <p className="mt-1 text-xs text-neutral-500">{item.owner} · {item.meeting}</p>
+            </Link>
+          ))}
+          {decisions.length === 0 && (
+            <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
+              No structured decisions captured yet.
             </p>
           )}
         </div>
@@ -639,6 +671,7 @@ export default async function DashboardPage() {
     captured_at: string
   }[] = []
   let commsProjectSummaries: { id: string; title: string; summary: string; href: string; label: string }[] = []
+  let commsDecisionItems: { id: string; decision: string; owner: string; href: string; meeting: string }[] = []
 
   if (showCommsBlocks) {
     const today = new Date()
@@ -673,9 +706,9 @@ export default async function DashboardPage() {
         .limit(6),
       supabase
         .from('campus_sessions')
-        .select('id, session_date, theme, summary')
+        .select('id, session_date, theme, summary, decisions_for_publication')
         .order('session_date', { ascending: false })
-        .limit(2),
+        .limit(4),
       supabase
         .from('events')
         .select('id, name, start_date, location_city, location_country, notes')
@@ -704,6 +737,20 @@ export default async function DashboardPage() {
         label: 'Event',
       }))),
     ]
+    commsDecisionItems = (campusRows ?? [])
+      .flatMap((row) =>
+        (row.decisions_for_publication ?? []).map((decision, index) => {
+          const parsed = parseCampusDecision(decision)
+          return {
+            id: `${row.id}-${index}`,
+            decision: parsed.decision,
+            owner: parsed.owner,
+            href: `/app/comms/campus/${new Date(row.session_date).getFullYear()}/${new Date(row.session_date).getMonth() + 1}`,
+            meeting: row.theme || `Campus ${formatShortDate(row.session_date)}`,
+          }
+        })
+      )
+      .slice(0, 4)
   }
 
   const { data: dbNotifications } = await supabase
@@ -762,6 +809,7 @@ export default async function DashboardPage() {
           contentItems={commsContentItems}
           incomingItems={commsIncomingItems}
           projectSummaries={commsProjectSummaries}
+          decisions={commsDecisionItems}
         />
       )}
 
