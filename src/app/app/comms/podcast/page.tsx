@@ -3,33 +3,37 @@ import { loadCommsEventPipelineData } from '@/lib/comms-event-pipeline'
 import { type EventStage } from '@/lib/comms-workflow'
 
 const VALID_STAGES = new Set<EventStage>(['announced', 'attending', 'in_progress', 'post_event', 'archived'])
-const VALID_SCOPES = new Set(['all', 'i2l', 'networking', 'past'])
 
-export default async function CommsEventsPage({
+export default async function CommsPodcastPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ stage?: string; scope?: string; event_type?: string }>
+  searchParams?: Promise<{ stage?: string }>
 }) {
   const params = (await searchParams) ?? {}
   const stageFilter =
     params.stage && VALID_STAGES.has(params.stage as EventStage) ? (params.stage as EventStage) : 'all'
-  const scopeFilter = params.scope && VALID_SCOPES.has(params.scope) ? params.scope : 'all'
-  const eventTypeFilter = params.event_type?.trim() || 'all'
-  const { events, eventTypes, initiatives, people } = await loadCommsEventPipelineData({
+  const { events, initiatives, people } = await loadCommsEventPipelineData({
     stageFilter,
-    scopeFilter: scopeFilter as 'all' | 'i2l' | 'networking' | 'past',
-    eventTypeFilter,
+    scopeFilter: 'i2l',
+    eventTypeFilter: 'podcast',
   })
 
   return (
     <EventsPipelineShell
       events={events}
       stageFilter={stageFilter}
-      scopeFilter={scopeFilter as 'all' | 'i2l' | 'networking' | 'past'}
-      eventTypeFilter={eventTypeFilter}
-      eventTypes={eventTypes}
+      scopeFilter="i2l"
+      eventTypeFilter="podcast"
+      eventTypes={['podcast']}
       initiatives={initiatives}
       people={people}
+      title="Podcast production"
+      eyebrow="I2L productions"
+      description="Run podcast episodes as owned communications productions with one accountable owner, clear setup, and structured follow-up."
+      recordLabel="episodes"
+      basePath="/app/comms/podcast"
+      showScopeFilters={false}
+      showEventTypeFilters={false}
     />
   )
 }

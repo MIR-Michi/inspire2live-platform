@@ -374,6 +374,204 @@ export type Database = {
           },
         ]
       }
+      comms_crm_connector_backlog: {
+        Row: {
+          created_at: string
+          guardrail: string
+          id: string
+          integration_target: string
+          status: string
+          use_case: string
+        }
+        Insert: {
+          created_at?: string
+          guardrail: string
+          id?: string
+          integration_target: string
+          status?: string
+          use_case: string
+        }
+        Update: {
+          created_at?: string
+          guardrail?: string
+          id?: string
+          integration_target?: string
+          status?: string
+          use_case?: string
+        }
+        Relationships: []
+      }
+      comms_crm_contact_events: {
+        Row: {
+          contact_id: string
+          created_at: string
+          event_id: string
+          relationship_type: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          event_id: string
+          relationship_type?: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          event_id?: string
+          relationship_type?: string
+        }
+        Relationships: []
+      }
+      comms_crm_contact_initiatives: {
+        Row: {
+          contact_id: string
+          created_at: string
+          initiative_id: string
+          relationship_label: string | null
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          initiative_id: string
+          relationship_label?: string | null
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          initiative_id?: string
+          relationship_label?: string | null
+        }
+        Relationships: []
+      }
+      comms_crm_contacts: {
+        Row: {
+          bio: string | null
+          city: string | null
+          consent_status: string
+          country: string | null
+          created_at: string
+          created_by: string | null
+          email: string | null
+          full_name: string
+          id: string
+          last_interaction_at: string | null
+          lifecycle_stage: string
+          next_follow_up_at: string | null
+          notes: string | null
+          organisation: string | null
+          phone: string | null
+          picture_url: string | null
+          preferred_channel: string | null
+          privacy_notes: string | null
+          relationship_owner_id: string | null
+          relationship_owner_label: string | null
+          retention_review_at: string | null
+          segment: string
+          source_id: string | null
+          source_label: string | null
+          source_type: string
+          tags: string[]
+          title: string | null
+          updated_at: string
+          updated_by: string | null
+        }
+        Insert: {
+          bio?: string | null
+          city?: string | null
+          consent_status?: string
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          full_name: string
+          id?: string
+          last_interaction_at?: string | null
+          lifecycle_stage?: string
+          next_follow_up_at?: string | null
+          notes?: string | null
+          organisation?: string | null
+          phone?: string | null
+          picture_url?: string | null
+          preferred_channel?: string | null
+          privacy_notes?: string | null
+          relationship_owner_id?: string | null
+          relationship_owner_label?: string | null
+          retention_review_at?: string | null
+          segment: string
+          source_id?: string | null
+          source_label?: string | null
+          source_type?: string
+          tags?: string[]
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Update: {
+          bio?: string | null
+          city?: string | null
+          consent_status?: string
+          country?: string | null
+          created_at?: string
+          created_by?: string | null
+          email?: string | null
+          full_name?: string
+          id?: string
+          last_interaction_at?: string | null
+          lifecycle_stage?: string
+          next_follow_up_at?: string | null
+          notes?: string | null
+          organisation?: string | null
+          phone?: string | null
+          picture_url?: string | null
+          preferred_channel?: string | null
+          privacy_notes?: string | null
+          relationship_owner_id?: string | null
+          relationship_owner_label?: string | null
+          retention_review_at?: string | null
+          segment?: string
+          source_id?: string | null
+          source_label?: string | null
+          source_type?: string
+          tags?: string[]
+          title?: string | null
+          updated_at?: string
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
+      comms_crm_interactions: {
+        Row: {
+          contact_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          interaction_type: string
+          next_follow_up_at: string | null
+          occurred_at: string
+          summary: string
+        }
+        Insert: {
+          contact_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          interaction_type?: string
+          next_follow_up_at?: string | null
+          occurred_at?: string
+          summary: string
+        }
+        Update: {
+          contact_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          interaction_type?: string
+          next_follow_up_at?: string | null
+          occurred_at?: string
+          summary?: string
+        }
+        Relationships: []
+      }
       comms_digest_runs: {
         Row: {
           digest_date: string

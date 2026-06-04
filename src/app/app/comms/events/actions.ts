@@ -30,6 +30,12 @@ function parseValues(formData: FormData, key: string) {
     .filter(Boolean)
 }
 
+function revalidateEventWorkspacePaths(eventId?: string) {
+  revalidatePath('/app/comms/events')
+  revalidatePath('/app/comms/podcast')
+  if (eventId) revalidatePath(`/app/comms/events/${eventId}`)
+}
+
 async function requireCommsOperator() {
   const supabase = await createClient()
   const {
@@ -185,7 +191,7 @@ export async function createEvent(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
-  revalidatePath('/app/comms/events')
+  revalidateEventWorkspacePaths()
   redirect(`/app/comms/events/${data?.id}`)
 }
 
@@ -244,8 +250,7 @@ export async function saveEventDetails(formData: FormData) {
   const { error } = await supabase.from('events').update(payload).eq('id', eventId)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/app/comms/events')
-  revalidatePath(`/app/comms/events/${eventId}`)
+  revalidateEventWorkspacePaths(eventId)
 }
 
 export async function transitionEventStage(formData: FormData) {
@@ -258,8 +263,7 @@ export async function transitionEventStage(formData: FormData) {
   const { error } = await supabase.from('events').update({ stage: nextStage }).eq('id', eventId)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/app/comms/events')
-  revalidatePath(`/app/comms/events/${eventId}`)
+  revalidateEventWorkspacePaths(eventId)
 }
 
 export async function toggleEventOutputItem(formData: FormData) {
@@ -280,8 +284,7 @@ export async function toggleEventOutputItem(formData: FormData) {
   const { error } = await supabase.from('events').update({ [field]: nextValue }).eq('id', eventId)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/app/comms/events')
-  revalidatePath(`/app/comms/events/${eventId}`)
+  revalidateEventWorkspacePaths(eventId)
 }
 
 export async function togglePodcastWorkflowItem(formData: FormData) {
@@ -297,8 +300,7 @@ export async function togglePodcastWorkflowItem(formData: FormData) {
   const { error } = await supabase.from('events').update({ [field]: nextValue }).eq('id', eventId)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/app/comms/events')
-  revalidatePath(`/app/comms/events/${eventId}`)
+  revalidateEventWorkspacePaths(eventId)
 }
 
 export async function linkEventInitiative(formData: FormData) {
@@ -321,6 +323,5 @@ export async function linkEventInitiative(formData: FormData) {
   const { error } = await supabase.from('events').update({ initiative_ids: initiativeIds }).eq('id', eventId)
   if (error) throw new Error(error.message)
 
-  revalidatePath('/app/comms/events')
-  revalidatePath(`/app/comms/events/${eventId}`)
+  revalidateEventWorkspacePaths(eventId)
 }
