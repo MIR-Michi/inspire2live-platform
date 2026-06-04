@@ -16,6 +16,7 @@ import {
   type CommsFormState,
 } from '@/app/app/comms/intake/actions'
 import { buildEventDraftFromIntake, parseCampusMemberDraft } from '@/lib/comms-routing'
+import { EVENT_TYPE_OPTIONS } from '@/lib/comms-events'
 import {
   CONTENT_TYPE_META,
   INTAKE_FILTERS,
@@ -213,9 +214,9 @@ function RouteModal({
                   defaultValue={parsedEvent.eventType}
                   className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm"
                 >
-                  {['conference', 'workshop', 'congress', 'symposium', 'webinar', 'other'].map((eventType) => (
-                    <option key={eventType} value={eventType}>
-                      {eventType.charAt(0).toUpperCase() + eventType.slice(1)}
+                  {EVENT_TYPE_OPTIONS.map((eventType) => (
+                    <option key={eventType.value} value={eventType.value}>
+                      {eventType.label}
                     </option>
                   ))}
                 </select>

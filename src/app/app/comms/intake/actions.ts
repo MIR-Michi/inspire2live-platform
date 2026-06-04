@@ -31,6 +31,7 @@ import {
   toClassifierRules,
 } from '@/lib/comms-classifier'
 import { sendDailyCommsDigest } from '@/lib/comms-digest'
+import { normalizeEventType } from '@/lib/comms-events'
 import { buildRecoveryTitle } from '@/lib/comms-media'
 import type { Database } from '@/types/database'
 
@@ -222,7 +223,7 @@ async function createDestinationRecord(
     const draft = eventDraft ?? buildEventDraftFromIntake(item)
     const { data: events, error: eventsError } = await sb
       .from('events')
-      .select('id, name, start_date, notes, organiser, location_city, location_country, initiative_ids, is_annual_congress')
+      .select('id, name, start_date, notes, organiser, location_city, location_country, initiative_ids, is_annual_congress, event_type')
       .order('start_date', { ascending: false })
 
     if (eventsError) throw new Error(eventsError.message)
@@ -241,6 +242,7 @@ async function createDestinationRecord(
         .from('events')
         .update({
           name: draft.name || current?.name || title,
+          event_type: normalizeEventType(draft.eventType || current?.event_type || 'conference'),
           organiser: draft.organiser || current?.organiser,
           location_city: draft.locationCity || current?.location_city,
           location_country: draft.locationCountry || current?.location_country,
@@ -260,7 +262,7 @@ async function createDestinationRecord(
       .from('events')
       .insert({
         name: draft.name || title,
-        event_type: draft.eventType || 'conference',
+        event_type: normalizeEventType(draft.eventType || 'conference'),
         start_date: draft.startDate || item.captured_at.slice(0, 10),
         end_date: draft.endDate || null,
         organiser: draft.organiser || item.sender_name,
@@ -517,7 +519,7 @@ export async function routeIntakeItem(
     const eventDraft = {
       ...parsedEventDraft,
       name: asText(formData.get('event_name')) || parsedEventDraft.name,
-      eventType: asText(formData.get('event_type')) || parsedEventDraft.eventType,
+      eventType: normalizeEventType(asText(formData.get('event_type')) || parsedEventDraft.eventType),
       startDate: asText(formData.get('event_start_date')) || parsedEventDraft.startDate,
       endDate: asText(formData.get('event_end_date')) || parsedEventDraft.endDate,
       organiser: asText(formData.get('event_organiser')) || parsedEventDraft.organiser,

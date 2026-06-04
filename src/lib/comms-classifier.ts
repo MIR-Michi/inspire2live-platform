@@ -59,7 +59,7 @@ export type ClassifierResult = {
   classifierVersion: string
 }
 
-export const COMMS_CLASSIFIER_VERSION = 'sprint-05-rules-v1'
+export const COMMS_CLASSIFIER_VERSION = 'sprint-05-rules-v2'
 
 const BUILT_IN_RULES: ClassifierRule[] = [
   {
@@ -77,10 +77,10 @@ const BUILT_IN_RULES: ClassifierRule[] = [
   {
     id: 'builtin:event-keywords',
     name: 'Event keywords',
-    description: 'Mentions of congresses, workshops, conferences, or assemblies map to events.',
+    description: 'Mentions of congresses, workshops, conferences, podcasts, or assemblies map to events.',
     matchField: 'raw_content',
     matchType: 'regex',
-    pattern: '\\b(congress|conference|workshop|summit|symposium|general assembly|meeting)\\b',
+    pattern: '\\b(congress|conference|workshop|summit|symposium|general assembly|meeting|podcast|episode)\\b',
     suggestedContentType: 'event_report',
     suggestedConfidence: 'high',
     marksPeter: false,

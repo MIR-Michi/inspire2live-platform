@@ -164,6 +164,21 @@ describe('event routing duplicate detection', () => {
     })
   })
 
+  it('detects podcast production signals as podcast events', () => {
+    expect(
+      buildEventDraftFromIntake({
+        sender_name: 'Comms Producer',
+        raw_content:
+          'Inspire2Live Podcast Episode recording session with Dr. Elena Rossi will happen next week. Please prepare the guest brief and studio link.',
+        captured_at: '2026-05-14T09:00:00Z',
+      })
+    ).toMatchObject({
+      name: 'Inspire2Live Podcast Episode',
+      eventType: 'podcast',
+      startDate: '2026-05-14',
+    })
+  })
+
   it('matches existing events by name and nearby date', () => {
     const match = findDuplicateEventMatch(
       {

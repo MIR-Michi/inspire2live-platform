@@ -717,6 +717,27 @@ export type Database = {
           output_media_stored: boolean
           output_newsletter_mentioned: boolean
           output_report_drafted: boolean
+          podcast_backup_completed: boolean
+          podcast_brief_ready: boolean
+          podcast_distribution_channels: string[]
+          podcast_edit_completed: boolean
+          podcast_episode_title: string | null
+          podcast_equipment_ready: boolean
+          podcast_followup_completed: boolean
+          podcast_followup_notes: string | null
+          podcast_guest_confirmed: boolean
+          podcast_guests: string[]
+          podcast_hosts: string[]
+          podcast_preparation_notes: string | null
+          podcast_published: boolean
+          podcast_recording_completed: boolean
+          podcast_recording_link: string | null
+          podcast_recording_mode: string
+          podcast_release_form_ready: boolean
+          podcast_run_of_show: string | null
+          podcast_series_name: string | null
+          podcast_show_notes_completed: boolean
+          podcast_transcript_completed: boolean
           presentation_asset_url: string | null
           presentation_summary: string | null
           push_to_group_calendar: boolean
@@ -745,6 +766,27 @@ export type Database = {
           output_media_stored?: boolean
           output_newsletter_mentioned?: boolean
           output_report_drafted?: boolean
+          podcast_backup_completed?: boolean
+          podcast_brief_ready?: boolean
+          podcast_distribution_channels?: string[]
+          podcast_edit_completed?: boolean
+          podcast_episode_title?: string | null
+          podcast_equipment_ready?: boolean
+          podcast_followup_completed?: boolean
+          podcast_followup_notes?: string | null
+          podcast_guest_confirmed?: boolean
+          podcast_guests?: string[]
+          podcast_hosts?: string[]
+          podcast_preparation_notes?: string | null
+          podcast_published?: boolean
+          podcast_recording_completed?: boolean
+          podcast_recording_link?: string | null
+          podcast_recording_mode?: string
+          podcast_release_form_ready?: boolean
+          podcast_run_of_show?: string | null
+          podcast_series_name?: string | null
+          podcast_show_notes_completed?: boolean
+          podcast_transcript_completed?: boolean
           presentation_asset_url?: string | null
           presentation_summary?: string | null
           push_to_group_calendar?: boolean
@@ -773,6 +815,27 @@ export type Database = {
           output_media_stored?: boolean
           output_newsletter_mentioned?: boolean
           output_report_drafted?: boolean
+          podcast_backup_completed?: boolean
+          podcast_brief_ready?: boolean
+          podcast_distribution_channels?: string[]
+          podcast_edit_completed?: boolean
+          podcast_episode_title?: string | null
+          podcast_equipment_ready?: boolean
+          podcast_followup_completed?: boolean
+          podcast_followup_notes?: string | null
+          podcast_guest_confirmed?: boolean
+          podcast_guests?: string[]
+          podcast_hosts?: string[]
+          podcast_preparation_notes?: string | null
+          podcast_published?: boolean
+          podcast_recording_completed?: boolean
+          podcast_recording_link?: string | null
+          podcast_recording_mode?: string
+          podcast_release_form_ready?: boolean
+          podcast_run_of_show?: string | null
+          podcast_series_name?: string | null
+          podcast_show_notes_completed?: boolean
+          podcast_transcript_completed?: boolean
           presentation_asset_url?: string | null
           presentation_summary?: string | null
           push_to_group_calendar?: boolean

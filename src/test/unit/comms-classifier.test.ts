@@ -80,6 +80,17 @@ describe('communications classifier', () => {
     expect(result.matchedRuleIds[0]).toBe('custom:sender-override')
   })
 
+  it('classifies podcast mentions as event reports', () => {
+    const result = classifyIntakeItem({
+      senderName: 'Podcast Producer',
+      rawContent: 'Podcast episode recording with our new guest is confirmed for Thursday.',
+    })
+
+    expect(result.contentType).toBe('event_report')
+    expect(result.confidence).toBe('high')
+    expect(result.reasoning.some((reason) => reason.ruleId === 'builtin:event-keywords')).toBe(true)
+  })
+
   it('extracts the first source URL from raw text', () => {
     expect(parseSourceUrl('More context here https://example.org/report and more text')).toBe(
       'https://example.org/report'

@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { getEventTypeLabel } from '@/lib/comms-events'
 import { createClient } from '@/lib/supabase/server'
 
 const TABS = [
@@ -114,7 +115,7 @@ export default async function CommsLibraryPage({
         <div className="grid gap-4 md:grid-cols-2">
           {visibleEvents.map((event) => (
             <Link key={event.id} href={`/app/comms/events/${event.id}`} className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm hover:border-orange-300">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">{event.event_type}</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">{getEventTypeLabel(event.event_type)}</p>
               <h3 className="mt-1 text-lg font-semibold text-neutral-950">{event.name}</h3>
               <p className="mt-2 text-sm text-neutral-500">{event.start_date} · {event.is_annual_congress || event.is_i2l_organised ? 'I2L own' : 'Networking'}</p>
             </Link>

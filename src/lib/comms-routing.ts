@@ -1,4 +1,5 @@
 import { EVENT_DUPLICATE_WINDOW_DAYS, KNOWN_COUNTRIES, PETER_KAPITEIN_ALIASES } from '@/lib/comms-constants'
+import { normalizeEventType } from '@/lib/comms-events'
 
 type EventLike = {
   id: string
@@ -169,8 +170,9 @@ export function parseCampusMemberDraft(input: IntakeLike): ParsedCampusMemberDra
 function extractEventNameCandidate(rawContent: string) {
   const text = rawContent.replace(/\s+/g, ' ').trim()
   const patterns = [
+    /\b([A-Z][A-Za-z0-9.&/\-]+(?:\s+[A-Z][A-Za-z0-9.&/\-]+){0,5}\s+(?:Podcast|Episode))\b/,
     /\b([A-Z][A-Za-z0-9.&/\-]+(?:\s+[A-Z][A-Za-z0-9.&/\-]+){0,5}\s+(?:General Assembly|Workshop|Congress|Meeting|Forum|Summit|Conference))\b/,
-    /\b(latest\s+[A-Z][A-Za-z0-9.&/\-]+(?:\s+[A-Z][A-Za-z0-9.&/\-]+){0,4}\s+(?:workshop|conference|meeting))\b/i,
+    /\b(latest\s+[A-Z][A-Za-z0-9.&/\-]+(?:\s+[A-Z][A-Za-z0-9.&/\-]+){0,4}\s+(?:podcast|episode|workshop|conference|meeting))\b/i,
   ]
 
   for (const pattern of patterns) {
@@ -196,16 +198,21 @@ export function buildEventDraftFromIntake(input: IntakeLike): ParsedEventDraft {
   const name = extractEventNameCandidate(input.raw_content) || input.sender_name
   const startDate = input.captured_at.slice(0, 10)
   const isAnnualCongress = /annual congress/i.test(input.raw_content) || /annual congress/i.test(name)
+  const isPodcast = /podcast|episode|recording session/i.test(`${name} ${input.raw_content}`)
 
   return {
     name,
-    eventType: /workshop/i.test(name)
-      ? 'workshop'
-      : isAnnualCongress
-        ? 'congress'
-        : /forum|meeting|summit/i.test(name)
-          ? 'symposium'
-          : 'conference',
+    eventType: normalizeEventType(
+      isPodcast
+        ? 'podcast'
+        : /workshop/i.test(name)
+          ? 'workshop'
+          : isAnnualCongress
+            ? 'congress'
+            : /forum|meeting|summit/i.test(name)
+              ? 'symposium'
+              : 'conference'
+    ),
     startDate,
     endDate: '',
     organiser: cleanExtractedValue(input.sender_name),

@@ -1,6 +1,12 @@
 import Link from 'next/link'
 import { createEvent } from '@/app/app/comms/events/actions'
 import { StatusBadge } from '@/components/ui/status-badge'
+import {
+  ATTENDANCE_KIND_OPTIONS,
+  EVENT_TYPE_OPTIONS,
+  getEventTypeLabel,
+  formatTokenLabel,
+} from '@/lib/comms-events'
 import { EVENT_STAGE_META, type EventStage } from '@/lib/comms-workflow'
 
 type EventCard = {
@@ -54,10 +60,6 @@ function formatLocation(city: string | null, country: string | null) {
   return [city, country].filter(Boolean).join(', ') || 'Location TBD'
 }
 
-function humanize(value: string) {
-  return value.replaceAll('_', ' ').replace(/^\w/, (char) => char.toUpperCase())
-}
-
 export function EventsPipelineShell({
   events,
   stageFilter,
@@ -103,12 +105,15 @@ export function EventsPipelineShell({
           <label className="block space-y-2">
             <span className="text-sm font-semibold text-neutral-800">Event type</span>
             <select name="event_type" defaultValue="conference" className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm">
-              {['conference', 'workshop', 'congress', 'symposium', 'webinar', 'other'].map((eventType) => (
-                <option key={eventType} value={eventType}>
-                  {eventType.charAt(0).toUpperCase() + eventType.slice(1)}
+              {EVENT_TYPE_OPTIONS.map((eventType) => (
+                <option key={eventType.value} value={eventType.value}>
+                  {eventType.label}
                 </option>
               ))}
             </select>
+            <p className="text-xs text-neutral-500">
+              Podcast events unlock a production workspace after creation with setup, recording, and follow-up tracking.
+            </p>
           </label>
 
           <label className="block space-y-2">
@@ -139,9 +144,9 @@ export function EventsPipelineShell({
           <label className="block space-y-2">
             <span className="text-sm font-semibold text-neutral-800">Kind of attending</span>
             <select name="attendance_kind" defaultValue="visitor" className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm">
-              {['visitor', 'presenter', 'chair', 'organiser', 'sponsor', 'speaker'].map((kind) => (
-                <option key={kind} value={kind}>
-                  {humanize(kind)}
+              {ATTENDANCE_KIND_OPTIONS.map((kind) => (
+                <option key={kind.value} value={kind.value}>
+                  {kind.label}
                 </option>
               ))}
             </select>
@@ -254,7 +259,7 @@ export function EventsPipelineShell({
               href={`/app/comms/events?scope=${scopeFilter}&event_type=${eventType}`}
               className={`rounded-full px-3 py-1.5 text-sm font-semibold ${eventTypeFilter === eventType ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
             >
-              {eventType}
+              {getEventTypeLabel(eventType)}
             </Link>
           ))}
         </nav>
@@ -267,7 +272,7 @@ export function EventsPipelineShell({
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <StatusBadge label={EVENT_STAGE_META[event.stage as EventStage]?.label ?? event.stage} tone={EVENT_STAGE_META[event.stage as EventStage]?.tone ?? 'neutral'} />
-                  <StatusBadge label={event.event_type} tone="blue" />
+                  <StatusBadge label={getEventTypeLabel(event.event_type)} tone="blue" />
                   <StatusBadge label={event.is_i2l_organised || event.is_annual_congress ? 'I2L own' : 'Networking'} tone={event.is_i2l_organised || event.is_annual_congress ? 'green' : 'neutral'} />
                   {event.is_annual_congress && <StatusBadge label="Annual Congress" tone="violet" />}
                 </div>
@@ -297,7 +302,7 @@ export function EventsPipelineShell({
                     </span>
                   )}
                   <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 font-semibold text-sky-700">
-                    Kind: {humanize(event.attendance_kind)}
+                    Kind: {formatTokenLabel(event.attendance_kind)}
                   </span>
                   {event.initiativeLabels.map((initiative) => (
                     <span key={initiative} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 font-semibold text-violet-700">
