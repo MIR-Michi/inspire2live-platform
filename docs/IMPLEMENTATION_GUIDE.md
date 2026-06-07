@@ -209,6 +209,7 @@ A feature is done when:
 | Hiroshi | IndustryPartner | Scoped partner view | Governed scope + compliance docs |
 | Amara | HubCoordinator | Hub dashboard (Phase 3) | Templates + local initiative tracking |
 | Peter | BoardMember | Board dashboard | Top-line metrics + drill-down |
+| Lina | Comms | Comms dashboard | Content calendar, campus updates, attention queue |
 
 See §2.2 of Design Document for full persona detail (open Layer A only when onboarding new contributors or designing a new persona-specific flow).
 

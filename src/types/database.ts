@@ -2891,7 +2891,6 @@ export type Database = {
           avatar_url: string | null
           bio: string | null
           city: string | null
-          comms_team: boolean
           country: string
           created_at: string
           email: string
@@ -2907,13 +2906,11 @@ export type Database = {
           role: string
           timezone: string
           updated_at: string
-          user_type: string
         }
         Insert: {
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
-          comms_team?: boolean
           country: string
           created_at?: string
           email: string
@@ -2929,13 +2926,11 @@ export type Database = {
           role: string
           timezone?: string
           updated_at?: string
-          user_type?: string
         }
         Update: {
           avatar_url?: string | null
           bio?: string | null
           city?: string | null
-          comms_team?: boolean
           country?: string
           created_at?: string
           email?: string
@@ -2951,7 +2946,6 @@ export type Database = {
           role?: string
           timezone?: string
           updated_at?: string
-          user_type?: string
         }
         Relationships: []
       }

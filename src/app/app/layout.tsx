@@ -2,14 +2,11 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TopNav } from '@/components/layouts/top-nav'
 import { SideNav } from '@/components/layouts/side-nav'
-import { canAccessAppPath, normalizeRole } from '@/lib/role-access'
+import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access'
 import { resolveAllSpaces } from '@/lib/permissions'
-import type { AccessLevel } from '@/lib/permissions'
-import { getViewAsRole, getViewAsUserType } from '@/lib/view-as'
+import { getViewAsRole } from '@/lib/view-as'
 import { switchPerspective } from './admin/view-as-action'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
-import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { applyCanonicalCommsFallback, getUserWorkspaceLabel, isCommsUser } from '@/lib/user-workspace'
 
 function getInitials(name: string): string {
   return name
@@ -28,23 +25,11 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   if (!user) redirect('/login')
 
-  const { data: profileWithUserType, error: profileWithUserTypeError } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
-    .select('name, role, onboarding_completed, comms_team, user_type')
+    .select('name, role, onboarding_completed')
     .eq('id', user.id)
     .maybeSingle()
-  let profile = profileWithUserType
-
-  if (profileWithUserTypeError) {
-    const { data: fallbackProfile } = await supabase
-      .from('profiles')
-      .select('name, role, onboarding_completed, comms_team')
-      .eq('id', user.id)
-      .maybeSingle()
-    profile = fallbackProfile ? { ...fallbackProfile, user_type: 'default' } : null
-  }
-
-  profile = applyCanonicalCommsFallback(profile, user.email)
 
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
@@ -65,15 +50,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   // Admin perspective switching: read cookie
   const viewAsRole = isAdmin ? await getViewAsRole() : null
-  const viewAsUserType = isAdmin ? await getViewAsUserType() : null
   const effectiveRole = viewAsRole ?? actualRole
-  const effectiveProfile = profile
-    ? {
-        ...profile,
-        user_type: viewAsUserType ?? profile.user_type,
-        comms_team: profile.comms_team || viewAsUserType === 'comms',
-      }
-    : profile
 
   const currentAllowed = canAccessAppPath(actualRole, '/app/dashboard')
   if (!currentAllowed) {
@@ -84,15 +61,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Uses effectiveRole (view-as aware) so preview mode reflects the target role's defaults,
   // but DB overrides are looked up by the actual user's id.
   const effectiveSpaces = await resolveAllSpaces(user.id, effectiveRole, supabase)
-  const canUseCommsWorkspace = canAccessCommsWorkspace(actualRole, effectiveProfile?.comms_team, effectiveProfile?.user_type)
-  const showCommsWorkspace = isCommsUser(effectiveProfile)
-  const workspaceLabel = getUserWorkspaceLabel(effectiveProfile)
-  const effectiveSpacesWithComms = canUseCommsWorkspace
-    ? {
-        ...effectiveSpaces,
-        comms: (isAdmin ? 'manage' : 'edit') as AccessLevel,
-      }
-    : effectiveSpaces
+  const showCommsWorkspace = effectiveRole === 'Comms'
+  const workspaceLabel = getRoleLabel(effectiveRole)
 
   const now = new Date()
   const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
@@ -110,14 +80,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <RoleLayersProvider platformRole={effectiveRole}>
       <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
         {/* Admin preview banner */}
-        {isAdmin && ((viewAsRole && viewAsRole !== 'PlatformAdmin') || viewAsUserType) && (
+        {isAdmin && viewAsRole && viewAsRole !== 'PlatformAdmin' && (
           <div className="flex items-center justify-center gap-3 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 border-b border-amber-200">
             <span>
-              Admin preview — role <strong>{viewAsRole ?? 'PlatformAdmin'}</strong>, workspace <strong>{workspaceLabel}</strong>
+              Admin preview — role <strong>{viewAsRole}</strong>
             </span>
             <form action={switchPerspective}>
               <input type="hidden" name="role" value="PlatformAdmin" />
-              <input type="hidden" name="user_type" value="default" />
               <button
                 type="submit"
                 className="rounded bg-amber-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-800"
@@ -135,13 +104,12 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           unreadCount={unread ?? 0}
           isAdmin={isAdmin}
           viewAsRole={viewAsRole}
-          viewAsUserType={viewAsUserType}
           showCommsNav={showCommsWorkspace}
           workspaceLabel={workspaceLabel}
         />
         <div className="flex min-h-0 flex-1">
           <SideNav
-            effectiveSpaces={effectiveSpacesWithComms}
+            effectiveSpaces={effectiveSpaces}
             isAdmin={isAdmin}
             showCommsWorkspace={showCommsWorkspace}
             commsUnreadCount={commsUnreadCount ?? 0}

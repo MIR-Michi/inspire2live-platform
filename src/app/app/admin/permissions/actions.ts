@@ -32,6 +32,7 @@ const VALID_ROLES = new Set<PlatformRole>([
   'Clinician',
   'Researcher',
   'Moderator',
+  'Comms',
   'HubCoordinator',
   'IndustryPartner',
   'BoardMember',

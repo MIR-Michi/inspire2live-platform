@@ -46,8 +46,8 @@ vi.mock('@/lib/comms-event-pipeline', () => ({
 
 describe('loadCommsTeamDashboardData', () => {
   const profiles = [
-    { id: 'u1', name: 'Ana', email: 'ana@x.com', user_type: 'comms' },
-    { id: 'u2', name: null, email: 'bob@x.com', user_type: 'comms' },
+    { id: 'u1', name: 'Ana', email: 'ana@x.com', role: 'Comms' },
+    { id: 'u2', name: null, email: 'bob@x.com', role: 'Comms' },
   ]
   const intakeItems = [
     { id: 'i1', sender_name: 'Alice', raw_content: 'Hello   world\n\nthis is a message', channel: 'campus', status: 'unreviewed', captured_at: '2026-06-01T10:00:00Z' },
@@ -121,7 +121,7 @@ describe('loadCommsTeamDashboardData', () => {
       kind: 'content',
       title: 'Blog post',
       ownerLabel: 'Ana',
-      ownerUserType: 'comms',
+      ownerRole: 'Comms',
       status: 'in_progress',
       href: '/app/comms/planner',
     })
@@ -184,8 +184,8 @@ describe('loadCommsTeamDashboardData', () => {
     const data = await loadCommsTeamDashboardData(supabase as any)
 
     expect(data.owners).toEqual([
-      { id: 'u1', label: 'Ana', userType: 'comms' },
-      { id: 'u2', label: 'bob@x.com', userType: 'comms' },
+      { id: 'u1', label: 'Ana', role: 'Comms' },
+      { id: 'u2', label: 'bob@x.com', role: 'Comms' },
     ])
   })
 })

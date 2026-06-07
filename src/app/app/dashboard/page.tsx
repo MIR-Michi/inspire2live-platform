@@ -4,8 +4,7 @@ import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { getDashboardConfig } from '@/lib/dashboard-config'
 import { buildDashboardGreeting, resolveDashboardVariant } from '@/lib/dashboard-view'
-import { applyCanonicalCommsFallback, isCommsUser } from '@/lib/user-workspace'
-import { getViewAsRole, getViewAsUserType } from '@/lib/view-as'
+import { getViewAsRole } from '@/lib/view-as'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
 import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-data'
 
@@ -365,42 +364,20 @@ export default async function DashboardPage() {
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profileWithUserType, error: profileWithUserTypeError } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
-    .select('name, role, onboarding_completed, comms_team, user_type')
+    .select('name, role, onboarding_completed')
     .eq('id', user.id)
     .maybeSingle()
-  let profile = profileWithUserType
-
-  if (profileWithUserTypeError) {
-    const { data: fallbackProfile } = await supabase
-      .from('profiles')
-      .select('name, role, onboarding_completed, comms_team')
-      .eq('id', user.id)
-      .maybeSingle()
-    profile = fallbackProfile ? { ...fallbackProfile, user_type: 'default' } : null
-  }
-
-  profile = applyCanonicalCommsFallback(profile, user.email)
 
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
   const actualRole = profile?.role ?? 'PatientAdvocate'
   const isAdmin = actualRole === 'PlatformAdmin'
   const viewAsRole = isAdmin ? await getViewAsRole() : null
-  const viewAsUserType = isAdmin ? await getViewAsUserType() : null
-  const effectiveProfile = profile
-    ? {
-        ...profile,
-        role: viewAsRole ?? profile.role,
-        user_type: viewAsUserType ?? profile.user_type,
-        comms_team: profile.comms_team || viewAsUserType === 'comms',
-      }
-    : profile
-
-  const role = effectiveProfile?.role ?? 'PatientAdvocate'
-  const dashboardConfig = getDashboardConfig(effectiveProfile?.user_type)
-  const showCommsBlocks = isCommsUser(effectiveProfile)
+  const role = viewAsRole ?? actualRole
+  const dashboardConfig = getDashboardConfig(role)
+  const showCommsBlocks = role === 'Comms'
   const dashboardVariant = resolveDashboardVariant(role)
   const isCoordinator = dashboardVariant === 'coordinator'
   const isBoard = dashboardVariant === 'board'

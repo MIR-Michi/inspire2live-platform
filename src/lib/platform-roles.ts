@@ -3,6 +3,7 @@ export type PlatformRole =
   | 'Clinician'
   | 'Researcher'
   | 'Moderator'
+  | 'Comms'
   | 'HubCoordinator'
   | 'IndustryPartner'
   | 'BoardMember'
@@ -33,6 +34,7 @@ const KNOWN_ROLES: Record<PlatformRole, true> = {
   Clinician: true,
   Researcher: true,
   Moderator: true,
+  Comms: true,
   HubCoordinator: true,
   IndustryPartner: true,
   BoardMember: true,

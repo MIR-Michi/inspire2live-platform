@@ -1,7 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { applyCanonicalCommsFallback } from '@/lib/user-workspace'
 import { CommsDashboardToggle } from '@/components/comms/comms-dashboard-toggle'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
 import { TeamDashboard } from '@/components/comms/team-dashboard'
@@ -30,14 +29,13 @@ export default async function CommsDashboardPage({
   } = await supabase.auth.getUser()
   if (!user) redirect('/login')
 
-  const { data: profileData } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
-    .select('name, role, comms_team, user_type')
+    .select('name, role')
     .eq('id', user.id)
     .maybeSingle()
-  const profile = applyCanonicalCommsFallback(profileData, user.email)
 
-  if (!canAccessCommsWorkspace(profile?.role, profile?.comms_team, profile?.user_type)) {
+  if (!canAccessCommsWorkspace(profile?.role)) {
     redirect('/app/dashboard')
   }
 

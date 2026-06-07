@@ -7,7 +7,6 @@ import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { canAccessAppPath, getSideNavItems, getRoleLabel, ROLE_LABELS, type NavKey } from '@/lib/role-access'
 import { RoleChips } from '@/components/roles/role-chips'
-import type { UserType } from '@/lib/user-workspace'
 
 /* ── icon helper (same set as side-nav, inlined for mobile menu) ────────── */
 const iconClass = 'h-5 w-5 shrink-0'
@@ -59,13 +58,6 @@ const ALL_PERSPECTIVE_ROLES = Object.entries(ROLE_LABELS).map(([value, label]) =
   label: value === 'PlatformAdmin' ? `${label} (default)` : label,
 }))
 
-const ALL_WORKSPACE_TYPES: Array<{ value: UserType; label: string }> = [
-  { value: 'default', label: 'Platform (default)' },
-  { value: 'comms', label: 'Communications' },
-  { value: 'board', label: 'Board' },
-  { value: 'partner', label: 'Partner' },
-]
-
 const COMMS_MOBILE_NAV = [
   { key: 'dashboard' as NavKey, label: 'Dashboard', href: '/app/dashboard' },
   { key: 'comms' as NavKey, label: 'Planner', href: '/app/comms/planner' },
@@ -84,7 +76,6 @@ interface TopNavProps {
   unreadCount?: number
   isAdmin?: boolean
   viewAsRole?: string | null
-  viewAsUserType?: UserType | null
   showCommsNav?: boolean
   workspaceLabel?: string
 }
@@ -96,7 +87,6 @@ export function TopNav({
   unreadCount = 0,
   isAdmin = false,
   viewAsRole,
-  viewAsUserType,
   showCommsNav = false,
   workspaceLabel = 'Platform',
 }: TopNavProps) {
@@ -140,14 +130,10 @@ export function TopNav({
 
   const notificationsAccessible = canAccessAppPath(userRole, '/app/notifications')
   const navItems = showCommsNav ? COMMS_MOBILE_NAV : getSideNavItems(userRole, { showComms: showCommsNav })
-  const previewActive = Boolean(
-    (viewAsRole && viewAsRole !== 'PlatformAdmin') ||
-    (viewAsUserType && viewAsUserType !== 'default')
-  )
+  const previewActive = Boolean(viewAsRole && viewAsRole !== 'PlatformAdmin')
 
   const resetPreview = () => {
     document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
-    document.cookie = 'i2l-view-as-user-type=; path=/; max-age=0'
   }
 
   return (
@@ -218,28 +204,6 @@ export function TopNav({
             >
               {ALL_PERSPECTIVE_ROLES.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-            <span className="hidden text-xs font-semibold text-orange-700 sm:inline">Workspace</span>
-            <select
-              value={viewAsUserType ?? 'default'}
-              onChange={(e) => {
-                const val = e.target.value as UserType
-                if (val === 'default') {
-                  document.cookie = 'i2l-view-as-user-type=; path=/; max-age=0'
-                } else {
-                  document.cookie = `i2l-view-as-user-type=${val}; path=/; max-age=86400; SameSite=Lax`
-                }
-                router.push('/app/dashboard')
-                router.refresh()
-              }}
-              className="max-w-44 rounded-md border border-orange-300 bg-white px-2 py-1 text-xs font-semibold text-orange-800 outline-none ring-orange-300 focus:ring-2 cursor-pointer"
-              aria-label="Switch workspace user type preview"
-            >
-              {ALL_WORKSPACE_TYPES.map((workspace) => (
-                <option key={workspace.value} value={workspace.value}>
-                  {workspace.label}
-                </option>
               ))}
             </select>
           </div>

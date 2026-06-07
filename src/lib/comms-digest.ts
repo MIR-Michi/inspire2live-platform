@@ -13,7 +13,7 @@ const DIGEST_ITEM_SELECT = 'id, sender_name, content_type, raw_content, source_u
 
 type DigestRecipient = Pick<
   ProfileRow,
-  'id' | 'email' | 'name' | 'role' | 'timezone' | 'notification_prefs' | 'comms_team'
+  'id' | 'email' | 'name' | 'role' | 'timezone' | 'notification_prefs'
 >
 
 interface SendDigestOptions {
@@ -267,12 +267,12 @@ export async function sendDailyCommsDigest(options: SendDigestOptions): Promise<
 export async function sendScheduledCommsDigests(supabase: AdminClient, baseUrl: string, now = new Date()) {
   const { data: recipientRows, error } = await supabase
     .from('profiles')
-    .select('id, email, name, role, timezone, notification_prefs, comms_team, user_type')
+    .select('id, email, name, role, timezone, notification_prefs')
 
   if (error) throw new Error(error.message)
 
   const recipients = (recipientRows ?? []).filter(
-    (recipient) => canAccessCommsWorkspace(recipient.role, recipient.comms_team, recipient.user_type)
+    (recipient) => canAccessCommsWorkspace(recipient.role)
   )
 
   const results: Array<{ email: string; sent: boolean; itemCount: number; error?: string }> = []

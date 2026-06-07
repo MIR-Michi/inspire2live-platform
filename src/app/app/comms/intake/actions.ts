@@ -96,12 +96,12 @@ async function requireCommsOperator() {
 
   const { data: profile, error } = await supabase
     .from('profiles')
-    .select('id, name, email, role, timezone, notification_prefs, comms_team, user_type')
+    .select('id, name, email, role, timezone, notification_prefs')
     .eq('id', user.id)
     .maybeSingle()
 
   if (error) throw new Error(error.message)
-  if (!profile || !canAccessCommsWorkspace(profile.role, profile.comms_team, profile.user_type)) {
+  if (!profile || !canAccessCommsWorkspace(profile.role)) {
     throw new Error('Not authorized for the communications workspace')
   }
 
@@ -389,12 +389,9 @@ async function createDestinationRecord(
         : (
             await sb
               .from('profiles')
-              .select('id, role, comms_team, user_type')
+              .select('id, role')
           ).data
-            ?.filter(
-              (profile) =>
-                canAccessCommsWorkspace(profile.role, profile.comms_team, profile.user_type)
-            )
+            ?.filter((profile) => canAccessCommsWorkspace(profile.role))
             .map((profile) => profile.id) ?? []
 
       if (recipientIds.length > 0) {

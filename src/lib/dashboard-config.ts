@@ -1,4 +1,4 @@
-import { normalizeUserType, type UserType } from '@/lib/user-workspace'
+import { normalizeRole } from '@/lib/platform-roles'
 
 export type DashboardQueryId =
   | 'initiative_health'
@@ -18,8 +18,10 @@ export type DashboardBlockId =
   | 'needs_attention'
   | 'content_ready'
 
+export type DashboardVariant = 'comms' | 'default'
+
 export type DashboardConfig = {
-  userType: UserType
+  variant: DashboardVariant
   title: string
   subtitle: string
   blocks: DashboardBlockId[]
@@ -27,7 +29,7 @@ export type DashboardConfig = {
 }
 
 const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
-  userType: 'default',
+  variant: 'default',
   title: 'Dashboard',
   subtitle: 'Your platform overview and next actions.',
   blocks: ['role_summary', 'notifications', 'newsfeed'],
@@ -35,16 +37,14 @@ const DEFAULT_DASHBOARD_CONFIG: DashboardConfig = {
 }
 
 const COMMS_DASHBOARD_CONFIG: DashboardConfig = {
-  userType: 'comms',
+  variant: 'comms',
   title: 'Comms dashboard',
   subtitle: 'Today, this week, attention queue, and content ready for review.',
   blocks: ['whats_up_today', 'this_week', 'needs_attention', 'content_ready', 'notifications'],
   queries: ['comms_today', 'comms_week', 'comms_attention', 'comms_ready', 'notifications'],
 }
 
-export function getDashboardConfig(userType: string | null | undefined): DashboardConfig {
-  const normalized = normalizeUserType(userType)
-  if (normalized === 'comms') return COMMS_DASHBOARD_CONFIG
-  return { ...DEFAULT_DASHBOARD_CONFIG, userType: normalized }
+export function getDashboardConfig(role: string | null | undefined): DashboardConfig {
+  if (normalizeRole(role) === 'Comms') return COMMS_DASHBOARD_CONFIG
+  return DEFAULT_DASHBOARD_CONFIG
 }
-

@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 import { canAccessAppPath } from '@/lib/role-access'
 import { canAccessCommsWorkspace, getPostLoginLandingPath } from '@/lib/comms-access'
-import { applyCanonicalCommsFallback } from '@/lib/user-workspace'
 
 export async function middleware(request: NextRequest) {
   let response = NextResponse.next({
@@ -71,28 +70,16 @@ export async function middleware(request: NextRequest) {
   let profile: {
     onboarding_completed: boolean | null
     role: string | null
-    comms_team: boolean | null
-    user_type: string | null
   } | null = null
 
   if (user) {
     try {
-      const { data, error } = await supabase
+      const { data } = await supabase
         .from('profiles')
-        .select('onboarding_completed, role, comms_team, user_type')
+        .select('onboarding_completed, role')
         .eq('id', user.id)
         .maybeSingle()
-      if (error) {
-        const { data: fallbackProfile } = await supabase
-          .from('profiles')
-          .select('onboarding_completed, role, comms_team')
-          .eq('id', user.id)
-          .maybeSingle()
-        profile = fallbackProfile ? { ...fallbackProfile, user_type: 'default' } : null
-      } else {
-        profile = data
-      }
-      profile = applyCanonicalCommsFallback(profile, user.email)
+      profile = data
     } catch {
       // Treat profile lookup failure as no profile; downstream guards handle it.
     }
@@ -100,7 +87,7 @@ export async function middleware(request: NextRequest) {
 
   if (user && isAuthPage) {
     const redirectUrl = request.nextUrl.clone()
-    redirectUrl.pathname = getPostLoginLandingPath(profile?.role, profile?.comms_team, profile?.user_type)
+    redirectUrl.pathname = getPostLoginLandingPath(profile?.role)
     return NextResponse.redirect(redirectUrl)
   }
 
@@ -114,7 +101,7 @@ export async function middleware(request: NextRequest) {
 
     if (profile?.onboarding_completed && isProtected) {
       const allowed = isCommsRoute
-        ? canAccessCommsWorkspace(profile.role, profile.comms_team, profile.user_type)
+        ? canAccessCommsWorkspace(profile.role)
         : canAccessAppPath(profile.role, pathname)
       if (!allowed) {
         const redirectUrl = request.nextUrl.clone()
