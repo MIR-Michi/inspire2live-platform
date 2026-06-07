@@ -1,7 +1,7 @@
 # Sprint 10 — Brand Identity Alignment
 
 **Phase:** 2 planning backlog
-**Status:** Not started
+**Status:** In progress — logo asset committed and placed in the app shell; brand colour tokens replaced; typography, email templates, and full visual QC remain
 
 ## Goal
 

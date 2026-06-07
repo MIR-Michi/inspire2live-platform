@@ -17,8 +17,8 @@ test.describe('Authentication smoke tests', () => {
   test('login page renders correctly', async ({ page }) => {
     await page.goto('/login')
     await expect(page).toHaveURL(/\/login/)
-    // The login page uses a branded span, not a heading — check for the platform name and key UI elements
-    await expect(page.locator('text=Inspire2Live Platform')).toBeVisible()
+    // The login page renders the Inspire2Live logo, not a text heading — check for the brand image and key UI elements
+    await expect(page.getByRole('img', { name: 'Inspire2Live' })).toBeVisible()
     await expect(page.getByRole('textbox', { name: /email/i })).toBeVisible()
     // "Sign in with magic link" link is present inside the sign-in form
     await expect(page.getByRole('button', { name: /magic link/i })).toBeVisible()

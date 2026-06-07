@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, type FormEvent } from 'react'
+import Image from 'next/image'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 
@@ -80,10 +81,15 @@ export default function ResetPasswordPage() {
   return (
     <main className="mx-auto flex min-h-screen w-full max-w-md items-center px-4 py-12">
       <div className="w-full rounded-xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="mb-6 flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-md bg-orange-600 text-sm font-bold text-white">
-            I2L
-          </span>
+        <div className="mb-6 flex items-center gap-3">
+          <Image
+            src="/brand/inspire2live-logo.png"
+            alt="Inspire2Live"
+            width={454}
+            height={355}
+            priority
+            className="h-9 w-auto"
+          />
           <span className="text-base font-semibold text-neutral-900">Set new password</span>
         </div>
 

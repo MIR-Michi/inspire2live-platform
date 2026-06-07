@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
 export default function Home() {
@@ -7,10 +8,14 @@ export default function Home() {
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-orange-600 text-sm font-bold text-white">
-              I2L
-            </span>
-            <span className="text-base font-semibold">Inspire2Live Platform</span>
+            <Image
+              src="/brand/inspire2live-logo.png"
+              alt="Inspire2Live"
+              width={454}
+              height={355}
+              priority
+              className="h-10 w-auto"
+            />
           </div>
 
           <div className="flex items-center gap-3">
