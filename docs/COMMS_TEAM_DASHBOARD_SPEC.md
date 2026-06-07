@@ -53,16 +53,11 @@ designed and validated *before* implementation.
 
 ## 3. Where it lives & how the toggle works
 
-- **Route:** keep the comms dashboard at its current entry
-  (`/app/comms` → currently the personal panel on `/app/dashboard`). Introduce a
-  view parameter so both views share one URL, e.g.
-  `/app/comms/dashboard?view=personal` and `?view=team`.
-  - *Open question:* the current "Overview → Dashboard" nav item points at the
-    global `/app/dashboard`. We should decide whether to (a) add a dedicated
-    `/app/comms/dashboard` route that hosts both views, or (b) keep both panels
-    on `/app/dashboard` behind the toggle. **Recommendation: (a)** a dedicated
-    comms route, so the team view is self-contained and the global dashboard
-    stays role-generic.
+- **Route (decided):** add a dedicated **`/app/comms/dashboard`** route that
+  hosts both the Personal and Team views behind the toggle, keeping the global
+  `/app/dashboard` role-generic. The two views share one URL via a view
+  parameter, e.g. `/app/comms/dashboard?view=personal` and `?view=team`. The
+  comms "Overview → Dashboard" nav item is repointed to this route.
 - **Toggle UI:** a two-segment control at the top of the page —
   `[ My dashboard | Team dashboard ]` — large, high-contrast, with clear active
   state. Persist the last choice (per user) so the toggle "remembers" them.
@@ -73,7 +68,8 @@ designed and validated *before* implementation.
 
 ## 4. Team dashboard content
 
-The screen is composed of four stacked, equally-weighted blocks. Order reflects
+The screen is composed of three stacked content blocks (WhatsApp channels,
+events, update feed), with a filter bar attached to the feed. Order reflects
 "shared awareness first, then drill-in."
 
 ### 4.1 WhatsApp channels (2)
@@ -91,7 +87,9 @@ A compact, scannable list/grid of **all events**, reachable from one place.
 - Surfaces upcoming + in-flight events across scopes already modelled in the
   events pipeline (`i2l`, `networking`, plus the Annual Congress and Podcast).
 - Each row: event name, date, scope/type badge, current stage, and owner.
-- Filter chips: *All · I2L · Networking · Congress · Podcast · Past*.
+- Filter chips: *All · I2L · Networking · Congress · Podcast · Past*. These are
+  the events block's **own** scope/type chips and are **independent** of the feed
+  status filter (§4.4) — status filtering applies to the update feed only.
 - Each row links to the existing event detail (`/app/comms/events/[id]`).
 - "Both groups" requirement: events associated with Campus stakeholders and with
   the Communications group should both appear here without the user needing to
@@ -110,13 +108,22 @@ A reverse-chronological **activity + work feed** — the heart of "common ground
 - Sort: deadline-aware (overdue → due soon → no date), matching the personal
   panel's existing "Deadlines" logic.
 
-### 4.4 Status filter (single source of truth)
-A persistent filter bar applying to the feed (and optionally events):
-**Not started · In progress · Skipped · Completed** (plus *All*).
-- These are **normalised** statuses — a presentation layer that maps the
-  different underlying status vocabularies into one simple set the team shares
-  (see §5). Multi-select; default shows everything except *Completed* and
-  *Skipped* so the feed leads with live work.
+### 4.4 Feed filters (applies to the update feed only)
+A filter bar above the update feed with **three** controls. It does **not**
+affect the WhatsApp channel cards or the events block.
+
+1. **Status** — multi-select over the normalised set
+   **Not started · In progress · Skipped · Completed** (plus *All*). These are
+   normalised statuses mapping the different underlying status vocabularies into
+   one simple shared set (see §5).
+2. **Owner** — filter to one or more team members (the work item's owner).
+3. **Date range** — a *from → to* range over the item's relevant date
+   (deadline, falling back to scheduled/created date).
+
+- **Default state (decided):** the feed opens showing **all statuses** — nothing
+  is hidden by default. The user narrows down using the status, owner, and date
+  filters as needed. Overdue items remain visually flagged regardless of filter.
+- Filters compose (AND): e.g. "In progress" + owner "Anna" + "this month".
 
 ---
 
@@ -179,14 +186,14 @@ that would justify promoting it to a real field.
 ## 7. UX principles (validate before building)
 
 Designed to be usable across age groups and comfort levels:
-1. **One decision at a time.** The toggle and the status filter are the only two
-   primary controls. Everything else is read-then-click-through.
+1. **One decision at a time.** The Personal/Team toggle is the primary control;
+   the feed's status/owner/date filters are secondary and collapsible.
 2. **Plain language.** "Not started / In progress / Completed / Skipped" — no
    internal jargon (`in_review`, `post_event`) shown to users.
 3. **Large, legible targets.** Generous tap/click areas, readable type sizes,
    strong colour contrast (WCAG AA), clear active states.
-4. **Strong defaults.** Opens on live work (hides completed/skipped); remembers
-   the last toggle choice.
+4. **Strong defaults.** Opens showing all work (no hidden items); remembers the
+   last toggle choice. The user narrows down only when they choose to.
 5. **Lean over complete.** Each block shows the few most relevant items with a
    "see all" link into the dedicated tool — the dashboard orients, it doesn't
    try to be every tool.
@@ -195,24 +202,27 @@ Designed to be usable across age groups and comfort levels:
 
 ### Recommended pre-build step
 Produce a low-fi wireframe / clickable mock of the team view (toggle, two
-channel cards, events list, feed + status filter) and review it with 2–3 comms
-users of differing ages before any code is written. UX sign-off is a gate on
-implementation.
+channel cards, events list, feed + status/owner/date filters) and review it with
+2–3 comms users of differing ages before any code is written. UX sign-off is a
+gate on implementation.
 
 ---
 
 ## 8. Acceptance criteria (proposed)
 
-- A **Personal ⇄ Team** toggle is present in the comms dashboard, persists the
-  last selection, and is keyboard- and screen-reader-accessible.
+- The team dashboard lives at the dedicated **`/app/comms/dashboard`** route,
+  with both views behind the toggle and the global `/app/dashboard` unchanged.
+- A **Personal ⇄ Team** toggle is present, persists the last selection, and is
+  keyboard- and screen-reader-accessible.
 - The team view shows **both WhatsApp channels** (Campus + Communications) with
   live waiting-for-review counts and recent signals.
-- **All events** from both groups are reachable from the team view with
+- **All events** from both groups are reachable from the team view with their own
   scope/type filtering and links to event detail.
 - A single **update feed** aggregates content, events, campus, and CRM work with
-  owner + deadline, overdue clearly flagged.
-- The feed is filterable by the unified status set **Not started / In progress /
-  Skipped / Completed**, defaulting to live work.
+  owner + deadline, overdue clearly flagged, visible to all comms users equally.
+- The feed has **status, owner, and date-range** filters; it opens showing all
+  statuses, and Completed (✅ green tick) vs Skipped (🟧 amber dash) are visually
+  distinct. These filters apply to the feed only, not to events or channels.
 - Access is restricted to comms-workspace users; no new outbound/sync behaviour
   is introduced.
 - UX wireframe reviewed and signed off before implementation.
@@ -229,18 +239,21 @@ implementation.
 
 ---
 
-## 10. Open questions for reviewer
+## 10. Reviewer decisions (resolved 2026-06-07)
 
-1. Dedicated `/app/comms/dashboard` route vs. both views on `/app/dashboard`?
-   (Recommendation: dedicated route.)
-2. ~~Is "Skipped" a real new state, or is it equivalent to "Archived"?~~
-   **Resolved:** both Skipped and Completed map to `archived`; they are
-   distinguished only by badge — ✅ green tick for Completed, 🟧 amber dash for
-   Skipped (see §5).
-3. Should the **status filter** also apply to the events block, or only the
-   update feed?
-4. Default feed view — hide Completed *and* Skipped, or only Completed?
-5. Should the team feed be visible to **all** comms users equally, or should some
-   blocks (e.g. CRM follow-ups) respect existing ownership/visibility rules?
-</content>
-</invoke>
+All initial open questions are now settled:
+
+1. **Route** — dedicated `/app/comms/dashboard` route hosting both views; global
+   `/app/dashboard` stays role-generic. (§3)
+2. **Skipped vs Completed** — both map to `archived`; distinguished only by badge
+   — ✅ green tick for Completed, 🟧 amber dash for Skipped. (§5)
+3. **Filter scope** — status filter applies to the **update feed only**; the
+   events block keeps its own independent scope/type chips. (§4.2, §4.4)
+4. **Default feed view** — show **all statuses** by default; the feed offers
+   **owner**, **date-range (from → to)**, and **status** filters for the user to
+   narrow down. (§4.4)
+5. **Visibility** — **all blocks shared equally**; every comms-workspace user
+   sees the full team view, including all CRM follow-ups. (§2, §8)
+
+No open questions remain. Next step is the UX wireframe (§7) for sign-off before
+implementation is scheduled into a sprint.
