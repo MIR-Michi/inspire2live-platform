@@ -15,25 +15,15 @@ const VALID_ROLES: PlatformRole[] = [
   'PlatformAdmin',
 ]
 
-/** Read the "view-as" cookie on the server (call from Server Components / Actions) */
+/**
+ * Read the "view-as" cookie on the server (call from Server Components / Actions).
+ *
+ * The cookie is written client-side by the admin PreviewPanel
+ * (components/layouts/preview-panel.tsx), so there is no server-side setter.
+ */
 export async function getViewAsRole(): Promise<PlatformRole | null> {
   const cookieStore = await cookies()
   const val = cookieStore.get(COOKIE_NAME)?.value
   if (val && VALID_ROLES.includes(val as PlatformRole)) return val as PlatformRole
   return null
-}
-
-/** Set or clear the "view-as" cookie (call from Server Actions only) */
-export async function setViewAsRole(role: PlatformRole | null) {
-  const cookieStore = await cookies()
-  if (!role || role === 'PlatformAdmin') {
-    cookieStore.delete(COOKIE_NAME)
-  } else {
-    cookieStore.set(COOKIE_NAME, role, {
-      path: '/',
-      sameSite: 'lax',
-      httpOnly: false,
-      maxAge: 60 * 60 * 24, // 1 day
-    })
-  }
 }

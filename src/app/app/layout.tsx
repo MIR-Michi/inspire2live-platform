@@ -5,7 +5,6 @@ import { SideNav } from '@/components/layouts/side-nav'
 import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access'
 import { resolveAllSpaces } from '@/lib/permissions'
 import { getViewAsRole } from '@/lib/view-as'
-import { switchPerspective } from './admin/view-as-action'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
 
 function getInitials(name: string): string {
@@ -79,24 +78,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <RoleLayersProvider platformRole={effectiveRole}>
       <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
-        {/* Admin preview banner */}
-        {isAdmin && viewAsRole && viewAsRole !== 'PlatformAdmin' && (
-          <div className="flex items-center justify-center gap-3 bg-amber-100 px-4 py-1.5 text-xs font-medium text-amber-800 border-b border-amber-200">
-            <span>
-              Admin preview — role <strong>{viewAsRole}</strong>
-            </span>
-            <form action={switchPerspective}>
-              <input type="hidden" name="role" value="PlatformAdmin" />
-              <button
-                type="submit"
-                className="rounded bg-amber-700 px-2 py-0.5 text-xs font-medium text-white hover:bg-amber-800"
-              >
-                Exit preview
-              </button>
-            </form>
-          </div>
-        )}
-
         <TopNav
           userName={name}
           userRole={effectiveRole}
@@ -105,7 +86,6 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           isAdmin={isAdmin}
           viewAsRole={viewAsRole}
           showCommsNav={showCommsWorkspace}
-          workspaceLabel={workspaceLabel}
         />
         <div className="flex min-h-0 flex-1">
           <SideNav
