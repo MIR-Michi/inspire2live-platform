@@ -158,7 +158,7 @@ Format: `REQ-[DOMAIN]-[NNN]` — see `docs/IMPLEMENTATION_GUIDE.md` §5 for doma
 | REQ-A11Y-002 | Focus indicators visible (2px primary-500 outline) on all interactive elements | §11 | `planned` | `globals.css` | — | Week 6 |
 | REQ-A11Y-003 | All status indicators use icon + text, not color alone | §11, §7.2 | `planned` | All badge/RAG components | — | Week 6 |
 | REQ-PERF-001 | Images lazy-loaded; SSR for initial page loads | §11 | `planned` | All image components | — | Week 6 |
-| REQ-DS-001 | Design token system (colors, typography, spacing, radius, shadows) as Tailwind 4 theme | §7.1 | `in-progress` | `src/app/globals.css` | 2026-02-19 | Partial; full implementation Week 6 |
+| REQ-DS-001 | Design token system (colors, typography, spacing, radius, shadows) as Tailwind 4 theme | §7.1 | `in-progress` | `src/app/globals.css` | 2026-06-07 | Color tokens now sourced from the real Inspire2Live brand (`public/brand/inspire2live-logo.png`, Sprint 10) instead of an orange/blue placeholder. Typography, spacing, radius, and shadow tokens still pending full brand alignment — see `sprints/sprint-10-brand-identity-alignment/`. |
 
 ---
 

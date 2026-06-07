@@ -1,5 +1,6 @@
 'use client'
 
+import Image from 'next/image'
 import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
@@ -177,12 +178,17 @@ export function TopNav({
           </button>
 
           <Link href="/app/dashboard" className="flex items-center gap-2">
-            <span className="flex h-7 w-7 items-center justify-center rounded-md bg-orange-600 text-xs font-bold text-white">
-              I2L
-            </span>
-            <span className="hidden text-sm font-semibold text-neutral-900 sm:block">
-              {showCommsNav ? 'Comms' : 'Inspire2Live Platform'}
-            </span>
+            <Image
+              src="/brand/inspire2live-logo.png"
+              alt="Inspire2Live"
+              width={409}
+              height={262}
+              priority
+              className="h-9 w-auto md:h-10"
+            />
+            {showCommsNav && (
+              <span className="hidden text-sm font-semibold text-neutral-900 sm:block">Comms</span>
+            )}
           </Link>
         </div>
 

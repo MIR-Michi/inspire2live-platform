@@ -162,11 +162,17 @@ A feature is done when:
 ## 7) Design System Quick Reference (from §7 of Design Doc)
 
 ### Primary Colors
+
+> Sourced from `public/brand/inspire2live-logo.png` (Sprint 10 — Brand Identity
+> Alignment): a dark-charcoal "inspire" / "live" wordmark with the "2" and the
+> accent dot in brand red, paired with a multi-tone dotted mark. These replace
+> the earlier orange/blue placeholder values.
+
 | Token | Hex | Use |
 |---|---|---|
-| `--color-primary-500` | `#E8501E` | CTAs, active states, primary buttons |
-| `--color-primary-600` | `#D04318` | Hover |
-| `--color-secondary-500` | `#1B4B6B` | Nav, secondary brand, text on light |
+| `--color-primary-500` | `#D74247` | CTAs, active states, primary buttons (brand red — from the "2" / accent dot) |
+| `--color-primary-600` | `#B8282D` | Hover |
+| `--color-secondary-500` | `#2A2C35` | Nav, secondary brand, text on light (brand charcoal — from the wordmark text) |
 | `--color-accent-500` | `#2AAA8A` | Success, progress, positive indicators |
 
 ### Semantic Colors
@@ -174,7 +180,7 @@ A feature is done when:
 |---|---|---|
 | `--color-success` | `#2AAA8A` | Green RAG, completed |
 | `--color-warning` | `#E8981E` | Amber RAG, approaching deadline |
-| `--color-danger` | `#D63B3B` | Red RAG, blocked, overdue |
+| `--color-danger` | `#B3261E` | Red RAG, blocked, overdue — deliberately a deeper, cooler red than `--color-primary-500` so CTAs and "blocked / overdue" states stay visually distinct (REQ-A11Y-003 still requires icon + text, not colour alone) |
 
 ### RAG Logic (Bureau + Dashboards)
 - **Green:** All milestones on track, no blocked tasks, activity within 7 days

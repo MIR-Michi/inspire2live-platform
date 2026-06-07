@@ -49,6 +49,7 @@ After Sprint 04 ships the MVP, Phase 2 begins: WhatsApp Business API webhook, ru
 These remain planning placeholders until the Sprint 04 pilot review is complete.
 
 - [`sprint-09-comms-crm-foundation/`](sprint-09-comms-crm-foundation/description.md)
+- [`sprint-10-brand-identity-alignment/`](sprint-10-brand-identity-alignment/description.md)
 
 ## How to read a sprint
 

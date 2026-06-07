@@ -1,3 +1,4 @@
+import Image from 'next/image'
 import Link from 'next/link'
 
 export default function Home() {
@@ -7,10 +8,14 @@ export default function Home() {
       <header className="border-b border-neutral-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4">
           <div className="flex items-center gap-2">
-            <span className="flex h-8 w-8 items-center justify-center rounded-md bg-orange-600 text-sm font-bold text-white">
-              I2L
-            </span>
-            <span className="text-base font-semibold">Inspire2Live Platform</span>
+            <Image
+              src="/brand/inspire2live-logo.png"
+              alt="Inspire2Live"
+              width={409}
+              height={262}
+              priority
+              className="h-10 w-auto"
+            />
           </div>
 
           <div className="flex items-center gap-3">
@@ -24,13 +29,6 @@ export default function Home() {
             </a>
 
             <Link
-              href="/login?tab=signup"
-              className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-800 hover:bg-neutral-100"
-            >
-              Sign up
-            </Link>
-
-            <Link
               href="/login?tab=signin"
               className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
             >
@@ -42,24 +40,24 @@ export default function Home() {
 
       {/* ── Hero ── */}
       <main className="mx-auto max-w-6xl px-6 py-10">
-        <section className="text-center space-y-4 py-8">
+        <section className="text-center space-y-3 py-8">
           <p className="text-sm font-semibold uppercase tracking-[0.14em] text-orange-700">
-            Operational Collaboration Platform
+            Inspire2Live · Internal Platform
           </p>
-          <h1 className="text-4xl font-bold tracking-tight sm:text-5xl text-balance">
-            Where patient advocates, researchers &amp; clinicians drive cancer initiatives forward
+          <h1 className="text-3xl font-bold tracking-tight sm:text-4xl text-balance">
+            The Inspire2Live collaboration workspace
           </h1>
-          <p className="mx-auto max-w-2xl text-lg text-neutral-600">
-            Manage initiatives, track milestones, share evidence, and coordinate across 14 countries.
-            Built by and for the Inspire2Live community.
+          <p className="mx-auto max-w-2xl text-base text-neutral-600">
+            Manage initiatives, track milestones, share evidence, and coordinate across the
+            Inspire2Live network. Access is by invitation — sign in with your Inspire2Live account.
           </p>
 
           <div className="flex justify-center pt-2">
             <Link
-              href="/login?tab=signup"
+              href="/login?tab=signin"
               className="rounded-lg bg-orange-600 px-6 py-3 font-medium text-white hover:bg-orange-700"
             >
-              Get started
+              Sign in
             </Link>
           </div>
         </section>
