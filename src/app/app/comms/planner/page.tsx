@@ -34,10 +34,10 @@ export default async function CommsPlannerPage({
       .order('created_at', { ascending: false }),
     supabase
       .from('profiles')
-      .select('id, name, email, role, comms_team, user_type')
+      .select('id, name, email, role')
       .order('name'),
     user
-      ? supabase.from('profiles').select('role, comms_team, user_type').eq('id', user.id).maybeSingle()
+      ? supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
       : Promise.resolve({ data: null }),
   ])
 
@@ -46,10 +46,8 @@ export default async function CommsPlannerPage({
     name: string | null
     email: string
     role: string
-    comms_team: boolean
-    user_type: string | null
   }>)
-    .filter((author) => canAccessCommsWorkspace(author.role, author.comms_team, author.user_type))
+    .filter((author) => canAccessCommsWorkspace(author.role))
     .map((author) => ({
       id: author.id,
       name: author.name ?? author.email,

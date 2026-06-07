@@ -2,7 +2,6 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextResponse } from 'next/server'
 import { getPostLoginLandingPath } from '@/lib/comms-access'
-import { applyCanonicalCommsFallback } from '@/lib/user-workspace'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -61,30 +60,18 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL('/reset-password', url.origin))
   }
 
-  const { data: profileWithUserType, error: profileWithUserTypeError } = await supabase
+  const { data: profile } = await supabase
     .from('profiles')
-    .select('onboarding_completed, role, comms_team, user_type')
+    .select('onboarding_completed, role')
     .eq('id', user.id)
     .maybeSingle()
-  let profile = profileWithUserType
-
-  if (profileWithUserTypeError) {
-    const { data: fallbackProfile } = await supabase
-      .from('profiles')
-      .select('onboarding_completed, role, comms_team')
-      .eq('id', user.id)
-      .maybeSingle()
-    profile = fallbackProfile ? { ...fallbackProfile, user_type: 'default' } : null
-  }
-
-  profile = applyCanonicalCommsFallback(profile, user.email)
 
   if (!profile?.onboarding_completed) {
     return NextResponse.redirect(new URL('/onboarding', url.origin))
   }
 
   const destination = requestedNext === '/app/dashboard'
-    ? getPostLoginLandingPath(profile?.role, profile?.comms_team, profile?.user_type)
+    ? getPostLoginLandingPath(profile?.role)
     : next
 
   return NextResponse.redirect(new URL(destination, url.origin))

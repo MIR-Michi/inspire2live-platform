@@ -5,9 +5,9 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { canAccessAppPath, getSideNavItems, getRoleLabel, ROLE_LABELS, type NavKey } from '@/lib/role-access'
-import { RoleChips } from '@/components/roles/role-chips'
-import type { UserType } from '@/lib/user-workspace'
+import { canAccessAppPath, getSideNavItems, getRoleLabel, type NavKey } from '@/lib/role-access'
+import { PreviewPanel } from '@/components/layouts/preview-panel'
+import { useRoleLayers } from '@/components/roles/role-layers-context'
 
 /* ── icon helper (same set as side-nav, inlined for mobile menu) ────────── */
 const iconClass = 'h-5 w-5 shrink-0'
@@ -54,18 +54,6 @@ function MobileNavIcon({ navKey }: { navKey: NavKey }) {
   }
 }
 
-const ALL_PERSPECTIVE_ROLES = Object.entries(ROLE_LABELS).map(([value, label]) => ({
-  value,
-  label: value === 'PlatformAdmin' ? `${label} (default)` : label,
-}))
-
-const ALL_WORKSPACE_TYPES: Array<{ value: UserType; label: string }> = [
-  { value: 'default', label: 'Platform (default)' },
-  { value: 'comms', label: 'Communications' },
-  { value: 'board', label: 'Board' },
-  { value: 'partner', label: 'Partner' },
-]
-
 const COMMS_MOBILE_NAV = [
   { key: 'dashboard' as NavKey, label: 'Dashboard', href: '/app/dashboard' },
   { key: 'comms' as NavKey, label: 'Planner', href: '/app/comms/planner' },
@@ -84,9 +72,7 @@ interface TopNavProps {
   unreadCount?: number
   isAdmin?: boolean
   viewAsRole?: string | null
-  viewAsUserType?: UserType | null
   showCommsNav?: boolean
-  workspaceLabel?: string
 }
 
 export function TopNav({
@@ -96,15 +82,16 @@ export function TopNav({
   unreadCount = 0,
   isAdmin = false,
   viewAsRole,
-  viewAsUserType,
   showCommsNav = false,
-  workspaceLabel = 'Platform',
 }: TopNavProps) {
   const router = useRouter()
   const pathname = usePathname()
+  const { congressRoles } = useRoleLayers()
   const [profileOpen, setProfileOpen] = useState(false)
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const mobileMenuRef = useRef<HTMLDivElement>(null)
+
+  const congressLabel = congressRoles.length > 0 ? congressRoles.join(', ') : null
 
   const closeMobileMenu = () => setMobileMenuOpen(false)
 
@@ -140,15 +127,6 @@ export function TopNav({
 
   const notificationsAccessible = canAccessAppPath(userRole, '/app/notifications')
   const navItems = showCommsNav ? COMMS_MOBILE_NAV : getSideNavItems(userRole, { showComms: showCommsNav })
-  const previewActive = Boolean(
-    (viewAsRole && viewAsRole !== 'PlatformAdmin') ||
-    (viewAsUserType && viewAsUserType !== 'default')
-  )
-
-  const resetPreview = () => {
-    document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
-    document.cookie = 'i2l-view-as-user-type=; path=/; max-age=0'
-  }
 
   return (
     <>
@@ -192,62 +170,9 @@ export function TopNav({
           </Link>
         </div>
 
-        {/* Center: perspective switcher (admin only, all screens) */}
-        {isAdmin && (
-          <div className="flex items-center gap-2 rounded-lg border border-orange-200 bg-orange-50 px-2 py-1.5 sm:px-3">
-            <svg className="h-4 w-4 text-orange-600 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-            <span className="hidden text-xs font-semibold text-orange-700 xl:inline">Preview:</span>
-            <span className="hidden text-xs font-semibold text-orange-700 sm:inline">Role</span>
-            <select
-              value={viewAsRole ?? 'PlatformAdmin'}
-              onChange={(e) => {
-                const val = e.target.value
-                if (val === 'PlatformAdmin') {
-                  document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
-                } else {
-                  document.cookie = `i2l-view-as-role=${val}; path=/; max-age=86400; SameSite=Lax`
-                }
-                router.push('/app/dashboard')
-                router.refresh()
-              }}
-              className="max-w-36 rounded-md border border-orange-300 bg-white px-2 py-1 text-xs font-semibold text-orange-800 outline-none ring-orange-300 focus:ring-2 cursor-pointer"
-              aria-label="Switch platform role preview"
-            >
-              {ALL_PERSPECTIVE_ROLES.map((r) => (
-                <option key={r.value} value={r.value}>{r.label}</option>
-              ))}
-            </select>
-            <span className="hidden text-xs font-semibold text-orange-700 sm:inline">Workspace</span>
-            <select
-              value={viewAsUserType ?? 'default'}
-              onChange={(e) => {
-                const val = e.target.value as UserType
-                if (val === 'default') {
-                  document.cookie = 'i2l-view-as-user-type=; path=/; max-age=0'
-                } else {
-                  document.cookie = `i2l-view-as-user-type=${val}; path=/; max-age=86400; SameSite=Lax`
-                }
-                router.push('/app/dashboard')
-                router.refresh()
-              }}
-              className="max-w-44 rounded-md border border-orange-300 bg-white px-2 py-1 text-xs font-semibold text-orange-800 outline-none ring-orange-300 focus:ring-2 cursor-pointer"
-              aria-label="Switch workspace user type preview"
-            >
-              {ALL_WORKSPACE_TYPES.map((workspace) => (
-                <option key={workspace.value} value={workspace.value}>
-                  {workspace.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        {/* Right: notifications + profile */}
+        {/* Right: preview (admin) + notifications + profile */}
         <div className="flex items-center gap-2">
-          <RoleChips compact workspaceLabel={workspaceLabel} />
+          {isAdmin && <PreviewPanel viewAsRole={viewAsRole} />}
 
           {notificationsAccessible ? (
             <Link
@@ -285,7 +210,10 @@ export function TopNav({
               <div className="absolute right-0 mt-1 w-52 rounded-lg border border-neutral-200 bg-white py-1 shadow-lg" role="menu">
                 <div className="border-b border-neutral-100 px-3 py-2">
                   <p className="text-xs font-medium text-neutral-900 truncate">{userName}</p>
-                  <p className="text-xs text-neutral-500">{getRoleLabel(userRole)} · {workspaceLabel}</p>
+                  <p className="text-xs text-neutral-500">{getRoleLabel(userRole)}</p>
+                  {congressLabel && (
+                    <p className="mt-0.5 text-[11px] text-neutral-400 truncate">Congress: {congressLabel}</p>
+                  )}
                 </div>
 
                 <Link
@@ -296,20 +224,6 @@ export function TopNav({
                 >
                   Profile &amp; settings
                 </Link>
-                {isAdmin && previewActive && (
-                  <button
-                    onClick={() => {
-                      resetPreview()
-                      setProfileOpen(false)
-                      router.push('/app/dashboard')
-                      router.refresh()
-                    }}
-                    className="flex w-full items-center gap-2 px-3 py-2 text-sm text-amber-700 hover:bg-amber-50"
-                    role="menuitem"
-                  >
-                    Reset to Admin view
-                  </button>
-                )}
                 <Link
                   href="/login"
                   className="flex w-full items-center gap-2 px-3 py-2 text-sm text-neutral-500 hover:bg-neutral-50"
@@ -387,7 +301,10 @@ export function TopNav({
             {/* Drawer footer: user info */}
             <div className="absolute bottom-0 left-0 right-0 border-t border-neutral-200 p-4">
               <p className="truncate text-sm font-medium text-neutral-900">{userName}</p>
-              <p className="text-xs text-neutral-500">{getRoleLabel(userRole)} · {workspaceLabel}</p>
+              <p className="text-xs text-neutral-500">{getRoleLabel(userRole)}</p>
+              {congressLabel && (
+                <p className="mt-0.5 truncate text-[11px] text-neutral-400">Congress: {congressLabel}</p>
+              )}
             </div>
           </nav>
         </div>

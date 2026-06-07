@@ -52,7 +52,7 @@ export default async function CommsCrmPage({
   ] = await Promise.all([
     supabase
       .from('profiles')
-      .select('id, name, email, avatar_url, bio, city, country, organization, role, expertise_tags, last_active_at, user_type, comms_team')
+      .select('id, name, email, avatar_url, bio, city, country, organization, role, expertise_tags, last_active_at')
       .order('name'),
     supabase.from('initiative_members').select('user_id, initiative_id, role'),
     supabase.from('initiatives').select('id, title').order('title'),
@@ -92,7 +92,7 @@ export default async function CommsCrmPage({
   const ownerMap = new Map((profiles ?? []).map((profile) => [profile.id, profile.name ?? profile.email]))
 
   const internalRecords: CrmContactRecord[] = (profiles ?? [])
-    .filter((profile) => profile.user_type !== 'partner')
+    .filter((profile) => profile.role !== 'IndustryPartner')
     .map((profile) => ({
       id: `profile:${profile.id}`,
       crmContactId: null,
@@ -115,7 +115,7 @@ export default async function CommsCrmPage({
       city: profile.city,
       country: profile.country,
       preferredChannel: 'Email',
-      relationshipOwner: profile.comms_team ? 'Communications team' : null,
+      relationshipOwner: profile.role === 'Comms' ? 'Communications team' : null,
       relationshipOwnerId: null,
       health: deriveRelationshipHealth(profile.last_active_at),
       lastInteractionAt: profile.last_active_at,
@@ -123,8 +123,8 @@ export default async function CommsCrmPage({
       consentStatus: 'not_required' as const,
       privacyNotes: null,
       retentionReviewAt: null,
-      sourceLabel: profile.user_type === 'comms' ? 'Comms workspace profile' : 'Platform profile',
-      tags: [...(profile.expertise_tags ?? []), profile.user_type === 'comms' ? 'comms' : 'internal'].filter(Boolean),
+      sourceLabel: profile.role === 'Comms' ? 'Comms workspace profile' : 'Platform profile',
+      tags: [...(profile.expertise_tags ?? []), profile.role === 'Comms' ? 'comms' : 'internal'].filter(Boolean),
       notes: null,
       recentInteractions: [],
     }))

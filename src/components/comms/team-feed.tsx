@@ -167,7 +167,7 @@ export function TeamFeed({ feed, owners }: { feed: FeedEntry[]; owners: TeamMemb
               {entry.ownerLabel && (
                 <span className="flex items-center gap-1 text-xs text-neutral-500">
                   {entry.ownerLabel}
-                  <RoleBadge userType={entry.ownerUserType} />
+                  <RoleBadge role={entry.ownerRole} />
                 </span>
               )}
               <StatusBadge status={entry.status} />

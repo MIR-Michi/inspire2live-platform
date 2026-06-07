@@ -42,7 +42,7 @@ export type FeedEntry = {
   title: string
   ownerId: string | null
   ownerLabel: string | null
-  ownerUserType: string | null
+  ownerRole: string | null
   status: UnifiedStatus
   date: string | null
   href: string
@@ -51,7 +51,7 @@ export type FeedEntry = {
 export type TeamMemberOption = {
   id: string
   label: string
-  userType: string | null
+  role: string | null
 }
 
 export type TeamDashboardData = {
@@ -96,7 +96,7 @@ export async function loadCommsTeamDashboardData(
     { data: agendaData },
     eventPipeline,
   ] = await Promise.all([
-    supabase.from('profiles').select('id, name, email, user_type').order('name'),
+    supabase.from('profiles').select('id, name, email, role').order('name'),
     supabase
       .from('intake_items')
       .select('id, sender_name, raw_content, channel, status, captured_at')
@@ -133,7 +133,7 @@ export async function loadCommsTeamDashboardData(
     loadCommsEventPipelineData({ scopeFilter }),
   ])
 
-  type ProfileRow = { id: string; name: string | null; email: string | null; user_type: string | null }
+  type ProfileRow = { id: string; name: string | null; email: string | null; role: string | null }
   const profiles = (profilesData ?? []) as ProfileRow[]
   const profileMap = new Map(profiles.map((p) => [p.id, p]))
   const labelFor = (id: string | null | undefined) => {
@@ -141,7 +141,7 @@ export async function loadCommsTeamDashboardData(
     const p = profileMap.get(id)
     return p ? p.name ?? p.email ?? 'Unknown' : null
   }
-  const userTypeFor = (id: string | null | undefined) => (id ? profileMap.get(id)?.user_type ?? null : null)
+  const roleFor = (id: string | null | undefined) => (id ? profileMap.get(id)?.role ?? null : null)
 
   // ── WhatsApp channels ──────────────────────────────────────────────
   const channels: ChannelCard[] = (['campus', 'communications'] as ChannelKey[]).map((key) => {
@@ -182,7 +182,7 @@ export async function loadCommsTeamDashboardData(
     summary: row.summary,
     ownerId: row.owner_id,
     ownerLabel: labelFor(row.owner_id),
-    ownerUserType: userTypeFor(row.owner_id),
+    ownerRole: roleFor(row.owner_id),
     status: normalizeAgendaStatus(row.status),
     createdAt: row.created_at,
   }))
@@ -205,7 +205,7 @@ export async function loadCommsTeamDashboardData(
       title: row.title,
       ownerId: row.author_id,
       ownerLabel: labelFor(row.author_id),
-      ownerUserType: userTypeFor(row.author_id),
+      ownerRole: roleFor(row.author_id),
       status: normalizeCalendarStatus(row.status),
       date: row.scheduled_at,
       href: '/app/comms/planner',
@@ -227,7 +227,7 @@ export async function loadCommsTeamDashboardData(
       title: row.title,
       ownerId: row.assignee_id,
       ownerLabel: labelFor(row.assignee_id),
-      ownerUserType: userTypeFor(row.assignee_id),
+      ownerRole: roleFor(row.assignee_id),
       status: normalizeTaskStatus(row.status),
       date: row.due_date,
       href: row.initiative_id ? `/app/initiatives/${row.initiative_id}/tasks` : '/app/tasks',
@@ -242,7 +242,7 @@ export async function loadCommsTeamDashboardData(
       title: event.name,
       ownerId: event.owner_id,
       ownerLabel: event.ownerLabel,
-      ownerUserType: userTypeFor(event.owner_id),
+      ownerRole: roleFor(event.owner_id),
       status: normalizeEventStage(event.stage),
       date: event.start_date,
       href: `/app/comms/events/${event.id}`,
@@ -263,7 +263,7 @@ export async function loadCommsTeamDashboardData(
       title: row.theme || row.summary || 'Campus session',
       ownerId: null,
       ownerLabel: 'Communications team',
-      ownerUserType: 'comms',
+      ownerRole: 'Comms',
       // Campus sessions in the past are records of done work.
       status: d < new Date() ? 'completed' : 'in_progress',
       date: row.session_date,
@@ -285,7 +285,7 @@ export async function loadCommsTeamDashboardData(
       title: `Follow up with ${row.full_name}`,
       ownerId: row.relationship_owner_id,
       ownerLabel: labelFor(row.relationship_owner_id) ?? 'Communications team',
-      ownerUserType: userTypeFor(row.relationship_owner_id),
+      ownerRole: roleFor(row.relationship_owner_id),
       status: row.lifecycle_stage === 'archived' ? 'completed' : 'in_progress',
       date: row.next_follow_up_at,
       href: '/app/comms/crm',
@@ -300,7 +300,7 @@ export async function loadCommsTeamDashboardData(
       title: item.title,
       ownerId: item.ownerId,
       ownerLabel: item.ownerLabel,
-      ownerUserType: item.ownerUserType,
+      ownerRole: item.ownerRole,
       status: item.status,
       date: item.meetingDate,
       href: '/app/comms/dashboard?view=team',
@@ -319,7 +319,7 @@ export async function loadCommsTeamDashboardData(
   const ownerIds = new Set<string>()
   for (const entry of feed) if (entry.ownerId) ownerIds.add(entry.ownerId)
   const owners: TeamMemberOption[] = Array.from(ownerIds)
-    .map((id) => ({ id, label: labelFor(id) ?? 'Unknown', userType: userTypeFor(id) }))
+    .map((id) => ({ id, label: labelFor(id) ?? 'Unknown', role: roleFor(id) }))
     .sort((a, b) => a.label.localeCompare(b.label))
 
   return { channels, events: eventPipeline.events, agendaGroups, feed, owners }

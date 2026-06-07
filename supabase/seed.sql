@@ -122,6 +122,16 @@ insert into public.profiles (
     '{"healthcare governance","funding","strategy","EU health policy"}',
     true,
     'Board member and former EU health policy advisor. Oversees strategic direction and funding partnerships.'
+  ),
+  (
+    '00000000-0000-0000-0000-000000000007',
+    'Lina Costa',
+    'lina@example.com',
+    'Comms',
+    'PT', 'Lisbon', 'Europe/Lisbon',
+    '{"content strategy","storytelling","press relations","social media"}',
+    true,
+    'Communications lead coordinating the weekly content calendar, campus updates, and external storytelling for Inspire2Live.'
   )
 on conflict (id) do nothing;
 

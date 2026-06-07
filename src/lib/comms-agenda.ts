@@ -13,7 +13,7 @@ export type AgendaItemRecord = {
   summary: string | null
   ownerId: string | null
   ownerLabel: string | null
-  ownerUserType: string | null
+  ownerRole: string | null
   status: UnifiedStatus
   createdAt: string
 }

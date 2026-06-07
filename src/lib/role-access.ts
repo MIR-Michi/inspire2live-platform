@@ -15,6 +15,7 @@ export const ROLE_LABELS: Record<PlatformRole, string> = {
   Clinician:       'Clinician',
   Researcher:      'Researcher',
   Moderator:       'Moderator',
+  Comms:           'Communications',
   HubCoordinator:  'Hub Coordinator',
   IndustryPartner: 'Industry Partner',
   BoardMember:     'Board Member',
@@ -33,6 +34,7 @@ export const ROLE_BADGE_COLORS: Record<PlatformRole, string> = {
   Researcher:      'bg-emerald-100 text-emerald-700',
   Clinician:       'bg-teal-100 text-teal-700',
   Moderator:       'bg-pink-100 text-pink-700',
+  Comms:           'bg-orange-100 text-orange-700',
   IndustryPartner: 'bg-amber-100 text-amber-700',
 }
 
@@ -108,6 +110,15 @@ const NAV_BY_ROLE: Record<PlatformRole, NavItemConfig[]> = {
     { key: 'profile',       label: 'Profile',        href: '/app/profile' },
   ],
   Moderator: [
+    { key: 'dashboard',     label: 'Dashboard',       href: '/app/dashboard' },
+    { key: 'comms',         label: 'Communications',  href: '/app/comms' },
+    { key: 'stories',       label: 'Stories',         href: '/app/stories' },
+    { key: 'network',       label: 'My Network',      href: '/app/network' },
+    { key: 'congress',      label: 'Congress',        href: '/app/congress/workspace' },
+    { key: 'resources',     label: 'Resources',       href: '/app/resources' },
+    { key: 'profile',       label: 'Profile',         href: '/app/profile' },
+  ],
+  Comms: [
     { key: 'dashboard',     label: 'Dashboard',       href: '/app/dashboard' },
     { key: 'comms',         label: 'Communications',  href: '/app/comms' },
     { key: 'stories',       label: 'Stories',         href: '/app/stories' },
@@ -192,7 +203,7 @@ export function getSideNavItems(
   const normalized = normalizeRole(role)
   const all = NAV_BY_ROLE[normalizeRole(role)]
   return all.filter((item) => {
-    if (item.key === 'comms' && normalized !== 'PlatformAdmin') {
+    if (item.key === 'comms' && normalized !== 'PlatformAdmin' && normalized !== 'Comms') {
       return options?.showComms === true
     }
     const level = resolveAccessFromRole(role, item.key as PlatformSpace)
