@@ -139,9 +139,20 @@ filtering only — it does **not** change the underlying models. Proposed mappin
 | **Completed** | `published` | `post_event` | `done` |
 | **Skipped** | `archived` | `archived` | cancelled/archived |
 
-*Open question for review:* "Skipped" today maps to `archived`. Do we want a
-distinct "skipped/won't-do" concept separate from "archived/filed"? If so it
-needs a small data addition; if not, archived = skipped is the pragmatic v1.
+**Decision (reviewer, 2026-06-07):** Both *Completed* and *Skipped* map to the
+underlying `archived` state — there is no new data state to add. The two are
+distinguished **visually only**, in the unified status badge:
+
+| Unified status | Marker | Meaning |
+|---|---|---|
+| **Completed** | ✅ green tick | the work was finished as planned |
+| **Skipped** | 🟧 amber dash | the work was deliberately not done / dropped |
+
+This is purely a presentation-layer distinction inside the status normaliser
+(see §6) — e.g. a small piece of metadata or naming convention at archive time
+tells the normaliser which badge to render. No schema change is required for
+v1; if the team later wants to *report* on "skipped vs completed" separately,
+that would justify promoting it to a real field.
 
 ---
 
@@ -213,7 +224,8 @@ implementation.
 - Charts, throughput metrics, and team-performance analytics.
 - Two-way WhatsApp interaction or sending from the dashboard.
 - Per-user customisable dashboard layouts.
-- A distinct "won't do" status separate from archived (pending §5 decision).
+- A distinct underlying "skipped" data state (resolved as visual-only, §5) —
+  could be revisited if the team later wants to report on it separately.
 
 ---
 
@@ -221,7 +233,10 @@ implementation.
 
 1. Dedicated `/app/comms/dashboard` route vs. both views on `/app/dashboard`?
    (Recommendation: dedicated route.)
-2. Is "Skipped" a real new state, or is it equivalent to "Archived"?
+2. ~~Is "Skipped" a real new state, or is it equivalent to "Archived"?~~
+   **Resolved:** both Skipped and Completed map to `archived`; they are
+   distinguished only by badge — ✅ green tick for Completed, 🟧 amber dash for
+   Skipped (see §5).
 3. Should the **status filter** also apply to the events block, or only the
    update feed?
 4. Default feed view — hide Completed *and* Skipped, or only Completed?
