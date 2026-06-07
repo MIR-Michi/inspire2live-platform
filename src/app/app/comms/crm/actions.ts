@@ -14,10 +14,14 @@ import {
 
 type CrmTableClient = {
   from: (table: string) => {
+    // The comms_crm_* tables are not yet present in the generated Database types,
+    // so the query builder chain is typed loosely here.
+    /* eslint-disable @typescript-eslint/no-explicit-any */
     select: (...args: unknown[]) => any
     insert: (...args: unknown[]) => any
     update: (...args: unknown[]) => any
     delete: (...args: unknown[]) => any
+    /* eslint-enable @typescript-eslint/no-explicit-any */
   }
 }
 

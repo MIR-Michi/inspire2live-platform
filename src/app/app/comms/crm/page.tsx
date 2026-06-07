@@ -16,6 +16,9 @@ import { createClient } from '@/lib/supabase/server'
 const VALID_SEGMENTS = new Set(['all', 'internal', 'external'])
 
 type CrmQueryClient = {
+  // The comms_crm_* tables are not yet present in the generated Database types,
+  // so the query builder chain is typed loosely here.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   from: (table: string) => any
 }
 
