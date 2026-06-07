@@ -69,7 +69,9 @@ const COMMS_MOBILE_NAV = [
   { key: 'dashboard' as NavKey, label: 'Dashboard', href: '/app/dashboard' },
   { key: 'comms' as NavKey, label: 'Planner', href: '/app/comms/planner' },
   { key: 'comms' as NavKey, label: 'Campus', href: '/app/comms/campus' },
+  { key: 'comms' as NavKey, label: 'CRM', href: '/app/comms/crm' },
   { key: 'comms' as NavKey, label: 'Annual Congress', href: '/app/congress' },
+  { key: 'comms' as NavKey, label: 'Podcast', href: '/app/comms/podcast' },
   { key: 'comms' as NavKey, label: 'All events', href: '/app/comms/events' },
   { key: 'resources' as NavKey, label: 'Library', href: '/app/comms/library' },
 ]

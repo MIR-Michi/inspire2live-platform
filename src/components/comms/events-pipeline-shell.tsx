@@ -69,6 +69,13 @@ export function EventsPipelineShell({
   eventTypes,
   initiatives,
   people,
+  title = 'Event pipeline',
+  eyebrow = 'Full routing',
+  description = 'Track I2L-owned productions separately from external attendance while keeping congress links visible.',
+  recordLabel = 'records',
+  basePath = '/app/comms/events',
+  showScopeFilters = true,
+  showEventTypeFilters = true,
 }: {
   events: EventCard[]
   stageFilter: 'all' | EventStage
@@ -77,21 +84,26 @@ export function EventsPipelineShell({
   eventTypes: string[]
   initiatives: Option[]
   people: Option[]
+  title?: string
+  eyebrow?: string
+  description?: string
+  recordLabel?: string
+  basePath?: string
+  showScopeFilters?: boolean
+  showEventTypeFilters?: boolean
 }) {
   return (
     <section className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Full routing</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{eyebrow}</p>
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-semibold text-neutral-900">Event pipeline</h2>
+            <h2 className="text-2xl font-semibold text-neutral-900">{title}</h2>
             <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
-              {events.length} records
+              {events.length} {recordLabel}
             </span>
           </div>
-          <p className="text-sm text-neutral-600">
-            Track I2L-owned productions separately from external attendance while keeping congress links visible.
-          </p>
+          <p className="text-sm text-neutral-600">{description}</p>
         </div>
       </header>
 
@@ -102,31 +114,38 @@ export function EventsPipelineShell({
         <EventCreateForm initiatives={initiatives} people={people} />
       </details>
 
-      <nav className="flex flex-wrap gap-2" aria-label="Event ownership filters">
-        {EVENT_SCOPE_FILTERS.map((item) => {
-          const isActive = item.key === scopeFilter
-          return (
-            <Link
-              key={item.key}
-              href={item.key === 'all' ? '/app/comms/events' : `/app/comms/events?scope=${item.key}`}
-              className={[
-                'rounded-full px-3 py-1.5 text-sm font-semibold transition',
-                isActive ? 'bg-orange-100 text-orange-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
-              ].join(' ')}
-            >
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
+      {showScopeFilters && (
+        <nav className="flex flex-wrap gap-2" aria-label="Event ownership filters">
+          {EVENT_SCOPE_FILTERS.map((item) => {
+            const isActive = item.key === scopeFilter
+            return (
+              <Link
+                key={item.key}
+                href={item.key === 'all' ? basePath : `${basePath}?scope=${item.key}`}
+                className={[
+                  'rounded-full px-3 py-1.5 text-sm font-semibold transition',
+                  isActive ? 'bg-orange-100 text-orange-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
+                ].join(' ')}
+              >
+                {item.label}
+              </Link>
+            )
+          })}
+        </nav>
+      )}
 
       <nav className="flex flex-wrap gap-2" aria-label="Event stage filters">
         {EVENT_FILTERS.map((item) => {
           const isActive = item.key === stageFilter
+          const params = new URLSearchParams()
+          if (showScopeFilters && scopeFilter !== 'all') params.set('scope', scopeFilter)
+          if (item.key !== 'all') params.set('stage', item.key)
+          if (showEventTypeFilters && eventTypeFilter !== 'all') params.set('event_type', eventTypeFilter)
+          const href = params.size > 0 ? `${basePath}?${params.toString()}` : basePath
           return (
             <Link
               key={item.key}
-              href={item.key === 'all' ? `/app/comms/events?scope=${scopeFilter}` : `/app/comms/events?scope=${scopeFilter}&stage=${item.key}`}
+              href={href}
               className={[
                 'rounded-full px-3 py-1.5 text-sm font-semibold transition',
                 isActive ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
@@ -138,10 +157,10 @@ export function EventsPipelineShell({
         })}
       </nav>
 
-      {eventTypes.length > 0 && (
+      {showEventTypeFilters && eventTypes.length > 0 && (
         <nav className="flex flex-wrap gap-2" aria-label="Event type filters">
           <Link
-            href={`/app/comms/events?scope=${scopeFilter}`}
+            href={scopeFilter === 'all' ? basePath : `${basePath}?scope=${scopeFilter}`}
             className={`rounded-full px-3 py-1.5 text-sm font-semibold ${eventTypeFilter === 'all' ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
           >
             All types
@@ -149,7 +168,10 @@ export function EventsPipelineShell({
           {eventTypes.map((eventType) => (
             <Link
               key={eventType}
-              href={`/app/comms/events?scope=${scopeFilter}&event_type=${eventType}`}
+              href={`${basePath}?${new URLSearchParams([
+                ...(scopeFilter === 'all' ? [] : [['scope', scopeFilter]]),
+                ['event_type', eventType],
+              ]).toString()}`}
               className={`rounded-full px-3 py-1.5 text-sm font-semibold ${eventTypeFilter === eventType ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
             >
               {getEventTypeLabel(eventType)}

@@ -39,12 +39,14 @@ const COMMS_NAV_SECTIONS: Array<{
     items: [
       { label: 'Planner', href: '/app/comms/planner' },
       { label: 'Campus', href: '/app/comms/campus', badge: 'campus' },
+      { label: 'CRM', href: '/app/comms/crm' },
     ],
   },
   {
     label: 'Events',
     items: [
       { label: 'Annual Congress', href: '/app/congress', priority: true },
+      { label: 'Podcast', href: '/app/comms/podcast' },
       { label: 'All events', href: '/app/comms/events' },
     ],
   },
