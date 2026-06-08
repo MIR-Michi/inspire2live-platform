@@ -9,11 +9,13 @@ import {
   CRM_FIELD_GROUPS,
   CRM_INTERACTION_OPTIONS,
   CRM_LIFECYCLE_OPTIONS,
+  CRM_PERSON_TYPE_OPTIONS,
   CRM_SEGMENT_OPTIONS,
   formatCrmDate,
   formatCrmList,
   getCrmConsentLabel,
   getCrmHealthLabel,
+  getCrmPersonTypeLabel,
   getCrmSegmentLabel,
   getInitials,
   type CrmConnectorBacklogItem,
@@ -22,11 +24,25 @@ import {
   type CrmSegment,
 } from '@/lib/comms-crm'
 
-function buildHref(segment: 'all' | CrmSegment, query: string) {
+type CrmFilter = 'follow_up' | 'privacy_review' | null
+
+function buildHref({
+  segment,
+  personType,
+  filter,
+  query,
+}: {
+  segment?: 'all' | CrmSegment
+  personType?: string
+  filter?: CrmFilter
+  query?: string
+}) {
   const params = new URLSearchParams()
-  if (segment !== 'all') params.set('segment', segment)
+  if (segment && segment !== 'all') params.set('segment', segment)
+  if (personType) params.set('type', personType)
+  if (filter) params.set('filter', filter)
   if (query) params.set('q', query)
-  return params.size > 0 ? `/app/comms/crm?${params.toString()}` : '/app/comms/crm'
+  return params.size > 0 ? `/app/comms/crm/people?${params.toString()}` : '/app/comms/crm/people'
 }
 
 function toneForHealth(value: CrmContactRecord['health']) {
@@ -120,9 +136,18 @@ function ContactEditForm({
           <input name="full_name" defaultValue={contact.fullName} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" required />
         </label>
         <label className="space-y-1">
-          <span className="text-xs font-semibold text-neutral-700">Segment</span>
+          <span className="text-xs font-semibold text-neutral-700">Intern / extern</span>
           <select name="segment" defaultValue={contact.segment} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
             {CRM_SEGMENT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-neutral-700">Person type</span>
+          <select name="person_type" defaultValue={contact.personType ?? ''} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+            <option value="">Unclassified</option>
+            {CRM_PERSON_TYPE_OPTIONS.map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
@@ -165,6 +190,30 @@ function ContactEditForm({
         <span className="text-xs font-semibold text-neutral-700">Bio</span>
         <textarea name="bio" defaultValue={contact.bio ?? ''} rows={3} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
       </label>
+
+      <div className="grid gap-3 rounded-lg border border-neutral-200 bg-white p-4 md:grid-cols-2">
+        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500 md:col-span-2">
+          Internal profile — picture, bio, field of expertise, and skills
+        </p>
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-neutral-700">Field of expertise</span>
+          <input
+            name="field_of_expertise"
+            defaultValue={formatCrmList(contact.fieldOfExpertise)}
+            placeholder="Comma or newline separated, e.g. Oncology, Patient engagement"
+            className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+          />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-neutral-700">Skills</span>
+          <input
+            name="skills"
+            defaultValue={formatCrmList(contact.skills)}
+            placeholder="Comma or newline separated, e.g. Public speaking, Data analysis"
+            className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
+          />
+        </label>
+      </div>
 
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1">
@@ -275,9 +324,18 @@ function NewContactForm({
             <input name="full_name" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" required />
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-neutral-700">Segment</span>
-            <select name="segment" defaultValue="external" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+            <span className="text-xs font-semibold text-neutral-700">Intern / extern</span>
+            <select name="segment" defaultValue="internal" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
               {CRM_SEGMENT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-neutral-700">Person type</span>
+            <select name="person_type" defaultValue="" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+              <option value="">Unclassified</option>
+              {CRM_PERSON_TYPE_OPTIONS.map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
@@ -308,6 +366,16 @@ function NewContactForm({
           <span className="text-xs font-semibold text-neutral-700">Bio</span>
           <textarea name="bio" rows={3} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
         </label>
+        <div className="grid gap-3 md:grid-cols-2">
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-neutral-700">Field of expertise</span>
+            <input name="field_of_expertise" placeholder="Comma separated" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-neutral-700">Skills</span>
+            <input name="skills" placeholder="Comma separated" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
+          </label>
+        </div>
         <div className="grid gap-3 md:grid-cols-2">
           <label className="space-y-1">
             <span className="text-xs font-semibold text-neutral-700">Associated projects</span>
@@ -369,6 +437,8 @@ export function CommsCrmWorkspace({
   records,
   visibleRecords,
   activeSegment,
+  activePersonType,
+  activeFilter,
   query,
   people,
   initiatives,
@@ -379,6 +449,8 @@ export function CommsCrmWorkspace({
   records: CrmContactRecord[]
   visibleRecords: CrmContactRecord[]
   activeSegment: 'all' | CrmSegment
+  activePersonType: string
+  activeFilter: CrmFilter
   query: string
   people: CrmSelectOption[]
   initiatives: CrmSelectOption[]
@@ -390,23 +462,23 @@ export function CommsCrmWorkspace({
     .filter((record) => record.health === 'follow_up' || Boolean(record.nextFollowUpAt))
     .sort((a, b) => (a.nextFollowUpAt ?? '9999-12-31').localeCompare(b.nextFollowUpAt ?? '9999-12-31'))
   const withProjectsCount = records.filter((record) => record.associatedProjects.length > 0).length
-  const privacyReviewCount = records.filter((record) => record.consentStatus === 'unknown' || Boolean(record.retentionReviewAt)).length
 
   return (
     <section className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Relationships</p>
-          <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-semibold text-neutral-900">CRM workspace</h2>
-            <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
-              {visibleRecords.length} visible
-            </span>
-          </div>
-          <p className="max-w-3xl text-sm text-neutral-600">
-            One comms-facing view across internal users and external stakeholders, with ownership, projects, events, consent, and follow-up state in one place.
-          </p>
+      <header className="space-y-2">
+        <Link href="/app/comms/crm" className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 hover:text-orange-900">
+          ← CRM
+        </Link>
+        <div className="flex flex-wrap items-center gap-3">
+          <h2 className="text-2xl font-semibold text-neutral-900">People</h2>
+          <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+            {visibleRecords.length} visible
+          </span>
         </div>
+        <p className="max-w-3xl text-sm text-neutral-600">
+          Search and filter every person comms works with — internal team members and external stakeholders — with
+          ownership, projects, events, and follow-up state in one place.
+        </p>
       </header>
 
       {!crmReady && (
@@ -419,55 +491,79 @@ export function CommsCrmWorkspace({
 
       <form className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
         <input type="hidden" name="segment" value={activeSegment === 'all' ? '' : activeSegment} />
+        <input type="hidden" name="type" value={activePersonType} />
+        <input type="hidden" name="filter" value={activeFilter ?? ''} />
         <label className="block space-y-2">
           <span className="text-sm font-semibold text-neutral-800">Search people and stakeholders</span>
           <input
             name="q"
             defaultValue={query}
-            placeholder="Search names, bio, projects, organisation, events, or tags"
+            placeholder="Search names, bio, projects, organisation, events, expertise, skills, or tags"
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
           />
         </label>
       </form>
 
-      <nav className="flex flex-wrap gap-2" aria-label="CRM segment filters">
-        <Link
-          href={buildHref('all', query)}
-          className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeSegment === 'all' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
-        >
-          All contacts
-        </Link>
-        {CRM_SEGMENT_OPTIONS.map((option) => (
+      <div className="space-y-3">
+        <nav className="flex flex-wrap gap-2" aria-label="Intern / extern filters">
           <Link
-            key={option.value}
-            href={buildHref(option.value, query)}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeSegment === option.value ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+            href={buildHref({ segment: 'all', personType: activePersonType, filter: activeFilter, query })}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeSegment === 'all' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
           >
-            {option.label}
+            All
           </Link>
-        ))}
-      </nav>
+          {CRM_SEGMENT_OPTIONS.map((option) => (
+            <Link
+              key={option.value}
+              href={buildHref({ segment: option.value, personType: activePersonType, filter: activeFilter, query })}
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeSegment === option.value ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+            >
+              {option.label}
+            </Link>
+          ))}
+        </nav>
 
-      <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+        <nav className="flex flex-wrap gap-2" aria-label="Person type filters">
+          <Link
+            href={buildHref({ segment: activeSegment, filter: activeFilter, query })}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${!activePersonType ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+          >
+            Any type
+          </Link>
+          {CRM_PERSON_TYPE_OPTIONS.map((option) => (
+            <Link
+              key={option.value}
+              href={buildHref({ segment: activeSegment, personType: option.value, filter: activeFilter, query })}
+              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${activePersonType === option.value ? 'bg-violet-100 text-violet-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+            >
+              {option.label}
+            </Link>
+          ))}
+          <Link
+            href={buildHref({ segment: activeSegment, personType: 'unclassified', filter: activeFilter, query })}
+            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${activePersonType === 'unclassified' ? 'bg-violet-100 text-violet-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+          >
+            Unclassified
+          </Link>
+        </nav>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-3">
         <article className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Total records</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Total people</p>
           <p className="mt-2 text-3xl font-semibold text-neutral-950">{records.length}</p>
         </article>
         <article className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Internal users</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Internal</p>
           <p className="mt-2 text-3xl font-semibold text-neutral-950">
             {records.filter((record) => record.segment === 'internal').length}
           </p>
         </article>
         <article className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">External stakeholders</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">External</p>
           <p className="mt-2 text-3xl font-semibold text-neutral-950">
             {records.filter((record) => record.segment === 'external').length}
           </p>
-        </article>
-        <article className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-          <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Privacy / consent review</p>
-          <p className="mt-2 text-3xl font-semibold text-neutral-950">{privacyReviewCount}</p>
         </article>
       </div>
 
@@ -492,6 +588,9 @@ export function CommsCrmWorkspace({
                       <div className="flex flex-wrap gap-2">
                         <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-700">
                           {getCrmSegmentLabel(contact.segment)}
+                        </span>
+                        <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-700">
+                          {getCrmPersonTypeLabel(contact.personType)}
                         </span>
                         <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${toneForHealth(contact.health)}`}>
                           {getCrmHealthLabel(contact.health)}
@@ -521,6 +620,35 @@ export function CommsCrmWorkspace({
                 <p className="mt-4 text-sm leading-6 text-neutral-600">
                   {contact.bio || 'Bio not yet added. Capture expertise, relationship context, and why this person matters to comms.'}
                 </p>
+
+                {contact.segment === 'internal' && (contact.fieldOfExpertise.length > 0 || contact.skills.length > 0) && (
+                  <div className="mt-4 grid gap-3 md:grid-cols-2">
+                    {contact.fieldOfExpertise.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Field of expertise</p>
+                        <div className="flex flex-wrap gap-2">
+                          {contact.fieldOfExpertise.map((item) => (
+                            <span key={item} className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                    {contact.skills.length > 0 && (
+                      <div className="space-y-2">
+                        <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Skills</p>
+                        <div className="flex flex-wrap gap-2">
+                          {contact.skills.map((item) => (
+                            <span key={item} className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 text-xs font-semibold text-amber-700">
+                              {item}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 <div className="mt-4 grid gap-4 md:grid-cols-2">
                   <div className="space-y-2">
@@ -643,45 +771,50 @@ export function CommsCrmWorkspace({
             </div>
           </article>
 
-          <article className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">CRM standard</p>
-            <h3 className="mt-2 text-lg font-semibold text-neutral-950">Record structure</h3>
-            <div className="mt-4 space-y-4">
-              {CRM_FIELD_GROUPS.map((group) => (
-                <div key={group.title}>
-                  <p className="text-sm font-semibold text-neutral-900">{group.title}</p>
-                  <div className="mt-2 flex flex-wrap gap-2">
-                    {group.fields.map((field) => (
-                      <span key={field} className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-xs font-semibold text-neutral-600">
-                        {field}
-                      </span>
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          </article>
+          <details className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
+            <summary className="cursor-pointer list-none text-sm font-semibold text-neutral-900">
+              More — record standard &amp; connector backlog
+            </summary>
 
-          <article className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
-            <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-700">Connector backlog</p>
-            <h3 className="mt-2 text-lg font-semibold text-neutral-950">Future sync guardrails</h3>
-            <div className="mt-4 space-y-3">
-              {connectorBacklog.map((item) => (
-                <div key={item.id} className="rounded-lg border border-blue-100 bg-blue-50 px-4 py-3">
-                  <p className="text-sm font-semibold text-blue-950">{item.integrationTarget} · {item.status}</p>
-                  <p className="mt-1 text-sm text-blue-900">{item.useCase}</p>
-                  <p className="mt-2 text-xs font-medium text-blue-800">{item.guardrail}</p>
+            <div className="mt-4 space-y-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-orange-700">CRM standard</p>
+                <h3 className="mt-1 text-sm font-semibold text-neutral-950">Record structure</h3>
+                <div className="mt-3 space-y-3">
+                  {CRM_FIELD_GROUPS.map((group) => (
+                    <div key={group.title}>
+                      <p className="text-xs font-semibold text-neutral-900">{group.title}</p>
+                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                        {group.fields.map((field) => (
+                          <span key={field} className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-[11px] font-semibold text-neutral-600">
+                            {field}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
-              {connectorBacklog.length === 0 && <p className="text-sm text-neutral-600">Connector backlog appears after migration 00048 is applied.</p>}
+              </div>
+
+              <div className="border-t border-neutral-200 pt-4">
+                <p className="text-xs font-semibold uppercase tracking-[0.12em] text-blue-700">Connector backlog</p>
+                <h3 className="mt-1 text-sm font-semibold text-neutral-950">Future sync guardrails</h3>
+                <div className="mt-3 space-y-2">
+                  {connectorBacklog.map((item) => (
+                    <div key={item.id} className="rounded-lg border border-blue-100 bg-blue-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-blue-950">{item.integrationTarget} · {item.status}</p>
+                      <p className="mt-1 text-xs text-blue-900">{item.useCase}</p>
+                      <p className="mt-1 text-[11px] font-medium text-blue-800">{item.guardrail}</p>
+                    </div>
+                  ))}
+                  {connectorBacklog.length === 0 && <p className="text-sm text-neutral-600">Connector backlog appears after migration 00048 is applied.</p>}
+                </div>
+                <p className="mt-3 text-xs text-neutral-600">
+                  {withProjectsCount} people already resolve to at least one project.
+                </p>
+              </div>
             </div>
-            <div className="mt-4 rounded-lg bg-neutral-50 p-4">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Coverage</p>
-              <p className="mt-2 text-sm text-neutral-700">
-                {withProjectsCount} contacts already resolve to at least one project.
-              </p>
-            </div>
-          </article>
+          </details>
         </aside>
       </div>
     </section>
