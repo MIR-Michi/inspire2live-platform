@@ -78,105 +78,46 @@ export async function setUserStatus(
   return { error: null }
 }
 
-// ─── deleteUser ────────────────────────────────────────────────────────────────
+// ─── Shared helpers (not exported — only async functions may be exported from
+//     a 'use server' module, but internal helpers can be any shape) ───────────
+
+type AdminClient = ReturnType<typeof createAdminClient>
 
 /**
- * Permanently deletes a user. Removes the auth.users record (which cascades to
- * the profile and owned rows). Records an audit-log entry before deletion.
- * Requires the service-role key.
+ * Removes one account. Prefers the Auth Admin API (which cascades profiles +
+ * owned rows). If the auth.users record is missing/malformed — common for
+ * accounts seeded directly into public.profiles, which surface as
+ * "User not found" — it falls back to deleting the profile row directly.
  */
-export async function deleteUser(
-  targetUserId: string
-): Promise<{ error: string | null }> {
-  const supabase = await createClient()
-  const { error: authError, adminId } = await requireAdmin(supabase)
-  if (authError || !adminId) return { error: authError ?? 'Unauthorized' }
+async function removeAccount(admin: AdminClient, id: string): Promise<{ ok: boolean; error?: string }> {
+  const { error } = await admin.auth.admin.deleteUser(id)
+  if (!error) return { ok: true }
 
-  if (!targetUserId) return { error: 'Invalid target user id' }
-  if (targetUserId === adminId) return { error: 'You cannot delete your own account' }
+  const msg = (error.message || '').toLowerCase()
+  const isMissing =
+    msg.includes('not found') ||
+    msg.includes('user_not_found') ||
+    (typeof (error as { status?: number }).status === 'number' && (error as { status?: number }).status === 404)
 
-  // Snapshot the profile for the audit log before it is cascade-deleted
-  const { data: existing } = await supabase
-    .from('profiles')
-    .select('name, email, role')
-    .eq('id', targetUserId)
-    .maybeSingle()
+  if (!isMissing) return { ok: false, error: error.message }
 
-  // Append the audit entry first — the profile FK cascades away on delete, but
-  // permission_audit_log.target_user_id has no FK so the record survives.
-  await supabase
-    .from('permission_audit_log')
-    .insert({
-      target_user_id: targetUserId,
-      changed_by: adminId,
-      change_type: 'user_deleted',
-      previous_value: existing
-        ? { name: existing.name, email: existing.email, role: existing.role }
-        : null,
-      new_value: null,
-    })
-
-  let admin: ReturnType<typeof createAdminClient>
-  try {
-    admin = createAdminClient()
-  } catch {
-    return { error: 'Server is not configured for user deletion (missing service role key)' }
-  }
-
-  const { error: deleteError } = await admin.auth.admin.deleteUser(targetUserId)
-  if (deleteError) return { error: deleteError.message }
-
-  revalidatePath('/app/admin/users')
-  return { error: null }
-}
-
-// ─── purgeDemo ────────────────────────────────────────────────────────────────
-
-export type PurgeDemoResult = {
-  deleted: number
-  skipped: number
-  errors: string[]
+  // Orphan profile: no usable auth.users row. Delete the profile directly.
+  const { error: profileError } = await admin.from('profiles').delete().eq('id', id)
+  if (profileError) return { ok: false, error: profileError.message }
+  return { ok: true }
 }
 
 /**
- * Bulk-deletes all demo / seed accounts listed in DEMO_EMAILS.
- * Cleans up owned content in FK dependency order before removing each
- * auth.users record (which cascades to public.profiles).
- * Requires SUPABASE_SERVICE_ROLE_KEY.
+ * Cleans up all content owned by the given users in FK dependency order so the
+ * accounts (or their profiles) can be removed without RESTRICT violations.
+ * Returns any non-ignorable error messages encountered.
  */
-export async function purgeDemo(): Promise<PurgeDemoResult> {
-  const supabase = await createClient()
-  const { error: authError, adminId } = await requireAdmin(supabase)
-  if (authError || !adminId) return { deleted: 0, skipped: 0, errors: [authError ?? 'Unauthorized'] }
-
-  let admin: ReturnType<typeof createAdminClient>
-  try {
-    admin = createAdminClient()
-  } catch {
-    return {
-      deleted: 0,
-      skipped: 0,
-      errors: [
-        'SUPABASE_SERVICE_ROLE_KEY is not configured. ' +
-        'Add it to your Vercel project settings under Settings → Environment Variables, ' +
-        'then redeploy.',
-      ],
-    }
-  }
-
-  // Resolve demo account IDs still present in the DB
-  const { data: targets } = await admin
-    .from('profiles')
-    .select('id, email')
-    .in('email', DEMO_EMAILS as string[])
-
-  if (!targets?.length) return { deleted: 0, skipped: 0, errors: [] }
-
-  const targetIds = targets.map(t => t.id)
+async function cleanupUserContent(admin: AdminClient, targetIds: string[]): Promise<string[]> {
   const errors: string[] = []
+  if (!targetIds.length) return errors
 
   // Wrap each operation: swallow "relation does not exist" errors for optional tables.
-  // PromiseLike<unknown> accepts PostgrestFilterBuilder (which is a thenable but not a full Promise).
+  // PromiseLike<unknown> accepts PostgrestFilterBuilder (a thenable, not a full Promise).
   const tryOp = async (desc: string, fn: () => PromiseLike<unknown>) => {
     try {
       const result = await fn() as { error?: { message?: string } | null }
@@ -330,16 +271,121 @@ export async function purgeDemo(): Promise<PurgeDemoResult> {
   // Initiatives last
   await tryOp('initiatives', () => admin.from('initiatives').delete().in('lead_id', targetIds))
 
-  // ── 3. Delete auth.users records (cascades to profiles) ───────────────────
+  return errors
+}
+
+// ─── deleteUser ────────────────────────────────────────────────────────────────
+
+/**
+ * Permanently deletes a single user. Cleans up owned content, then removes the
+ * account via the Auth Admin API — falling back to a direct profile delete when
+ * the auth.users record is missing. Records an audit-log entry before deletion.
+ * Requires the service-role key.
+ */
+export async function deleteUser(
+  targetUserId: string
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error: authError, adminId } = await requireAdmin(supabase)
+  if (authError || !adminId) return { error: authError ?? 'Unauthorized' }
+
+  if (!targetUserId) return { error: 'Invalid target user id' }
+  if (targetUserId === adminId) return { error: 'You cannot delete your own account' }
+
+  // Snapshot the profile for the audit log before it is deleted
+  const { data: existing } = await supabase
+    .from('profiles')
+    .select('name, email, role')
+    .eq('id', targetUserId)
+    .maybeSingle()
+
+  // Append the audit entry first — permission_audit_log.target_user_id has no FK
+  // so the record survives the deletion.
+  await supabase
+    .from('permission_audit_log')
+    .insert({
+      target_user_id: targetUserId,
+      changed_by: adminId,
+      change_type: 'user_deleted',
+      previous_value: existing
+        ? { name: existing.name, email: existing.email, role: existing.role }
+        : null,
+      new_value: null,
+    })
+
+  let admin: AdminClient
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { error: 'Server is not configured for user deletion (missing service role key)' }
+  }
+
+  // Clear owned content first so a direct profile delete won't hit RESTRICT FKs.
+  await cleanupUserContent(admin, [targetUserId])
+
+  const { ok, error } = await removeAccount(admin, targetUserId)
+  if (!ok) return { error: error ?? 'Failed to delete user' }
+
+  revalidatePath('/app/admin/users')
+  return { error: null }
+}
+
+// ─── purgeDemo ────────────────────────────────────────────────────────────────
+
+export type PurgeDemoResult = {
+  deleted: number
+  skipped: number
+  errors: string[]
+}
+
+/**
+ * Bulk-deletes all demo / seed accounts listed in DEMO_EMAILS.
+ * Cleans up owned content in FK dependency order before removing each account
+ * (Auth Admin API, falling back to a direct profile delete for orphan profiles).
+ * Requires SUPABASE_SERVICE_ROLE_KEY.
+ */
+export async function purgeDemo(): Promise<PurgeDemoResult> {
+  const supabase = await createClient()
+  const { error: authError, adminId } = await requireAdmin(supabase)
+  if (authError || !adminId) return { deleted: 0, skipped: 0, errors: [authError ?? 'Unauthorized'] }
+
+  let admin: AdminClient
+  try {
+    admin = createAdminClient()
+  } catch {
+    return {
+      deleted: 0,
+      skipped: 0,
+      errors: [
+        'SUPABASE_SERVICE_ROLE_KEY is not configured. ' +
+        'Add it to your Vercel project settings under Settings → Environment Variables, ' +
+        'then redeploy.',
+      ],
+    }
+  }
+
+  // Resolve demo account IDs still present in the DB
+  const { data: targets } = await admin
+    .from('profiles')
+    .select('id, email')
+    .in('email', DEMO_EMAILS as string[])
+
+  if (!targets?.length) return { deleted: 0, skipped: 0, errors: [] }
+
+  const targetIds = targets.map(t => t.id)
+
+  // ── Clean up owned content, then remove each account ──────────────────────
+  const errors = await cleanupUserContent(admin, targetIds)
+
   let deleted = 0
   let skipped = 0
   for (const target of targets) {
-    const { error } = await admin.auth.admin.deleteUser(target.id)
-    if (error) {
-      errors.push(`Delete ${target.email}: ${error.message}`)
-      skipped++
-    } else {
+    const { ok, error } = await removeAccount(admin, target.id)
+    if (ok) {
       deleted++
+    } else {
+      errors.push(`Delete ${target.email}: ${error}`)
+      skipped++
     }
   }
 
