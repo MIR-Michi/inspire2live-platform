@@ -78,6 +78,7 @@ function LoginContent() {
 
   const authError = searchParams.get('error')
   const resetStatus = searchParams.get('reset')
+  const accountStatus = searchParams.get('status')
 
   // Allow deep-linking like /login?tab=signup, e.g. from invitation emails.
   useEffect(() => {
@@ -210,6 +211,13 @@ function LoginContent() {
             className="h-16 w-auto"
           />
         </div>
+
+        {/* Deactivated account notice */}
+        {accountStatus === 'inactive' && (
+          <p className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700">
+            Your account has been deactivated. Please contact a platform administrator if you believe this is a mistake.
+          </p>
+        )}
 
         {/* Auth callback error */}
         {authError === 'auth_callback_failed' && (

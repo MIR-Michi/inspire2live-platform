@@ -3048,6 +3048,7 @@ export type Database = {
           onboarding_completed: boolean
           organization: string | null
           role: string
+          status: string
           timezone: string
           updated_at: string
         }
@@ -3068,6 +3069,7 @@ export type Database = {
           onboarding_completed?: boolean
           organization?: string | null
           role: string
+          status?: string
           timezone?: string
           updated_at?: string
         }
@@ -3088,6 +3090,7 @@ export type Database = {
           onboarding_completed?: boolean
           organization?: string | null
           role?: string
+          status?: string
           timezone?: string
           updated_at?: string
         }

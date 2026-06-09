@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { EditRoleButton, InviteUserButton, AssignCongressRolesButton } from '@/components/ui/client-buttons'
+import { EditRoleButton, InviteUserButton, AssignCongressRolesButton, UserStatusButton, DeleteUserButton } from '@/components/ui/client-buttons'
 import { fetchLatestWorkspaceEvent } from '@/lib/congress-workspace/current-event'
 import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
 
@@ -21,10 +21,26 @@ export default async function AdminUsersPage() {
     )
   }
 
-  const { data: dbUsers } = await supabase
+  const { data: dbUsersWithStatus, error: statusColError } = await supabase
     .from('profiles')
-    .select('id, name, email, role, country, onboarding_completed, updated_at')
+    .select('id, name, email, role, country, onboarding_completed, status, updated_at')
     .order('name')
+
+  // Fall back gracefully when migration 00053 hasn't been applied yet —
+  // PostgREST returns an error if the status column doesn't exist.
+  let dbUsers: Array<{
+    id: string; name: string; email: string; role: string;
+    country: string; onboarding_completed: boolean; status: string | null; updated_at: string
+  }> | null = dbUsersWithStatus
+
+  if (statusColError) {
+    const { data: fallback } = await supabase
+      .from('profiles')
+      .select('id, name, email, role, country, onboarding_completed, updated_at')
+      .order('name')
+    dbUsers = (fallback ?? []).map(u => ({ ...u, status: 'active' }))
+  }
+
   const { event: latestCongress } = await fetchLatestWorkspaceEvent(supabase)
 
   const users = (dbUsers ?? []).map(u => ({
@@ -34,7 +50,7 @@ export default async function AdminUsersPage() {
     role: u.role,
     country: u.country ?? '',
     last_active: u.updated_at,
-    status: 'active' as const,
+    status: (u.status === 'inactive' ? 'inactive' : 'active') as 'active' | 'inactive',
     onboarding_completed: u.onboarding_completed,
   }))
 
@@ -68,6 +84,7 @@ export default async function AdminUsersPage() {
               <th className="px-4 py-3 text-left">User</th>
               <th className="px-4 py-3 text-left">Role</th>
               <th className="px-4 py-3 text-left">Country</th>
+              <th className="px-4 py-3 text-left">Status</th>
               <th className="px-4 py-3 text-left">Onboarding</th>
               <th className="px-4 py-3 text-right">Actions</th>
             </tr>
@@ -93,13 +110,19 @@ export default async function AdminUsersPage() {
                 </td>
                 <td className="px-4 py-3 text-neutral-600">{u.country}</td>
                 <td className="px-4 py-3">
+                  {u.status === 'active'
+                    ? <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">Active</span>
+                    : <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-medium text-neutral-500">Inactive</span>
+                  }
+                </td>
+                <td className="px-4 py-3">
                   {u.onboarding_completed
                     ? <span className="text-emerald-600">✓ Done</span>
                     : <span className="text-amber-600">Pending</span>
                   }
                 </td>
                 <td className="px-4 py-3 text-right">
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex flex-wrap items-center justify-end gap-2">
                     <AssignCongressRolesButton
                       userName={u.name}
                       userId={u.id}
@@ -107,6 +130,8 @@ export default async function AdminUsersPage() {
                       congressTitle={latestCongress?.title}
                     />
                     <EditRoleButton userName={u.name} userId={u.id} currentRole={u.role} />
+                    <UserStatusButton userId={u.id} userName={u.name} status={u.status} isSelf={u.id === user.id} />
+                    <DeleteUserButton userId={u.id} userName={u.name} isSelf={u.id === user.id} />
                   </div>
                 </td>
               </tr>

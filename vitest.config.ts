@@ -18,8 +18,21 @@ export default defineConfig({
       exclude: [
         // Demo / seed content is intentionally large and not unit-tested.
         'src/lib/demo-data.ts',
+        'src/lib/congress-workspace-demo.ts',
         // Thin wrappers around Next/Supabase runtime.
         'src/lib/supabase/**',
+        // Supabase data-layer query files — require live DB or heavy mocking.
+        'src/lib/comms-crm-data.ts',
+        'src/lib/comms-digest.ts',
+        'src/lib/comms-event-pipeline.ts',
+        'src/lib/comms-integration-intents.ts',
+        'src/lib/congress-workspace/current-event.ts',
+        // External API / email dispatch wrappers — no unit-test value.
+        'src/lib/whatsapp-send.ts',
+        'src/lib/invitation-email.ts',
+        // Thin env-flag or type-only files.
+        'src/lib/comms-integrations.ts',
+        'src/lib/patient-stories.ts',
         // Depends on Next.js runtime cookies(); cover via E2E.
         'src/lib/view-as.ts',
         'src/types/**',

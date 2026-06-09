@@ -70,13 +70,14 @@ export async function middleware(request: NextRequest) {
   let profile: {
     onboarding_completed: boolean | null
     role: string | null
+    status: string | null
   } | null = null
 
   if (user) {
     try {
       const { data } = await supabase
         .from('profiles')
-        .select('onboarding_completed, role')
+        .select('onboarding_completed, role, status')
         .eq('id', user.id)
         .maybeSingle()
       profile = data
@@ -85,7 +86,16 @@ export async function middleware(request: NextRequest) {
     }
   }
 
-  if (user && isAuthPage) {
+  // Deactivated accounts are locked out of the entire app. Keep them on the
+  // login page (where a notice is shown) regardless of onboarding state.
+  if (user && profile?.status === 'inactive' && !isAuthPage) {
+    const redirectUrl = request.nextUrl.clone()
+    redirectUrl.pathname = '/login'
+    redirectUrl.search = '?status=inactive'
+    return NextResponse.redirect(redirectUrl)
+  }
+
+  if (user && isAuthPage && profile?.status !== 'inactive') {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = getPostLoginLandingPath(profile?.role)
     return NextResponse.redirect(redirectUrl)

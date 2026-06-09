@@ -20,18 +20,21 @@ type RoutingInput = {
   user: boolean
   onboardingCompleted: boolean | null
   role?: string | null
+  status?: string | null
   pathname: string
 }
 
 function resolveRedirect(input: RoutingInput): string | null {
-  const { user, onboardingCompleted, pathname, role = null } = input
+  const { user, onboardingCompleted, pathname, role = null, status = 'active' } = input
 
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
   const isOnboardingPage = pathname.startsWith('/onboarding')
   const isProtected = pathname.startsWith('/app')
 
   if (!user && isProtected) return '/login'
-  if (user && isAuthPage) return getPostLoginLandingPath(role)
+  // Deactivated accounts are locked out everywhere except the login page.
+  if (user && status === 'inactive' && !isAuthPage) return '/login'
+  if (user && isAuthPage && status !== 'inactive') return getPostLoginLandingPath(role)
   if (user && !isOnboardingPage && !isAuthPage && onboardingCompleted === false && isProtected) {
     return '/onboarding'
   }
@@ -148,6 +151,41 @@ describe('Middleware routing logic', () => {
           onboardingCompleted: true,
           role: 'PlatformAdmin',
           pathname: '/app/comms/planner',
+        })
+      ).toBeNull()
+    })
+  })
+
+  describe('Deactivated (inactive) user', () => {
+    it('redirects to /login when accessing a protected /app route', () => {
+      expect(
+        resolveRedirect({
+          user: true,
+          onboardingCompleted: true,
+          status: 'inactive',
+          pathname: '/app/dashboard',
+        })
+      ).toBe('/login')
+    })
+
+    it('redirects to /login from the onboarding page', () => {
+      expect(
+        resolveRedirect({
+          user: true,
+          onboardingCompleted: false,
+          status: 'inactive',
+          pathname: '/onboarding',
+        })
+      ).toBe('/login')
+    })
+
+    it('stays on /login without being forwarded into the app', () => {
+      expect(
+        resolveRedirect({
+          user: true,
+          onboardingCompleted: true,
+          status: 'inactive',
+          pathname: '/login',
         })
       ).toBeNull()
     })
