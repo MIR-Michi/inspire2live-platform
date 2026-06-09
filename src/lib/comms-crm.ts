@@ -1,12 +1,34 @@
 export const CRM_SEGMENT_OPTIONS = [
-  { value: 'internal', label: 'Internal users' },
-  { value: 'external', label: 'External stakeholders' },
+  { value: 'internal', label: 'Internal' },
+  { value: 'external', label: 'External' },
 ] as const
 
 export type CrmSegment = (typeof CRM_SEGMENT_OPTIONS)[number]['value']
 export type CrmRelationshipHealth = 'active' | 'nurture' | 'follow_up' | 'archived'
 export type CrmSourceType = 'manual' | 'profile' | 'campus_member'
 export type CrmConsentStatus = 'unknown' | 'granted' | 'declined' | 'not_required'
+
+export const CRM_PERSON_TYPE_OPTIONS = [
+  { value: 'comms', label: 'Comms' },
+  { value: 'patient_advocate', label: 'Patient Advocate' },
+  { value: 'clinician', label: 'Clinician' },
+  { value: 'researcher', label: 'Researcher' },
+  { value: 'governmental', label: 'Governmental' },
+  { value: 'patient', label: 'Patient' },
+] as const
+
+export type CrmPersonType = (typeof CRM_PERSON_TYPE_OPTIONS)[number]['value']
+
+const CRM_PERSON_TYPE_SET = new Set(CRM_PERSON_TYPE_OPTIONS.map((option) => option.value))
+
+export function normalizeCrmPersonType(value: string | null | undefined): CrmPersonType | null {
+  return CRM_PERSON_TYPE_SET.has(value as CrmPersonType) ? (value as CrmPersonType) : null
+}
+
+export function getCrmPersonTypeLabel(value: string | null | undefined) {
+  if (!value) return 'Unclassified'
+  return CRM_PERSON_TYPE_OPTIONS.find((option) => option.value === value)?.label ?? value
+}
 
 export const CRM_LIFECYCLE_OPTIONS = [
   { value: 'active', label: 'Active' },
@@ -56,6 +78,9 @@ export type CrmContactRecord = {
   sourceId: string | null
   fullName: string
   segment: CrmSegment
+  personType: CrmPersonType | null
+  fieldOfExpertise: string[]
+  skills: string[]
   pictureUrl: string | null
   bio: string | null
   title: string | null
@@ -207,4 +232,39 @@ export function parseCrmList(raw: string) {
 
 export function formatCrmList(values: string[] | null | undefined) {
   return (values ?? []).join(', ')
+}
+
+// ─── Pipelines (funnels) ─────────────────────────────────────────────────────
+
+export type CrmPipelineMember = {
+  id: string
+  contactId: string
+  fullName: string
+  pictureUrl: string | null
+  title: string | null
+  organisation: string | null
+  segment: CrmSegment
+  personType: CrmPersonType | null
+  note: string | null
+  position: number
+}
+
+export type CrmPipelineStage = {
+  id: string
+  name: string
+  position: number
+  members: CrmPipelineMember[]
+}
+
+export type CrmPipelineSummary = {
+  id: string
+  name: string
+  description: string | null
+  stageCount: number
+  memberCount: number
+  updatedAt: string
+}
+
+export type CrmPipelineDetail = CrmPipelineSummary & {
+  stages: CrmPipelineStage[]
 }

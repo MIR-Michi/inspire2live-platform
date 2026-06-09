@@ -7,6 +7,7 @@ import {
   normalizeCrmConsent,
   normalizeCrmInteractionType,
   normalizeCrmLifecycle,
+  normalizeCrmPersonType,
   parseCrmList,
   type CrmSegment,
   type CrmSourceType,
@@ -129,6 +130,9 @@ export async function saveCrmContact(formData: FormData) {
     source_type: sourceType,
     source_id: sourceId,
     full_name: fullName,
+    person_type: normalizeCrmPersonType(asText(formData.get('person_type'))),
+    field_of_expertise: parseCrmList(asText(formData.get('field_of_expertise'))),
+    skills: parseCrmList(asText(formData.get('skills'))),
     picture_url: asNullableText(formData.get('picture_url')),
     bio: asNullableText(formData.get('bio')),
     title: asNullableText(formData.get('title')),
@@ -196,6 +200,7 @@ export async function saveCrmContact(formData: FormData) {
   )
 
   revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
 }
 
 export async function addCrmInteraction(formData: FormData) {
@@ -233,6 +238,7 @@ export async function addCrmInteraction(formData: FormData) {
   if (updateError) throw new Error(updateError.message)
 
   revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
 }
 
 export async function markCrmFollowUpDone(formData: FormData) {
@@ -264,4 +270,5 @@ export async function markCrmFollowUpDone(formData: FormData) {
   if (interactionError) throw new Error(interactionError.message)
 
   revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
 }

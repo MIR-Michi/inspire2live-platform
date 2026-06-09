@@ -452,6 +452,7 @@ export type Database = {
           created_at: string
           created_by: string | null
           email: string | null
+          field_of_expertise: string[]
           full_name: string
           id: string
           last_interaction_at: string | null
@@ -459,6 +460,7 @@ export type Database = {
           next_follow_up_at: string | null
           notes: string | null
           organisation: string | null
+          person_type: string | null
           phone: string | null
           picture_url: string | null
           preferred_channel: string | null
@@ -467,6 +469,7 @@ export type Database = {
           relationship_owner_label: string | null
           retention_review_at: string | null
           segment: string
+          skills: string[]
           source_id: string | null
           source_label: string | null
           source_type: string
@@ -483,6 +486,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email?: string | null
+          field_of_expertise?: string[]
           full_name: string
           id?: string
           last_interaction_at?: string | null
@@ -490,6 +494,7 @@ export type Database = {
           next_follow_up_at?: string | null
           notes?: string | null
           organisation?: string | null
+          person_type?: string | null
           phone?: string | null
           picture_url?: string | null
           preferred_channel?: string | null
@@ -497,7 +502,8 @@ export type Database = {
           relationship_owner_id?: string | null
           relationship_owner_label?: string | null
           retention_review_at?: string | null
-          segment: string
+          segment?: string
+          skills?: string[]
           source_id?: string | null
           source_label?: string | null
           source_type?: string
@@ -514,6 +520,7 @@ export type Database = {
           created_at?: string
           created_by?: string | null
           email?: string | null
+          field_of_expertise?: string[]
           full_name?: string
           id?: string
           last_interaction_at?: string | null
@@ -521,6 +528,7 @@ export type Database = {
           next_follow_up_at?: string | null
           notes?: string | null
           organisation?: string | null
+          person_type?: string | null
           phone?: string | null
           picture_url?: string | null
           preferred_channel?: string | null
@@ -529,6 +537,7 @@ export type Database = {
           relationship_owner_label?: string | null
           retention_review_at?: string | null
           segment?: string
+          skills?: string[]
           source_id?: string | null
           source_label?: string | null
           source_type?: string
@@ -536,6 +545,87 @@ export type Database = {
           title?: string | null
           updated_at?: string
           updated_by?: string | null
+        }
+        Relationships: []
+      }
+      comms_crm_pipeline_members: {
+        Row: {
+          added_at: string
+          added_by: string | null
+          contact_id: string
+          id: string
+          note: string | null
+          position: number
+          stage_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by?: string | null
+          contact_id: string
+          id?: string
+          note?: string | null
+          position?: number
+          stage_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string | null
+          contact_id?: string
+          id?: string
+          note?: string | null
+          position?: number
+          stage_id?: string
+        }
+        Relationships: []
+      }
+      comms_crm_pipeline_stages: {
+        Row: {
+          created_at: string
+          id: string
+          name: string
+          pipeline_id: string
+          position: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          name: string
+          pipeline_id: string
+          position?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          name?: string
+          pipeline_id?: string
+          position?: number
+        }
+        Relationships: []
+      }
+      comms_crm_pipelines: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          name?: string
+          updated_at?: string
         }
         Relationships: []
       }
