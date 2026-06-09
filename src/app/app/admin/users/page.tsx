@@ -21,10 +21,26 @@ export default async function AdminUsersPage() {
     )
   }
 
-  const { data: dbUsers } = await supabase
+  const { data: dbUsersWithStatus, error: statusColError } = await supabase
     .from('profiles')
     .select('id, name, email, role, country, onboarding_completed, status, updated_at')
     .order('name')
+
+  // Fall back gracefully when migration 00053 hasn't been applied yet —
+  // PostgREST returns an error if the status column doesn't exist.
+  let dbUsers: Array<{
+    id: string; name: string; email: string; role: string;
+    country: string; onboarding_completed: boolean; status: string | null; updated_at: string
+  }> | null = dbUsersWithStatus
+
+  if (statusColError) {
+    const { data: fallback } = await supabase
+      .from('profiles')
+      .select('id, name, email, role, country, onboarding_completed, updated_at')
+      .order('name')
+    dbUsers = (fallback ?? []).map(u => ({ ...u, status: 'active' }))
+  }
+
   const { event: latestCongress } = await fetchLatestWorkspaceEvent(supabase)
 
   const users = (dbUsers ?? []).map(u => ({
