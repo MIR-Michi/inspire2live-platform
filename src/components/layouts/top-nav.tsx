@@ -5,65 +5,9 @@ import Link from 'next/link'
 import { useRouter, usePathname } from 'next/navigation'
 import { useState, useEffect, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { canAccessAppPath, getSideNavItems, getRoleLabel, type NavKey } from '@/lib/role-access'
+import { canAccessAppPath, getSideNavSections, getRoleLabel } from '@/lib/role-access'
 import { PreviewPanel } from '@/components/layouts/preview-panel'
 import { useRoleLayers } from '@/components/roles/role-layers-context'
-
-/* ── icon helper (same set as side-nav, inlined for mobile menu) ────────── */
-const iconClass = 'h-5 w-5 shrink-0'
-
-function MobileNavIcon({ navKey }: { navKey: NavKey }) {
-  switch (navKey) {
-    case 'dashboard':
-      return (
-        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 6A2.25 2.25 0 016 3.75h2.25A2.25 2.25 0 0110.5 6v2.25a2.25 2.25 0 01-2.25 2.25H6a2.25 2.25 0 01-2.25-2.25V6zM3.75 15.75A2.25 2.25 0 016 13.5h2.25a2.25 2.25 0 012.25 2.25V18a2.25 2.25 0 01-2.25 2.25H6A2.25 2.25 0 013.75 18v-2.25zM13.5 6a2.25 2.25 0 012.25-2.25H18A2.25 2.25 0 0120.25 6v2.25A2.25 2.25 0 0118 10.5h-2.25a2.25 2.25 0 01-2.25-2.25V6zM13.5 15.75a2.25 2.25 0 012.25-2.25H18a2.25 2.25 0 012.25 2.25V18A2.25 2.25 0 0118 20.25h-2.25A2.25 2.25 0 0113.5 18v-2.25z" />
-        </svg>
-      )
-    case 'initiatives':
-      return (
-        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 12h16.5m-16.5 3.75h16.5M3.75 19.5h16.5M5.625 4.5h12.75a1.875 1.875 0 010 3.75H5.625a1.875 1.875 0 010-3.75z" />
-        </svg>
-      )
-    case 'comms':
-      return (
-        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M10.34 3.94c.09-.54.56-.94 1.1-.94h1.12c.54 0 1.01.4 1.1.94l.18 1.06a7.502 7.502 0 013.12 1.81l.95-.5a1.125 1.125 0 011.37.23l.79.79c.4.4.49 1.01.23 1.5l-.5.95A7.5 7.5 0 0121 12c0 .8-.13 1.58-.37 2.3l.5.95c.26.49.17 1.1-.23 1.5l-.79.79c-.4.4-1.01.49-1.5.23l-.95-.5A7.502 7.502 0 0114 19.19l-.18 1.06c-.09.54-.56.94-1.1.94h-1.12c-.54 0-1.01-.4-1.1-.94l-.18-1.06a7.502 7.502 0 01-3.12-1.81l-.95.5a1.125 1.125 0 01-1.37-.23l-.79-.79a1.125 1.125 0 01-.23-1.5l.5-.95A7.5 7.5 0 013 12c0-.8.13-1.58.37-2.3l-.5-.95a1.125 1.125 0 01.23-1.5l.79-.79c.4-.4 1.01-.49 1.5-.23l.95.5A7.502 7.502 0 0110.16 5l.18-1.06z" />
-          <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 12h7.5M8.25 15h4.5M8.25 9h7.5" />
-        </svg>
-      )
-    case 'bureau':
-      return (
-        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M3 13.125C3 12.504 3.504 12 4.125 12h2.25c.621 0 1.125.504 1.125 1.125v6.75C7.5 20.496 6.996 21 6.375 21h-2.25A1.125 1.125 0 013 19.875v-6.75zM9.75 8.625c0-.621.504-1.125 1.125-1.125h2.25c.621 0 1.125.504 1.125 1.125v11.25c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V8.625zM16.5 4.125c0-.621.504-1.125 1.125-1.125h2.25C20.496 3 21 3.504 21 4.125v15.75c0 .621-.504 1.125-1.125 1.125h-2.25a1.125 1.125 0 01-1.125-1.125V4.125z" />
-        </svg>
-      )
-    case 'resources':
-      return (
-        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 12.75V12A2.25 2.25 0 014.5 9.75h15A2.25 2.25 0 0121.75 12v.75m-8.69-6.44l-2.12-2.12a1.5 1.5 0 00-1.061-.44H4.5A2.25 2.25 0 002.25 6v12a2.25 2.25 0 002.25 2.25h15A2.25 2.25 0 0021.75 18V9a2.25 2.25 0 00-2.25-2.25h-5.379a1.5 1.5 0 01-1.06-.44z" />
-        </svg>
-      )
-    default:
-      return (
-        <svg className={iconClass} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
-        </svg>
-      )
-  }
-}
-
-const COMMS_MOBILE_NAV = [
-  { key: 'dashboard' as NavKey, label: 'Dashboard', href: '/app/dashboard' },
-  { key: 'comms' as NavKey, label: 'Planner', href: '/app/comms/planner' },
-  { key: 'comms' as NavKey, label: 'Campus', href: '/app/comms/campus' },
-  { key: 'comms' as NavKey, label: 'CRM', href: '/app/comms/crm' },
-  { key: 'comms' as NavKey, label: 'Annual Congress', href: '/app/congress' },
-  { key: 'comms' as NavKey, label: 'Podcast', href: '/app/comms/podcast' },
-  { key: 'comms' as NavKey, label: 'All events', href: '/app/comms/events' },
-  { key: 'resources' as NavKey, label: 'Library', href: '/app/comms/library' },
-]
 
 interface TopNavProps {
   userName: string
@@ -126,7 +70,7 @@ export function TopNav({
 
 
   const notificationsAccessible = canAccessAppPath(userRole, '/app/notifications')
-  const navItems = showCommsNav ? COMMS_MOBILE_NAV : getSideNavItems(userRole, { showComms: showCommsNav })
+  const navSections = getSideNavSections(userRole)
 
   return (
     <>
@@ -258,16 +202,18 @@ export function TopNav({
           <nav
             id="mobile-nav"
             ref={mobileMenuRef}
-            className="absolute inset-y-0 left-0 w-64 bg-white shadow-xl"
+            className="absolute inset-y-0 left-0 flex w-64 flex-col bg-[#202133] text-slate-200 shadow-xl"
             role="navigation"
             aria-label="Main navigation"
           >
             {/* Drawer header */}
-            <div className="flex h-14 items-center justify-between border-b border-neutral-200 px-4 md:h-16">
-              <span className="text-sm font-semibold text-neutral-900">Navigation</span>
+            <div className="flex h-14 items-center justify-between border-b border-white/5 px-4 md:h-16">
+              <span className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
+                {getRoleLabel(userRole)}
+              </span>
               <button
                 onClick={() => setMobileMenuOpen(false)}
-                className="flex h-8 w-8 items-center justify-center rounded-lg text-neutral-500 hover:bg-neutral-100"
+                className="flex h-8 w-8 items-center justify-center rounded-lg text-slate-400 hover:bg-white/5 hover:text-white"
                 aria-label="Close navigation"
               >
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
@@ -275,35 +221,45 @@ export function TopNav({
                 </svg>
               </button>
             </div>
-            {/* Nav items */}
-            <div className="flex flex-col gap-1 p-3">
-              {navItems.map((item) => {
-                const active = pathname === item.href || pathname.startsWith(item.href + '/')
-                return (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    onClick={closeMobileMenu}
-                    className={[
-                      'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                      active
-                        ? 'bg-orange-50 text-orange-700'
-                        : 'text-neutral-600 hover:bg-neutral-100 hover:text-neutral-900',
-                    ].join(' ')}
-                    aria-current={active ? 'page' : undefined}
-                  >
-                    {!showCommsNav && <MobileNavIcon navKey={item.key} />}
-                    {item.label}
-                  </Link>
-                )
-              })}
+            {/* Nav sections */}
+            <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
+              {navSections.map((section) => (
+                <div key={section.label} className="space-y-1.5">
+                  <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                    {section.label}
+                  </p>
+                  {section.items.map((item) => {
+                    const active = pathname === item.href || pathname.startsWith(item.href + '/')
+                    return (
+                      <Link
+                        key={item.href}
+                        href={item.href}
+                        onClick={closeMobileMenu}
+                        className={[
+                          'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                          active
+                            ? item.priority
+                              ? 'bg-[#343449] text-orange-300'
+                              : 'bg-[#343449] text-white'
+                            : item.priority
+                              ? 'text-orange-300 hover:bg-white/5'
+                              : 'text-slate-300 hover:bg-white/5 hover:text-white',
+                        ].join(' ')}
+                        aria-current={active ? 'page' : undefined}
+                      >
+                        {item.label}
+                      </Link>
+                    )
+                  })}
+                </div>
+              ))}
             </div>
             {/* Drawer footer: user info */}
-            <div className="absolute bottom-0 left-0 right-0 border-t border-neutral-200 p-4">
-              <p className="truncate text-sm font-medium text-neutral-900">{userName}</p>
-              <p className="text-xs text-neutral-500">{getRoleLabel(userRole)}</p>
+            <div className="border-t border-white/5 p-4">
+              <p className="truncate text-sm font-medium text-white">{userName}</p>
+              <p className="text-xs text-slate-400">{getRoleLabel(userRole)}</p>
               {congressLabel && (
-                <p className="mt-0.5 truncate text-[11px] text-neutral-400">Congress: {congressLabel}</p>
+                <p className="mt-0.5 truncate text-[11px] text-slate-500">Congress: {congressLabel}</p>
               )}
             </div>
           </nav>

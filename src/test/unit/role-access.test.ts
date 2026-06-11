@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { canAccessAppPath, getSideNavItems, normalizeRole } from '@/lib/role-access'
+import {
+  canAccessAppPath,
+  getSideNavItems,
+  getSideNavSections,
+  normalizeRole,
+} from '@/lib/role-access'
 
 describe('normalizeRole', () => {
   it('falls back to PatientAdvocate for unknown values', () => {
@@ -60,5 +65,40 @@ describe('getSideNavItems', () => {
     const visible = getSideNavItems('Moderator', { showComms: true })
     expect(hidden.some((item) => item.key === 'comms')).toBe(false)
     expect(visible.some((item) => item.key === 'comms')).toBe(true)
+  })
+})
+
+describe('getSideNavSections', () => {
+  it('groups every role into labelled sections', () => {
+    const sections = getSideNavSections('PatientAdvocate')
+    expect(sections.length).toBeGreaterThan(1)
+    expect(sections.every((s) => s.label && s.items.length > 0)).toBe(true)
+    expect(sections[0]?.label).toBe('Overview')
+  })
+
+  it('preserves the Comms blueprint workspace items and campus badge', () => {
+    const sections = getSideNavSections('Comms')
+    const workspace = sections.find((s) => s.label === 'Workspace')
+    expect(workspace?.items.map((i) => i.label)).toEqual([
+      'Planner',
+      'Campus',
+      'WhatsApp',
+      'CRM',
+    ])
+    const campus = workspace?.items.find((i) => i.label === 'Campus')
+    expect(campus?.badge).toBe('campus')
+  })
+
+  it('drops items whose space resolves to invisible', () => {
+    // BoardMember has no tasks access — it must never surface in any section.
+    const sections = getSideNavSections('BoardMember')
+    const allItems = sections.flatMap((s) => s.items)
+    expect(allItems.some((i) => i.key === 'tasks')).toBe(false)
+  })
+
+  it('exposes User Management for PlatformAdmin under Account', () => {
+    const sections = getSideNavSections('PlatformAdmin')
+    const account = sections.find((s) => s.label === 'Account')
+    expect(account?.items.some((i) => i.key === 'admin')).toBe(true)
   })
 })

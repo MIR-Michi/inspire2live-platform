@@ -78,6 +78,156 @@ export type NavItemConfig = {
   href: string
 }
 
+// ─── Sectioned (grouped) nav ──────────────────────────────────────────────────
+//
+// The dark, sectioned sidebar — originally the Communications workspace blueprint
+// — is the standard layout for every role. Each role's nav items are grouped into
+// labelled sections (Overview / Workspace / Events / …). Visibility is still gated
+// by the permissions resolver (and DB overrides on the server) per item key.
+
+export type NavSectionItem = {
+  key: NavKey
+  label: string
+  href: string
+  /** Renders a live counter badge sourced from the matching workspace metric. */
+  badge?: 'campus'
+  /** Highlights the item with the accent colour (e.g. the flagship event). */
+  priority?: boolean
+}
+
+export type NavSection = {
+  label: string
+  items: NavSectionItem[]
+}
+
+export const NAV_SECTIONS_BY_ROLE: Record<PlatformRole, NavSection[]> = {
+  PatientAdvocate: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [
+      { key: 'initiatives', label: 'My Initiatives', href: '/app/initiatives' },
+      { key: 'tasks',       label: 'My Tasks',       href: '/app/tasks' },
+    ] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [
+      { key: 'network', label: 'My Network', href: '/app/network' },
+      { key: 'stories', label: 'My Stories', href: '/app/stories' },
+    ] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [{ key: 'profile', label: 'Profile', href: '/app/profile' }] },
+  ],
+  Clinician: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [
+      { key: 'initiatives', label: 'My Initiatives', href: '/app/initiatives' },
+      { key: 'tasks',       label: 'My Tasks',       href: '/app/tasks' },
+    ] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [
+      { key: 'network', label: 'My Network', href: '/app/network' },
+      { key: 'stories', label: 'Stories',    href: '/app/stories' },
+    ] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [{ key: 'profile', label: 'Profile', href: '/app/profile' }] },
+  ],
+  Researcher: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [
+      { key: 'initiatives', label: 'My Initiatives', href: '/app/initiatives' },
+      { key: 'tasks',       label: 'My Tasks',       href: '/app/tasks' },
+    ] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [
+      { key: 'network', label: 'My Network', href: '/app/network' },
+      { key: 'stories', label: 'Stories',    href: '/app/stories' },
+    ] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [{ key: 'profile', label: 'Profile', href: '/app/profile' }] },
+  ],
+  Moderator: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [{ key: 'comms', label: 'Communications', href: '/app/comms' }] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [
+      { key: 'stories', label: 'Stories',    href: '/app/stories' },
+      { key: 'network', label: 'My Network', href: '/app/network' },
+    ] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [{ key: 'profile', label: 'Profile', href: '/app/profile' }] },
+  ],
+  Comms: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/comms/dashboard' }] },
+    { label: 'Workspace', items: [
+      { key: 'comms', label: 'Planner',  href: '/app/comms/planner' },
+      { key: 'comms', label: 'Campus',   href: '/app/comms/campus', badge: 'campus' },
+      { key: 'comms', label: 'WhatsApp', href: '/app/comms/whatsapp' },
+      { key: 'comms', label: 'CRM',      href: '/app/comms/crm' },
+    ] },
+    { label: 'Events',    items: [
+      { key: 'congress', label: 'Annual Congress', href: '/app/congress', priority: true },
+      { key: 'comms',    label: 'Podcast',         href: '/app/comms/podcast' },
+      { key: 'comms',    label: 'All events',      href: '/app/comms/events' },
+    ] },
+    { label: 'Content',   items: [{ key: 'comms', label: 'Library', href: '/app/comms/library' }] },
+  ],
+  IndustryPartner: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [{ key: 'partners', label: 'My Engagements', href: '/app/partners' }] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [{ key: 'network', label: 'My Network', href: '/app/network' }] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [{ key: 'profile', label: 'Profile', href: '/app/profile' }] },
+  ],
+  BoardMember: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Board Overview', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [
+      { key: 'board',       label: 'Board View',  href: '/app/board' },
+      { key: 'initiatives', label: 'Initiatives', href: '/app/initiatives' },
+    ] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [
+      { key: 'network', label: 'My Network', href: '/app/network' },
+      { key: 'stories', label: 'Stories',    href: '/app/stories' },
+    ] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [{ key: 'profile', label: 'Profile', href: '/app/profile' }] },
+  ],
+  HubCoordinator: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [
+      { key: 'bureau',      label: 'Bureau',          href: '/app/bureau' },
+      { key: 'initiatives', label: 'All Initiatives', href: '/app/initiatives' },
+      { key: 'partners',    label: 'Partners',        href: '/app/partners' },
+    ] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [
+      { key: 'network', label: 'My Network', href: '/app/network' },
+      { key: 'stories', label: 'Stories',    href: '/app/stories' },
+    ] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [{ key: 'profile', label: 'Profile', href: '/app/profile' }] },
+  ],
+  PlatformAdmin: [
+    { label: 'Overview',  items: [{ key: 'dashboard', label: 'Dashboard', href: '/app/dashboard' }] },
+    { label: 'Workspace', items: [
+      { key: 'comms',       label: 'Communications',  href: '/app/comms' },
+      { key: 'bureau',      label: 'Bureau',          href: '/app/bureau' },
+      { key: 'initiatives', label: 'All Initiatives', href: '/app/initiatives' },
+      { key: 'board',       label: 'Board View',      href: '/app/board' },
+    ] },
+    { label: 'Events',    items: [{ key: 'congress', label: 'Congress', href: '/app/congress/workspace' }] },
+    { label: 'Community', items: [
+      { key: 'network',  label: 'My Network', href: '/app/network' },
+      { key: 'stories',  label: 'Stories',    href: '/app/stories' },
+      { key: 'partners', label: 'Partners',   href: '/app/partners' },
+    ] },
+    { label: 'Resources', items: [{ key: 'resources', label: 'Resources', href: '/app/resources' }] },
+    { label: 'Account',   items: [
+      { key: 'admin',   label: 'User Management', href: '/app/admin/users' },
+      { key: 'profile', label: 'Profile',         href: '/app/profile' },
+    ] },
+  ],
+}
+
 const NAV_BY_ROLE: Record<PlatformRole, NavItemConfig[]> = {
   PatientAdvocate: [
     { key: 'dashboard',     label: 'Dashboard',      href: '/app/dashboard' },
@@ -209,4 +359,23 @@ export function getSideNavItems(
     const level = resolveAccessFromRole(role, item.key as PlatformSpace)
     return level !== 'invisible'
   })
+}
+
+/**
+ * Returns the grouped (sectioned) nav for a role, used by the dark sidebar and the
+ * mobile drawer. Items whose space resolves to 'invisible' are dropped, and any
+ * section left empty is removed. Uses the synchronous role-defaults resolver, so
+ * it is safe in client components (DB overrides are applied separately on the
+ * server via `effectiveSpaces`).
+ */
+export function getSideNavSections(role: string | null | undefined): NavSection[] {
+  const sections = NAV_SECTIONS_BY_ROLE[normalizeRole(role)]
+  return sections
+    .map((section) => ({
+      label: section.label,
+      items: section.items.filter(
+        (item) => resolveAccessFromRole(role, item.key as PlatformSpace) !== 'invisible',
+      ),
+    }))
+    .filter((section) => section.items.length > 0)
 }
