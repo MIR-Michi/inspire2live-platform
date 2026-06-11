@@ -138,6 +138,47 @@ export const MASTER_NAV: NavSection[] = [
   },
 ]
 
+// The Communications role keeps its original curated blueprint *exactly* — it is the
+// canonical comms workspace, not a permission-expanded view. Every other role sees
+// the permission-driven MASTER_NAV (Comms is the baseline; broader roles such as
+// Admin extend it with the platform-wide items). Items here are still permission-
+// gated as a safety net, but the curated set is what keeps the Comms menu lean and
+// stable instead of surfacing every space the role happens to have access to.
+//
+// Note: the Comms dashboard is its own page (/app/comms/dashboard) with the
+// personal/team toggle — distinct from the shared /app/dashboard other roles use.
+const COMMS_NAV_SECTIONS: NavSection[] = [
+  {
+    label: 'Overview',
+    items: [
+      { id: 'comms-dashboard', label: 'Dashboard', href: '/app/comms/dashboard', space: 'dashboard' },
+    ],
+  },
+  {
+    label: 'Workspace',
+    items: [
+      { id: 'comms-planner',  label: 'Planner',  href: '/app/comms/planner',  space: 'comms' },
+      { id: 'comms-campus',   label: 'Campus',   href: '/app/comms/campus',   space: 'comms', badge: 'campus' },
+      { id: 'comms-whatsapp', label: 'WhatsApp', href: '/app/comms/whatsapp', space: 'comms' },
+      { id: 'comms-crm',      label: 'CRM',      href: '/app/comms/crm',      space: 'comms' },
+    ],
+  },
+  {
+    label: 'Events',
+    items: [
+      { id: 'congress',      label: 'Annual Congress', href: '/app/congress',      space: 'congress', priority: true },
+      { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast', space: 'comms' },
+      { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',  space: 'comms' },
+    ],
+  },
+  {
+    label: 'Content',
+    items: [
+      { id: 'comms-library', label: 'Library', href: '/app/comms/library', space: 'comms' },
+    ],
+  },
+]
+
 function getAppSection(pathname: string): string | null {
   if (!pathname.startsWith('/app')) return null
   if (pathname === '/app' || pathname === '/app/') return 'dashboard'
@@ -159,16 +200,20 @@ export function canAccessAppPath(role: string | null | undefined, pathname: stri
 }
 
 /**
- * Filters the single MASTER_NAV tree down to the sections/items a user may see,
- * given their resolved access levels per space. Items the user cannot reach are
- * dropped; any section left empty is removed. Pure function — pass the same
- * `effectiveSpaces` map used to render the sidebar (server-resolved, includes DB
- * overrides) so the desktop sidebar and the mobile drawer stay in lockstep.
+ * Filters the navigation tree down to the sections/items a user may see, given
+ * their resolved access levels per space. The Communications role uses its curated
+ * blueprint (`COMMS_NAV_SECTIONS`); every other role uses the permission-driven
+ * `MASTER_NAV`. Items the user cannot reach are dropped and empty sections removed.
+ * Pure function — pass the same `effectiveSpaces` map used to render the sidebar
+ * (server-resolved, includes DB overrides) so the desktop sidebar and the mobile
+ * drawer stay in lockstep.
  */
 export function getSideNavSections(
+  role: string | null | undefined,
   spaces: Record<PlatformSpace, AccessLevel>,
 ): NavSection[] {
-  return MASTER_NAV
+  const tree = normalizeRole(role) === 'Comms' ? COMMS_NAV_SECTIONS : MASTER_NAV
+  return tree
     .map((section) => ({
       label: section.label,
       items: section.items.filter((item) =>

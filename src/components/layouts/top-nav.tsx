@@ -75,7 +75,7 @@ export function TopNav({
   const spaces: Record<PlatformSpace, AccessLevel> = isAdmin
     ? { ...effectiveSpaces, admin: 'manage' }
     : effectiveSpaces
-  const navSections = getSideNavSections(spaces)
+  const navSections = getSideNavSections(userRole, spaces)
 
   return (
     <>

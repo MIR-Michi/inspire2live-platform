@@ -376,6 +376,11 @@ export default async function DashboardPage() {
   const isAdmin = actualRole === 'PlatformAdmin'
   const viewAsRole = isAdmin ? await getViewAsRole() : null
   const role = viewAsRole ?? actualRole
+
+  // Comms has its own dashboard (the personal/team toggle) and uses it as the
+  // landing page. Send Comms users there from the shared dashboard.
+  if (role === 'Comms') redirect('/app/comms/dashboard')
+
   const dashboardConfig = getDashboardConfig(role)
   const showCommsBlocks = role === 'Comms'
   const dashboardVariant = resolveDashboardVariant(role)

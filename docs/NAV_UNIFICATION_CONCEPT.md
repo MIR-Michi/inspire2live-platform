@@ -29,13 +29,17 @@ curated by role instead of *derived* from access.
 
 Consequences:
 
-- The Comms role sees the tree minus everything its permissions hide — which yields
-  exactly today's Comms menu.
-- The Admin role sees the same tree with *more* items visible (Bureau, Board,
-  User Management, …) — i.e. "the Comms menu, extended".
+- The Admin role sees the full tree (Board, User Management, …) — i.e. "the Comms
+  menu, extended".
 - A Patient Advocate sees the same tree with the comms-only items hidden.
 - Granting a user access to a space via a DB override automatically reveals the
   corresponding menu items. No menu code changes.
+
+**One refinement (see §4 / §5.3):** the **Comms role is the single exception** to the
+pure-permission rule. Because Comms can *access* spaces (Stories, Initiatives, …)
+that should not clutter its workspace sidebar, Comms renders an explicit **curated
+blueprint** (`COMMS_NAV_SECTIONS`) — exactly today's comms menu — instead of the
+permission-filtered tree. Same dark sectioned style; different source list.
 
 ## 3. The master tree
 
@@ -44,7 +48,7 @@ One definition, `MASTER_NAV`, in `src/lib/role-access.ts`. Every item carries th
 
 | Section | Item | Gating space | Notes |
 |---|---|---|---|
-| **Overview** | Dashboard | `dashboard` | single canonical `/app/dashboard` for all roles + landing page, see §5.5 |
+| **Overview** | Dashboard | `dashboard` | `/app/dashboard` (non-comms roles); Comms uses its own `/app/comms/dashboard`, see §5.5 |
 | **Workspace** | Planner | `comms` | |
 | | Campus | `comms` | live badge (intake count) |
 | | WhatsApp | `comms` | |
@@ -85,28 +89,36 @@ MASTER_NAV
 `showCommsWorkspace` / `showCommsNav` flags are deleted. The role only matters
 indirectly, as input to the permission resolver.
 
-## 4. Resulting views (derived, not defined)
+## 4. Resulting views
 
-These are computed from `ROLE_SPACE_DEFAULTS`, not authored per role:
+The **Communications role keeps its exact curated blueprint** (`COMMS_NAV_SECTIONS`)
+— it is the canonical comms workspace, not a permission-expanded menu. Every other
+role sees a permission-filtered view of the shared `MASTER_NAV`. Both render in the
+same dark sectioned style; the only difference is which tree feeds the filter.
 
-- **Comms** (`comms: edit`, `initiatives: view`, `stories: manage`, `network:
-  view`, `resources: view`, `board/admin: invisible`) — Dashboard · Planner ·
-  Campus · WhatsApp · CRM · Initiatives · Annual Congress · Podcast · All events ·
-  Network · Stories · Library · Resources. The comms workspace structure is intact;
-  the menu now *also* surfaces the other spaces Comms can already reach (Initiatives,
-  Network, Stories, Resources). This is the "different views, one tree" outcome — see
-  §5.3.
-- **PlatformAdmin** (`manage` everywhere) — the Comms view *plus* Board and User
-  Management. ("Extended with further menu items.")
-- **PatientAdvocate / Clinician / Researcher** — Dashboard · Initiatives ·
-  Congress · Network · Stories · Resources. Comms items absent because the `comms`
-  space is `invisible` for them.
-- **Moderator** (`comms: invisible`) — Dashboard · Initiatives · Congress · Network
-  · Stories · Resources. No comms sub-items, since the `comms` space is invisible —
-  this replaces today's single opaque "Communications" link.
+- **Comms** — Dashboard (→ `/app/comms/dashboard`, personal/team toggle) · Planner ·
+  Campus · WhatsApp · CRM · Annual Congress · Podcast · All events · Library.
+  Identical to the pre-existing comms menu. It does **not** list Initiatives /
+  Network / Stories / Resources even though Comms can access those spaces — the
+  curated list keeps the menu lean (it must not look like the Admin menu).
+- **PlatformAdmin** (`manage` everywhere) — the full `MASTER_NAV`: the comms items
+  *plus* Initiatives, Board, Network, Stories, Resources, and User Management.
+  ("Extended with further menu items.")
+- **PatientAdvocate / Clinician / Researcher** — Dashboard (`/app/dashboard`) ·
+  Initiatives · Congress · Network · Stories · Resources. Comms items absent because
+  the `comms` space is `invisible` for them.
+- **Moderator** (`comms: invisible`) — Dashboard · Initiatives · Congress · Network ·
+  Stories · Resources. No comms sub-items.
 
 (No role shows a Profile, Tasks, Bureau, or Partners item — those are removed from
 the nav entirely per §3.)
+
+Why Comms is special-cased rather than purely permission-driven: the permission
+matrix cannot distinguish "Comms can *manage* Stories" from "Stories belongs in the
+Comms menu". Comms manages Stories/Initiatives operationally but its sidebar should
+stay focused on the comms workspace, so it gets an explicit curated list. Trimming
+those via `ROLE_SPACE_DEFAULTS` instead was rejected — it would also revoke real
+access (e.g. `stories: manage`).
 
 ## 5. Decision points
 
@@ -127,55 +139,41 @@ Items currently point to different targets per role:
   canonical entry point needs no per-role redirect logic — everyone lands on the
   congress overview and enters the workspace from there.
 
-### 5.5 One dashboard only (decided)
-There must be a **single** dashboard, reached via the menu's `Dashboard` item, and
-it is the landing page on entering the app. Today there are two:
+### 5.5 One dashboard *per audience* (decided — corrected)
+Each role has a single dashboard reached via its menu's `Dashboard` item, and that
+dashboard is its landing page. There are two dashboard surfaces, kept for different
+audiences:
 
-- `/app/dashboard` — the real, shared, role-aware dashboard. Login already lands
-  here (`login/page.tsx`, `middleware.ts`). It **already renders the Comms personal
-  panel** for the Comms role (`showCommsBlocks = role === 'Comms'`). **This is the
-  one we keep.**
-- `/app/comms/dashboard` — a second "Communications dashboard" (events pipeline,
-  agenda board, team-activity "team" view, with a personal/team toggle). In the
-  Comms sidebar the `Dashboard` item points *here*, so the menu opens this
-  congress/events-heavy view instead of the real dashboard. **This page is
-  removed.**
+- `/app/comms/dashboard` — the **Communications dashboard**, with the personal/team
+  **toggle** ("my dashboard" ↔ "team dashboard": events pipeline, weekly agenda,
+  team activity). **This is the dashboard for the Comms role** and the comms menu's
+  `Dashboard` item points here. *(An earlier revision deleted this and pointed Comms
+  at the shared dashboard — that was wrong; the toggle dashboard is what Comms
+  needs, so it is kept/restored.)*
+- `/app/dashboard` — the shared, role-aware dashboard for **every other role**
+  (coordinator / board / advocate variants).
 
 Decisions:
 
-1. **`MASTER_NAV` Dashboard → `/app/dashboard` for every role** (no more
-   `/app/comms/dashboard` target). One dashboard, reached through the menu, and it
-   is the landing route (already true for login).
-2. **Delete the `/app/comms/dashboard` route** (`page.tsx` + `comms-dashboard-toggle`).
-   The Comms *personal* view survives because `/app/dashboard` already shows it.
-3. **The Comms *team* view** (events pipeline, weekly agenda, team activity) lives
-   only on the deleted page. Per "the other dashboard can go", it is dropped. The
-   weekly-agenda feature goes with it (it had no home outside the team dashboard).
-   *Optional follow-up (not default):* if those widgets later prove valuable, fold
-   them into `/app/dashboard` for the Comms role — a separate decision.
-4. **Delete the whole team-dashboard cluster** (no relocation needed — it is
-   self-contained). Tracing imports shows these are used *only* by the deleted page:
-   `comms/dashboard/page.tsx`, `comms/dashboard/actions.ts`,
-   `components/comms/team-dashboard.tsx`, `components/comms/team-feed.tsx`,
-   `components/comms/comms-dashboard-toggle.tsx`,
-   `components/comms/agenda-add-form.tsx`,
-   `components/comms/agenda-status-control.tsx`, the data lib
-   `lib/comms-dashboard-data.ts`, and its test `comms-dashboard-data.test.ts`.
-   The *personal* dashboard pieces (`comms-personal-dashboard.tsx`,
-   `comms-personal-dashboard-data.ts`) are **kept** — `/app/dashboard` uses them.
-   The `comms_weekly_agenda_items` table/migration is left untouched (DB-only, no
-   code references after the cluster is removed).
+1. **Comms `Dashboard` → `/app/comms/dashboard`** (curated blueprint, §4); all other
+   roles' `Dashboard` → `/app/dashboard` (MASTER_NAV).
+2. **Comms landing = the comms dashboard.** Login still targets `/app/dashboard`, so
+   `/app/dashboard` **redirects the Comms role to `/app/comms/dashboard`** — making
+   the toggle dashboard the comms landing while keeping one entry point for everyone
+   else.
+3. **Keep the whole team-dashboard cluster** (page, `actions.ts`, `team-dashboard`,
+   `team-feed`, `comms-dashboard-toggle`, the agenda forms, `comms-dashboard-data`,
+   and its test). The personal pieces (`comms-personal-dashboard*`) remain shared.
 
-### 5.3 Comms sidebar gets longer (decided: accept)
-Under derived visibility the Comms role also sees the spaces it can already reach —
-Initiatives (`view`), Network (`view`), Stories (`manage`), Resources (`view`) —
-which today are hidden behind "Other sections via profile menu". **Decision: accept
-this and drop the footer note.** It is precisely the consistency being asked for
-("no separate workspaces, just different views"). If product later wants the Comms
-menu trimmed, that is a *data* change (set the space to `invisible` for Comms in
-`ROLE_SPACE_DEFAULTS`), not a menu-code change — which is the whole point of the
-model. (Profile is no longer a sidebar concern — it lives only in the top-right
-account menu.)
+### 5.3 Comms menu stays lean (decided — corrected)
+The Comms role must see **the same menu as before** — its curated blueprint — not a
+permission-expanded list. A purely permission-driven menu would add Initiatives,
+Network, Stories, Resources (spaces Comms can access), making it look almost
+identical to the Admin menu, which is not wanted. **Decision: Comms uses an explicit
+curated section list (`COMMS_NAV_SECTIONS`); all other roles use the permission-
+driven `MASTER_NAV`.** Trimming via `ROLE_SPACE_DEFAULTS` was rejected because it
+would also revoke real access (e.g. `stories: manage`). (Profile is no longer a
+sidebar concern — it lives only in the top-right account menu.)
 
 ### 5.4 Finer granularity inside a space (future)
 All comms sub-items are currently gated by the single `comms` space. If individual
@@ -185,31 +183,31 @@ feature-level space. No structural change required.
 
 ## 6. Implementation plan (when approved)
 
-1. **`src/lib/role-access.ts`** — replace `NAV_SECTIONS_BY_ROLE` with `MASTER_NAV`
-   (`{ id, label, href, space, minLevel?, badge?, priority? }`); rewrite
-   `getSideNavSections(effectiveSpaces)` as the pure filter described in §3;
-   delete `NAV_BY_ROLE` / `getSideNavItems` and migrate their tests.
-2. **`src/components/layouts/side-nav.tsx`** — drop the `role` prop; render from
-   `getSideNavSections(effectiveSpaces)`. Visual blueprint unchanged.
+1. **`src/lib/role-access.ts`** — define `MASTER_NAV`
+   (`{ id, label, href, space, minLevel?, badge?, priority? }`) and the curated
+   `COMMS_NAV_SECTIONS`; `getSideNavSections(role, spaces)` picks the comms
+   blueprint for the Comms role and the permission-filtered `MASTER_NAV` otherwise.
+   Remove `NAV_BY_ROLE` / `NAV_SECTIONS_BY_ROLE` / `getSideNavItems`.
+2. **`src/components/layouts/side-nav.tsx`** — render from
+   `getSideNavSections(role, effectiveSpaces)`. Visual blueprint (dark, sectioned)
+   unchanged.
 3. **`src/components/layouts/top-nav.tsx`** — pass `effectiveSpaces` from the
    server layout into `TopNav` so the mobile drawer uses the same filtered tree
-   (today it re-derives from role defaults client-side and misses DB overrides).
+   (it previously re-derived from role defaults client-side and missed DB overrides).
 4. **`src/app/app/layout.tsx`** — remove `showCommsWorkspace` branching; compute
-   the campus badge whenever the user can view `comms` (not only for the Comms
-   role); thread `effectiveSpaces` to both navs.
-5. **Single dashboard** (per §5.5) — point `MASTER_NAV` Dashboard at
-   `/app/dashboard`; delete the self-contained team-dashboard cluster listed in
-   §5.5.4; confirm `/app/dashboard` is the landing (already true via login +
-   middleware) and still renders the Comms personal panel.
-6. **Congress href** (per §5.2) — `MASTER_NAV` Congress → `/app/congress` for all
-   roles. No page changes (the overview already links into the workspace).
-7. **Tests** — per-role snapshot of derived sections (Comms unchanged, Admin =
-   superset, advocate roles = no comms items); DB-override case (granting `comms:
-   view` to a non-Comms user reveals the comms items); dashboard consolidation
-   (Comms `Dashboard` link resolves to `/app/dashboard`; agenda actions still wired
-   after relocation).
-7. **Docs** — update `docs/ROLE_PERMISSION_MODEL.md` (nav is now derived from the
-   matrix) and `docs/DESIGN_CHANGELOG.md`.
+   the campus badge whenever the user can view `comms`; thread `role` +
+   `effectiveSpaces` to both navs.
+5. **Dashboards** (per §5.5) — Comms `Dashboard` → `/app/comms/dashboard` (kept,
+   personal/team toggle); all other roles → `/app/dashboard`. `/app/dashboard`
+   redirects the Comms role to `/app/comms/dashboard` so the toggle dashboard is the
+   comms landing. The team-dashboard cluster is retained.
+6. **Congress href** (per §5.2) — Congress → `/app/congress` for all roles. No page
+   changes (the overview already links into the workspace).
+7. **Tests** — Comms shows its exact blueprint (no Initiatives/Network/Stories/
+   Resources); Admin = superset incl. User Management; advocate roles = no comms
+   items; DB-override case (granting `comms: view` to a non-Comms role reveals the
+   comms items); per-audience dashboard hrefs.
+8. **Docs** — update `docs/ROLE_PERMISSION_MODEL.md` and `docs/DESIGN_CHANGELOG.md`.
 
 ## 7. Out of scope
 

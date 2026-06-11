@@ -91,6 +91,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
         />
         <div className="flex min-h-0 flex-1">
           <SideNav
+            role={effectiveRole}
             effectiveSpaces={effectiveSpaces}
             isAdmin={isAdmin}
             commsUnreadCount={commsUnreadCount ?? 0}

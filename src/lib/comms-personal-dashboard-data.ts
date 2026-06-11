@@ -2,8 +2,8 @@
  * lib/comms-personal-dashboard-data.ts
  *
  * Loads the data for a comms user's PERSONAL dashboard panel
- * ("what needs my attention?"). Rendered on the single global /app/dashboard
- * for the Comms role.
+ * ("what needs my attention?"). Shared by the global /app/dashboard and
+ * the comms /app/comms/dashboard?view=personal route.
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'

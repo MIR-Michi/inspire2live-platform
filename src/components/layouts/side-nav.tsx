@@ -4,17 +4,19 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import type { AccessLevel, PlatformSpace } from '@/lib/permissions'
 import { getSideNavSections } from '@/lib/role-access'
+import type { PlatformRole } from '@/lib/role-access'
 
 // ─── Component ────────────────────────────────────────────────────────────────
 //
 // A single, unified dark sidebar for every role. The grouped/sectioned layout —
-// originally the Communications workspace blueprint — is now the standard. There is
-// one master nav tree (`MASTER_NAV` in role-access.ts); this component renders the
-// subset a user may see, derived purely from the server-resolved `effectiveSpaces`
-// (which includes DB overrides). The role never branches the layout — it only feeds
-// the permission resolver upstream.
+// originally the Communications workspace blueprint — is the standard. The
+// Communications role keeps its curated blueprint; every other role sees a
+// permission-filtered view of the master tree, derived from the server-resolved
+// `effectiveSpaces` (which includes DB overrides). See `getSideNavSections`.
 
 interface SideNavProps {
+  /** The effective (view-as aware) platform role — selects the comms blueprint vs the master tree. */
+  role: PlatformRole
   /**
    * Effective access levels per space, resolved in the Server Component layout.
    * Includes DB overrides. Passed as a serialisable plain object.
@@ -32,6 +34,7 @@ interface SideNavProps {
 }
 
 export function SideNav({
+  role,
   effectiveSpaces,
   isAdmin,
   commsUnreadCount = 0,
@@ -44,7 +47,7 @@ export function SideNav({
     ? { ...effectiveSpaces, admin: 'manage' }
     : effectiveSpaces
 
-  const sections = getSideNavSections(spaces)
+  const sections = getSideNavSections(role, spaces)
 
   return (
     <aside
