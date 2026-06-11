@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import type {
   PersonalTask,
   PersonalContentItem,
@@ -86,13 +87,16 @@ export function CommsDashboardPanel({
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <section className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-neutral-900">Deadlines</h3>
+        <CollapsibleCard
+          tone="orange"
+          title="Deadlines"
+          storageKey="comms-personal-deadlines"
+          actions={
             <Link href="/app/comms/planner?view=my_items" className="text-xs font-semibold text-orange-700 hover:underline">
               My items
             </Link>
-          </div>
+          }
+        >
           <div className="space-y-2">
             {dueSoon.slice(0, 6).map((item) => (
               <Link key={item.id} href={item.href} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-200 px-3 py-2 hover:bg-neutral-50">
@@ -108,15 +112,18 @@ export function CommsDashboardPanel({
               </p>
             )}
           </div>
-        </section>
+        </CollapsibleCard>
 
-        <section className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
-          <div className="mb-3 flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-neutral-900">Incoming for review</h3>
+        <CollapsibleCard
+          tone="orange"
+          title="Incoming for review"
+          storageKey="comms-personal-incoming"
+          actions={
             <Link href="/app/comms/intake" className="text-xs font-semibold text-orange-700 hover:underline">
               Open intake
             </Link>
-          </div>
+          }
+        >
           <div className="space-y-2">
             {incomingItems.slice(0, 5).map((item) => (
               <div key={item.id} className="rounded-lg border border-neutral-200 px-3 py-2">
@@ -140,16 +147,19 @@ export function CommsDashboardPanel({
               </p>
             )}
           </div>
-        </section>
+        </CollapsibleCard>
       </div>
 
-      <section className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-neutral-900">Project summaries</h3>
+      <CollapsibleCard
+        tone="orange"
+        title="Project summaries"
+        storageKey="comms-personal-summaries"
+        actions={
           <Link href="/app/comms/campus" className="text-xs font-semibold text-orange-700 hover:underline">
             Open campus
           </Link>
-        </div>
+        }
+      >
         <div className="grid gap-3 md:grid-cols-2">
           {projectSummaries.map((item) => (
             <Link key={item.id} href={item.href} className="rounded-xl border border-neutral-200 bg-neutral-50 p-3 hover:bg-white">
@@ -164,15 +174,18 @@ export function CommsDashboardPanel({
             </p>
           )}
         </div>
-      </section>
+      </CollapsibleCard>
 
-      <section className="rounded-xl border border-orange-200 bg-white p-4 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-neutral-900">Recent decisions</h3>
+      <CollapsibleCard
+        tone="orange"
+        title="Recent decisions"
+        storageKey="comms-personal-decisions"
+        actions={
           <Link href="/app/comms/campus" className="text-xs font-semibold text-orange-700 hover:underline">
             Open meetings
           </Link>
-        </div>
+        }
+      >
         <div className="space-y-2">
           {decisions.map((item) => (
             <Link key={item.id} href={item.href} className="block rounded-lg border border-neutral-200 px-3 py-3 hover:bg-neutral-50">
@@ -186,7 +199,7 @@ export function CommsDashboardPanel({
             </p>
           )}
         </div>
-      </section>
+      </CollapsibleCard>
 
       <div className="grid gap-3 md:grid-cols-3">
         <Link href="/app/comms/campus" className="rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-900 shadow-sm hover:border-orange-400">

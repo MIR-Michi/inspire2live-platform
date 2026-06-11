@@ -6,6 +6,7 @@ import { getDashboardConfig } from '@/lib/dashboard-config'
 import { buildDashboardGreeting, resolveDashboardVariant } from '@/lib/dashboard-view'
 import { getViewAsRole } from '@/lib/view-as'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-data'
 
 type InitiativeHealth = Tables<'initiative_health'>
@@ -68,13 +69,16 @@ function CoordinatorDashboard({
       </div>
 
       {/* RAG grid */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-neutral-900">Initiative Health</h2>
+      <CollapsibleCard
+        variant="plain"
+        title="Initiative Health"
+        storageKey="dash-initiative-health"
+        actions={
           <Link href="/app/bureau" className="text-sm font-medium text-orange-600 hover:underline">
             Open Bureau →
           </Link>
-        </div>
+        }
+      >
         <div className="overflow-hidden rounded-xl border border-neutral-200 bg-white shadow-sm">
           <table className="w-full text-sm">
             <thead className="bg-neutral-50 text-xs font-semibold uppercase tracking-wide text-neutral-500">
@@ -127,17 +131,22 @@ function CoordinatorDashboard({
             </tbody>
           </table>
         </div>
-      </section>
+      </CollapsibleCard>
 
       {/* Inactivity alerts */}
       {inactive.length > 0 && (
-        <section>
-          <h2 className="mb-3 text-base font-semibold text-neutral-900">
-            Inactivity Alerts
-            <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
-              {inactive.length}
-            </span>
-          </h2>
+        <CollapsibleCard
+          variant="plain"
+          storageKey="dash-inactivity"
+          title={
+            <>
+              Inactivity Alerts
+              <span className="ml-2 rounded-full bg-red-100 px-2 py-0.5 text-xs font-medium text-red-700">
+                {inactive.length}
+              </span>
+            </>
+          }
+        >
           <div className="rounded-xl border border-red-100 bg-white shadow-sm">
             <ul className="divide-y divide-neutral-100">
               {inactive.map((m) => (
@@ -156,7 +165,7 @@ function CoordinatorDashboard({
               ))}
             </ul>
           </div>
-        </section>
+        </CollapsibleCard>
       )}
 
       {inactive.length === 0 && (
@@ -203,13 +212,16 @@ function AdvocateDashboard({
       </div>
 
       {/* My tasks */}
-      <section>
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-base font-semibold text-neutral-900">My Tasks</h2>
+      <CollapsibleCard
+        variant="plain"
+        title="My Tasks"
+        storageKey="dash-my-tasks"
+        actions={
           <Link href="/app/tasks" className="text-sm font-medium text-orange-600 hover:underline">
             View all →
           </Link>
-        </div>
+        }
+      >
         <div className="space-y-2">
           {myTasks.slice(0, 6).map((t) => {
             const isOverdue = t.due_date && new Date(t.due_date) < new Date()
@@ -250,11 +262,10 @@ function AdvocateDashboard({
             </p>
           )}
         </div>
-      </section>
+      </CollapsibleCard>
 
       {/* My initiatives */}
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-neutral-900">My Initiatives</h2>
+      <CollapsibleCard variant="plain" title="My Initiatives" storageKey="dash-my-initiatives">
         <div className="grid gap-3 sm:grid-cols-2">
           {initiatives.map((i) => {
             const rag = computeRag(i)
@@ -294,7 +305,7 @@ function AdvocateDashboard({
             </p>
           )}
         </div>
-      </section>
+      </CollapsibleCard>
     </div>
   )
 }
@@ -322,8 +333,7 @@ function BoardDashboard({ initiatives }: { initiatives: InitiativeHealth[] }) {
         </p>
       )}
 
-      <section>
-        <h2 className="mb-3 text-base font-semibold text-neutral-900">Portfolio Overview</h2>
+      <CollapsibleCard variant="plain" title="Portfolio Overview" storageKey="dash-portfolio">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {initiatives.slice(0, 6).map((i) => {
             const rag = computeRag(i)
@@ -351,7 +361,7 @@ function BoardDashboard({ initiatives }: { initiatives: InitiativeHealth[] }) {
             </p>
           )}
         </div>
-      </section>
+      </CollapsibleCard>
     </div>
   )
 }
@@ -506,20 +516,25 @@ export default async function DashboardPage() {
       {/* ── Notifications + Newsfeed ── */}
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Notifications */}
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-neutral-900">Notifications</h2>
+        <CollapsibleCard
+          variant="plain"
+          storageKey="dash-notifications"
+          title={
+            <span className="inline-flex items-center gap-2">
+              Notifications
               {unreadCount > 0 && (
                 <span className="rounded-full bg-red-100 px-2 py-0.5 text-xs font-semibold text-red-700">
                   {unreadCount} new
                 </span>
               )}
-            </div>
+            </span>
+          }
+          actions={
             <Link href="/app/notifications" className="text-sm font-medium text-orange-600 hover:underline">
               View all →
             </Link>
-          </div>
+          }
+        >
           <div className="space-y-2">
             {notifications.slice(0, 6).map(n => {
               const meta = NOTIF_META[n.type] ?? { icon: '🔔', color: 'bg-neutral-100 text-neutral-600' }
@@ -552,13 +567,10 @@ export default async function DashboardPage() {
               </p>
             )}
           </div>
-        </section>
+        </CollapsibleCard>
 
         {/* Newsfeed */}
-        <section>
-          <div className="mb-3 flex items-center justify-between">
-            <h2 className="text-base font-semibold text-neutral-900">Field Newsfeed</h2>
-          </div>
+        <CollapsibleCard variant="plain" title="Field Newsfeed" storageKey="dash-newsfeed">
           <div className="space-y-2">
             {newsfeed.map(nf => {
               const meta = NEWSFEED_META[nf.category] ?? { label: nf.category, color: 'bg-neutral-100 text-neutral-700' }
@@ -587,7 +599,7 @@ export default async function DashboardPage() {
               </p>
             )}
           </div>
-        </section>
+        </CollapsibleCard>
       </div>
     </div>
   )
