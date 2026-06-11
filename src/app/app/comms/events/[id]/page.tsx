@@ -9,6 +9,7 @@ import {
 } from '@/app/app/comms/events/actions'
 import { triggerEventTeamsStub } from '@/app/app/comms/integration-actions'
 import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
   ATTENDANCE_KIND_OPTIONS,
@@ -528,9 +529,8 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
         </form>
 
         <div className="space-y-5">
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-neutral-900">Event links</h2>
-            <div className="mt-4 grid gap-2">
+          <CollapsibleCard titleClassName="text-lg font-semibold text-neutral-900" title="Event links" storageKey="event-links">
+            <div className="grid gap-2">
               {event.event_website_url && (
                 <a href={event.event_website_url} target="_blank" rel="noreferrer" className="rounded-xl border border-blue-200 bg-blue-50 px-4 py-3 text-sm font-semibold text-blue-800 hover:bg-blue-100">
                   {isPodcast ? 'Open episode landing page' : 'Open event website'}
@@ -555,11 +555,10 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
                 </p>
               )}
             </div>
-          </section>
+          </CollapsibleCard>
 
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-neutral-900">Lifecycle</h2>
-            <div className="mt-4 flex flex-wrap gap-2">
+          <CollapsibleCard titleClassName="text-lg font-semibold text-neutral-900" title="Lifecycle" storageKey="event-lifecycle">
+            <div className="flex flex-wrap gap-2">
               {(Object.keys(EVENT_STAGE_META) as EventStage[]).map((stage) => (
                 <form key={stage} action={transitionEventStage}>
                   <input type="hidden" name="event_id" value={event.id} />
@@ -584,23 +583,23 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
                 />
               </div>
             )}
-          </section>
+          </CollapsibleCard>
 
           {isPodcast && (
-            <section className="rounded-2xl border border-violet-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                  <h2 className="text-lg font-semibold text-neutral-900">Podcast workflow</h2>
-                  <p className="mt-1 text-sm text-neutral-500">
-                    Standard setup, recording, and follow-up steps for episode production.
-                  </p>
-                </div>
+            <CollapsibleCard
+              titleClassName="text-lg font-semibold text-neutral-900"
+              title="Podcast workflow"
+              storageKey="event-podcast-workflow"
+              actions={
                 <div className="rounded-xl border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-800">
                   {podcastWorkflowProgress.completed}/{podcastWorkflowProgress.total} completed
                 </div>
-              </div>
-
-              <div className="mt-4 space-y-4">
+              }
+            >
+              <p className="mb-4 text-sm text-neutral-500">
+                Standard setup, recording, and follow-up steps for episode production.
+              </p>
+              <div className="space-y-4">
                 {PODCAST_WORKFLOW_SECTIONS.map((section) => (
                   <div key={section.key} className="rounded-2xl border border-violet-100 bg-violet-50/60 p-4">
                     <div className="mb-3">
@@ -639,12 +638,11 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
                   </div>
                 ))}
               </div>
-            </section>
+            </CollapsibleCard>
           )}
 
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-neutral-900">Output checklist</h2>
-            <div className="mt-4 grid gap-3">
+          <CollapsibleCard titleClassName="text-lg font-semibold text-neutral-900" title="Output checklist" storageKey="event-output">
+            <div className="grid gap-3">
               {OUTPUT_FIELDS.map((item) => {
                 const done = Boolean(event[item.field])
                 return (
@@ -663,11 +661,10 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
                 )
               })}
             </div>
-          </section>
+          </CollapsibleCard>
 
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-neutral-900">Initiatives</h2>
-            <div className="mt-3 flex flex-wrap gap-2">
+          <CollapsibleCard titleClassName="text-lg font-semibold text-neutral-900" title="Initiatives" storageKey="event-initiatives">
+            <div className="flex flex-wrap gap-2">
               {linkedInitiatives.length === 0 ? (
                 <p className="text-sm text-neutral-500">No initiative linked yet.</p>
               ) : (
@@ -694,11 +691,10 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
                 Link initiative
               </button>
             </form>
-          </section>
+          </CollapsibleCard>
 
-          <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-            <h2 className="text-lg font-semibold text-neutral-900">Calendar entries</h2>
-            <div className="mt-3 space-y-3">
+          <CollapsibleCard titleClassName="text-lg font-semibold text-neutral-900" title="Calendar entries" storageKey="event-calendar">
+            <div className="space-y-3">
               {(linkedCalendar ?? []).length === 0 ? (
                 <p className="text-sm text-neutral-500">No content calendar cards linked to this event yet.</p>
               ) : (
@@ -712,7 +708,7 @@ export default async function CommsEventDetailPage({ params }: { params: Promise
                 ))
               )}
             </div>
-          </section>
+          </CollapsibleCard>
         </div>
       </div>
     </div>

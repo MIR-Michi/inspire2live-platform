@@ -18,6 +18,7 @@ import { responsibilitySummary } from '@/lib/congress-policy'
 import { fetchLatestWorkspaceEvent } from '@/lib/congress-workspace/current-event'
 import { WorkspaceDiagnostics } from '@/components/congress/workspace/workspace-diagnostics'
 import { StageBanner } from '@/components/congress/workspace/stage-banner'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { updateCongressStatus } from '@/app/app/congress/workspace/actions'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -401,9 +402,8 @@ export default async function CongressWorkspaceOverviewPage() {
           )}
 
           {/* TRIAGE VIEW: Now / Next / Later */}
-          <section>
-            <h2 className="text-sm font-semibold text-neutral-700">This week</h2>
-            <div className="mt-2 grid gap-3 md:grid-cols-3">
+          <CollapsibleCard variant="plain" title="This week" storageKey="congress-ws-thisweek">
+            <div className="grid gap-3 md:grid-cols-3">
               {(
                 [
                   { label: 'NOW',  tasks: nowTasks,   accent: 'border-orange-300 bg-orange-50/40' },
@@ -434,19 +434,21 @@ export default async function CongressWorkspaceOverviewPage() {
                 <a href="/app/congress/workspace/tasks" className="text-orange-600 hover:underline">View tasks →</a>
               </p>
             )}
-          </section>
+          </CollapsibleCard>
 
           {/* OPEN RISKS from DB */}
           {raidItems.length > 0 && (
-            <section>
-              <div className="flex items-baseline justify-between">
-                <h2 className="text-sm font-semibold text-neutral-700">Open risks & issues</h2>
-                <a href="/app/congress/workspace/raid"
-                   className="text-xs text-neutral-500 hover:underline">
+            <CollapsibleCard
+              variant="plain"
+              title="Open risks & issues"
+              storageKey="congress-ws-risks"
+              actions={
+                <a href="/app/congress/workspace/raid" className="text-xs text-neutral-500 hover:underline">
                   Full RAID log →
                 </a>
-              </div>
-              <div className="mt-2 space-y-2">
+              }
+            >
+              <div className="space-y-2">
                 {raidItems.slice(0, 3).map(r => (
                   <div key={r.id}
                        className={['flex items-start gap-3 rounded-lg border px-3 py-2 text-xs',
@@ -459,13 +461,12 @@ export default async function CongressWorkspaceOverviewPage() {
                   </div>
                 ))}
               </div>
-            </section>
+            </CollapsibleCard>
           )}
 
           {/* ACTIVITY (placeholder — no activity log table yet) */}
-          <section>
-            <h2 className="text-sm font-semibold text-neutral-700">Recent changes</h2>
-            <div className="mt-2 space-y-1.5">
+          <CollapsibleCard variant="plain" title="Recent changes" storageKey="congress-ws-activity">
+            <div className="space-y-1.5">
               {activity.length === 0 && (
                 <p className="text-xs text-neutral-400 italic">No recent activity recorded yet.</p>
               )}
@@ -487,7 +488,7 @@ export default async function CongressWorkspaceOverviewPage() {
                 </ol>
               )}
             </div>
-          </section>
+          </CollapsibleCard>
         </div>
 
         {/* ── CONTEXT SIDEBAR ─────────────────────────────────────────────── */}

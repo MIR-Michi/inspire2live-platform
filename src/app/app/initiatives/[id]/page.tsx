@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
 
 // ─── Risk indicator helpers ───────────────────────────────────────────────────
 
@@ -256,8 +257,7 @@ export default async function InitiativeOverviewPage({
       )}
 
       {/* ── Initiative Health Panel ── */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-4 text-sm font-semibold text-neutral-900">Initiative Health</h2>
+      <CollapsibleCard title="Initiative Health" storageKey="init-health">
         <div className="grid gap-3 sm:grid-cols-2">
           {/* Risks */}
           <div>
@@ -274,20 +274,18 @@ export default async function InitiativeOverviewPage({
             <p className="text-sm font-medium text-neutral-700">{lastActivityLabel}</p>
           </div>
         </div>
-      </section>
+      </CollapsibleCard>
 
       {/* ── Description ── */}
       {description && (
-        <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-2 text-sm font-semibold text-neutral-900">About this Initiative</h2>
+        <CollapsibleCard title="About this Initiative" storageKey="init-about">
           <p className="text-sm leading-relaxed text-neutral-700">{description}</p>
-        </section>
+        </CollapsibleCard>
       )}
 
       {/* ── Objectives ── */}
       {objectives.length > 0 && (
-        <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-          <h2 className="mb-3 text-sm font-semibold text-neutral-900">Objectives</h2>
+        <CollapsibleCard title="Objectives" storageKey="init-objectives">
           <ul className="space-y-2">
             {objectives.map((obj, i) => (
               <li key={i} className="flex items-start gap-2.5 text-sm text-neutral-700">
@@ -296,15 +294,14 @@ export default async function InitiativeOverviewPage({
               </li>
             ))}
           </ul>
-        </section>
+        </CollapsibleCard>
       )}
 
       {/* ── Geography & cancer types ── */}
       {(countries.length > 0 || cancerTypes.length > 0) && (
         <div className="grid gap-4 sm:grid-cols-2">
           {countries.length > 0 && (
-            <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-neutral-900">Countries</h2>
+            <CollapsibleCard title="Countries" storageKey="init-countries">
               <div className="flex flex-wrap gap-2">
                 {countries.map((c) => (
                   <span
@@ -315,11 +312,10 @@ export default async function InitiativeOverviewPage({
                   </span>
                 ))}
               </div>
-            </section>
+            </CollapsibleCard>
           )}
           {cancerTypes.length > 0 && (
-            <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-              <h2 className="mb-3 text-sm font-semibold text-neutral-900">Cancer Types</h2>
+            <CollapsibleCard title="Cancer Types" storageKey="init-cancer-types">
               <div className="flex flex-wrap gap-2">
                 {cancerTypes.map((ct) => (
                   <span
@@ -330,19 +326,21 @@ export default async function InitiativeOverviewPage({
                   </span>
                 ))}
               </div>
-            </section>
+            </CollapsibleCard>
           )}
         </div>
       )}
 
       {/* ── Core Team ── */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <div className="mb-3 flex items-center justify-between">
-          <h2 className="text-sm font-semibold text-neutral-900">Core Team</h2>
+      <CollapsibleCard
+        title="Core Team"
+        storageKey="init-core-team"
+        actions={
           <Link href={`/app/initiatives/${id}/team`} className="text-xs text-orange-600 hover:underline">
             View full team →
           </Link>
-        </div>
+        }
+      >
         <div className="flex flex-wrap gap-3">
           {coreTeam.map(m => {
             const initials = m.name.split(' ').map((n: string) => n[0]).join('').slice(0, 2).toUpperCase()
@@ -360,11 +358,10 @@ export default async function InitiativeOverviewPage({
             )
           })}
         </div>
-      </section>
+      </CollapsibleCard>
 
       {/* ── Initiative Lead ── */}
-      <section className="rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <h2 className="mb-3 text-sm font-semibold text-neutral-900">Initiative Lead</h2>
+      <CollapsibleCard title="Initiative Lead" storageKey="init-lead">
         {leadName ? (
           <div className="flex items-center gap-3">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-orange-100 text-sm font-bold text-orange-700">
@@ -384,7 +381,7 @@ export default async function InitiativeOverviewPage({
         ) : (
           <p className="text-sm text-neutral-400 italic">No lead assigned yet</p>
         )}
-      </section>
+      </CollapsibleCard>
     </div>
   )
 }

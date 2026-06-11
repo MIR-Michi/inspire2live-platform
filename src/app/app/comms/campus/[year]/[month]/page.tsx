@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { addCampusActionItem, addCampusAgendaItem, addCampusDecisionItem, updateCampusDecisionItem } from '@/app/app/comms/campus-log/actions'
 import { deleteIntakeItem, markIntakeReviewed } from '@/app/app/comms/intake/actions'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { createClient } from '@/lib/supabase/server'
 
 async function markReviewedAction(formData: FormData) {
@@ -292,14 +293,17 @@ export default async function CampusMonthPage({
               </p>
             </section>
 
-            <section className="rounded-lg border border-neutral-200">
-              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2">
-                <h3 className="text-sm font-semibold text-neutral-900">What happened - {formatMonth(start)}</h3>
+            <CollapsibleCard
+              title={`What happened - ${formatMonth(start)}`}
+              storageKey="campus-happened"
+              bodyClassName="px-0 pb-0"
+              actions={
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
                   {incomingItems.length + (members?.length ?? 0)} items
                 </span>
-              </div>
-              <ul className="divide-y divide-neutral-100">
+              }
+            >
+              <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
                 {incomingItems.slice(0, 5).map((item) => (
                   <li key={item.id} className="px-4 py-3 text-sm leading-5 text-neutral-700">
                     {item.sender_name} shared {typeLabel(item.content_type)} - {item.raw_content.slice(0, 88)}
@@ -311,14 +315,15 @@ export default async function CampusMonthPage({
                   </li>
                 ))}
               </ul>
-            </section>
+            </CollapsibleCard>
 
-            <section className="rounded-lg border border-neutral-200">
-              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2">
-                <h3 className="text-sm font-semibold text-neutral-900">Agenda</h3>
-                <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">{agendaItems.length} items</span>
-              </div>
-              <ol className="divide-y divide-neutral-100">
+            <CollapsibleCard
+              title="Agenda"
+              storageKey="campus-agenda"
+              bodyClassName="px-0 pb-0"
+              actions={<span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">{agendaItems.length} items</span>}
+            >
+              <ol className="divide-y divide-neutral-100 border-t border-neutral-200">
                 {agendaItems.slice(0, 6).map((item, index) => (
                   <li key={`${item}-${index}`} className="grid grid-cols-[24px_1fr] gap-3 px-4 py-3 text-sm leading-5 text-neutral-700">
                     <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-50 text-xs font-bold text-orange-700">{index + 1}</span>
@@ -329,14 +334,15 @@ export default async function CampusMonthPage({
                   <li className="px-4 py-8 text-center text-sm text-neutral-500">No agenda items yet.</li>
                 )}
               </ol>
-            </section>
+            </CollapsibleCard>
 
-            <section className="rounded-lg border border-neutral-200">
-              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2">
-                <h3 className="text-sm font-semibold text-neutral-900">Action items</h3>
-                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{actionItems.length} items</span>
-              </div>
-              <ul className="divide-y divide-neutral-100">
+            <CollapsibleCard
+              title="Action items"
+              storageKey="campus-actions"
+              bodyClassName="px-0 pb-0"
+              actions={<span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{actionItems.length} items</span>}
+            >
+              <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
                 {actionItems.map((item, index) => {
                   const actionItem = parseActionItem(item)
                   return (
@@ -378,14 +384,15 @@ export default async function CampusMonthPage({
                   </button>
                 </form>
               )}
-            </section>
+            </CollapsibleCard>
 
-            <section className="rounded-lg border border-neutral-200">
-              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-4 py-2">
-                <h3 className="text-sm font-semibold text-neutral-900">Decisions</h3>
-                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">{decisions.length} decisions</span>
-              </div>
-              <ul className="divide-y divide-neutral-100">
+            <CollapsibleCard
+              title="Decisions"
+              storageKey="campus-decisions"
+              bodyClassName="px-0 pb-0"
+              actions={<span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">{decisions.length} decisions</span>}
+            >
+              <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
                 {decisions.slice(0, 5).map((decision, index) => {
                   const parsedDecision = parseDecisionItem(decision)
                   return (
@@ -445,7 +452,7 @@ export default async function CampusMonthPage({
                   </button>
                 </form>
               )}
-            </section>
+            </CollapsibleCard>
           </div>
         </aside>
       </div>

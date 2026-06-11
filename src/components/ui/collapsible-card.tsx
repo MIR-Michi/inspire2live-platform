@@ -27,6 +27,8 @@ interface CollapsibleCardProps {
   className?: string
   /** Extra classes for the body wrapper. */
   bodyClassName?: string
+  /** Override the title typography (defaults depend on variant). */
+  titleClassName?: string
   children: React.ReactNode
 }
 
@@ -66,6 +68,7 @@ export function CollapsibleCard({
   variant = 'card',
   className,
   bodyClassName,
+  titleClassName,
   children,
 }: CollapsibleCardProps) {
   const [collapsed, setCollapsed] = useState(defaultCollapsed)
@@ -126,7 +129,8 @@ export function CollapsibleCard({
           <Chevron collapsed={collapsed} />
           <span
             className={
-              plain ? 'text-base font-semibold text-neutral-900' : 'text-sm font-semibold text-neutral-900'
+              titleClassName ??
+              (plain ? 'text-base font-semibold text-neutral-900' : 'text-sm font-semibold text-neutral-900')
             }
           >
             {title}
