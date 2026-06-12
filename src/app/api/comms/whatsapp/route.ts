@@ -4,7 +4,10 @@ import {
   authenticateWhatsAppWebhookRequest,
   COMMS_WEBHOOK_SECRET_HEADER,
 } from '@/lib/comms-webhook-auth'
-import { processWhatsAppWebhookPayload } from '@/lib/comms-webhook'
+import {
+  processWhatsAppStatusEvents,
+  processWhatsAppWebhookPayload,
+} from '@/lib/comms-webhook'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -37,11 +40,18 @@ export async function POST(request: Request) {
 
     const payload = JSON.parse(rawBody) as unknown
     const admin = createAdminClient()
-    const result = await processWhatsAppWebhookPayload(admin, payload)
+    // A single webhook call carries inbound messages, delivery receipts, or
+    // both. Process each independently so a payload that is purely status
+    // receipts still updates outbound delivery state.
+    const [result, statuses] = await Promise.all([
+      processWhatsAppWebhookPayload(admin, payload),
+      processWhatsAppStatusEvents(admin, payload),
+    ])
 
     return NextResponse.json({
       ok: true,
       ...result,
+      statuses,
     })
   } catch (error) {
     if (error instanceof SyntaxError) {

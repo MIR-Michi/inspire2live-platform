@@ -51,6 +51,29 @@
 
 **If missing:** Cron endpoints will reject requests (401). No impact on interactive features.
 
+### WhatsApp Cloud API (Required for the Communications WhatsApp inbox)
+
+Powers the inbound webhook (`GET`/`POST /api/comms/whatsapp`) that captures
+messages into the intake queue, and the outbound reply sender. See
+[`WHATSAPP_WEBHOOK_SETUP.md`](WHATSAPP_WEBHOOK_SETUP.md) for the full Meta-side
+walkthrough.
+
+| Variable | Scope | Required | Default | Description |
+|----------|-------|----------|---------|-------------|
+| `WHATSAPP_VERIFY_TOKEN` | Server only | ✅ (inbound) | — | A string you choose. Enter the **same** value in the Meta webhook config; Meta echoes it back during the `GET` verification handshake. |
+| `WHATSAPP_APP_SECRET` | Server only | ✅ (inbound) | — | Meta App secret (App Settings → Basic). Used to verify the `x-hub-signature-256` HMAC on every inbound `POST`. Preferred auth method. |
+| `WHATSAPP_WEBHOOK_SECRET` | Server only | ⚠️ Fallback | — | Shared secret checked against the `x-inspire2live-webhook-secret` header. Only used when `WHATSAPP_APP_SECRET` is unset (e.g. a relay/proxy that can't sign with the App secret). |
+| `WHATSAPP_ACCESS_TOKEN` | Server only | ✅ (outbound) | — | Graph API token (temporary 24h or long-lived System User token). **Never exposed to the browser.** Required to send replies. |
+| `WHATSAPP_PHONE_NUMBER_ID` | Server only | ✅ (outbound) | — | The sending phone number's ID, from WhatsApp → API Setup. |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | Server only | ❌ | — | The WABA ID, from API Setup. Informational/reference today. |
+
+**If inbound vars missing:** `POST /api/comms/whatsapp` returns 500
+("auth is not configured") or 401 (signature/secret mismatch); no messages are
+captured. The `GET` verification handshake fails (403) without `WHATSAPP_VERIFY_TOKEN`.
+
+**If outbound vars missing:** Sending a reply fails with "WhatsApp send is not
+configured"; inbound capture is unaffected.
+
 ### Feature Flags
 
 | Variable | Scope | Required | Default | Description |
@@ -88,6 +111,11 @@ All variables set in: **Vercel → Project → Settings → Environment Variable
 | `RESEND_API_KEY` | Production only | Production |
 | `NEXT_PUBLIC_APP_URL` | Production only | Production: `https://inspire2live-platform.vercel.app` |
 | `CRON_SECRET` | Production only | Production |
+| `WHATSAPP_VERIFY_TOKEN` | Production only | Production |
+| `WHATSAPP_APP_SECRET` | Production only | Production |
+| `WHATSAPP_ACCESS_TOKEN` | Production only | Production |
+| `WHATSAPP_PHONE_NUMBER_ID` | Production only | Production |
+| `WHATSAPP_BUSINESS_ACCOUNT_ID` | Production only | Production |
 | Feature flags | Preview + Production | Toggle per environment |
 
 ---

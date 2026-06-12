@@ -1,7 +1,7 @@
 # Sprint 12 — WhatsApp Webhook Production Hardening
 
 **Phase:** 2 hardening
-**Status:** Not Started
+**Status:** Completed (pending sprint review)
 
 ## Goal
 
@@ -52,24 +52,31 @@ Out of scope (explicitly deferred, note in backlog if still wanted later):
 
 ## Acceptance criteria
 
-- [ ] Inbound webhook handles Meta `statuses` change events (delivered/read/
+- [x] Inbound webhook handles Meta `statuses` change events (delivered/read/
       failed) for messages this platform sent, and updates
       `whatsapp_outbound_messages.delivery_status` accordingly.
-- [ ] `whatsapp_webhook_events` rows with `processing_status = 'failed'` are
+- [x] `whatsapp_webhook_events` rows with `processing_status = 'failed'` are
       visible to comms/admins in the UI (or an existing monitoring surface)
       with enough detail to diagnose and a way to re-trigger processing.
-- [ ] Intake items and outbound replies that belong to the same WhatsApp
+- [x] Intake items and outbound replies that belong to the same WhatsApp
       conversation are visibly linked in the UI (e.g. a simple thread view
       on the intake detail / WhatsApp inbox).
-- [ ] `docs/ENVIRONMENT_REFERENCE.md` documents all `WHATSAPP_*` variables
+- [x] `docs/ENVIRONMENT_REFERENCE.md` documents all `WHATSAPP_*` variables
       (currently only in `.env.example`), and a new
       `docs/WHATSAPP_WEBHOOK_SETUP.md` walks an operator through the full
       Meta App + webhook callback configuration from scratch.
-- [ ] A monitoring summary (counts of accepted / duplicate / failed webhook
+- [x] A monitoring summary (counts of accepted / duplicate / failed webhook
       events, last received timestamp) is available via the existing
       `/api/monitoring`-style surface or a comms dashboard tile.
-- [ ] All changes covered by unit tests; existing webhook/classifier tests
+- [x] All changes covered by unit tests; existing webhook/classifier tests
       continue to pass; `pnpm typecheck`, `pnpm lint`, `pnpm test` green.
+
+## Verification summary
+
+- `pnpm typecheck` — clean
+- `pnpm lint` — 0 errors (2 pre-existing unrelated `<img>` warnings)
+- `pnpm test` — 262 passed (29 files; +19 new in `comms-whatsapp-webhook.test.ts`)
+- `pnpm build` — not runnable in this sandbox (Google Fonts fetch is network-blocked); compilation of the new routes/components succeeds before that step.
 
 ## Verification plan
 
