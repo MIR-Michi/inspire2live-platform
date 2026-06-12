@@ -50,6 +50,8 @@ These remain planning placeholders until the Sprint 04 pilot review is complete.
 
 - [`sprint-09-comms-crm-foundation/`](sprint-09-comms-crm-foundation/description.md)
 - [`sprint-10-brand-identity-alignment/`](sprint-10-brand-identity-alignment/description.md)
+- [`sprint-11-crm-people-and-pipelines/`](sprint-11-crm-people-and-pipelines/tasks.md)
+- [`sprint-12-whatsapp-webhook-production-hardening/`](sprint-12-whatsapp-webhook-production-hardening/description.md) — hardens the Sprint 05 WhatsApp webhook + outbound reply integration for production use (delivery status, failure triage, threading, ops docs).
 
 ## How to read a sprint
 
