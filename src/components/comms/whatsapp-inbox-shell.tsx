@@ -1,19 +1,12 @@
 'use client'
 
 import { useActionState, useMemo } from 'react'
+import Link from 'next/link'
 import { StatusBadge } from '@/components/ui/status-badge'
 import { sendWhatsAppReply, type CommsFormState } from '@/app/app/comms/whatsapp/actions'
+import { groupIntoThreads, type WhatsAppThreadMessage } from '@/lib/comms-whatsapp-thread'
 
-export type WhatsAppFeedItem = {
-  id: string
-  direction: 'inbound' | 'outbound'
-  whatsappId: string
-  displayName: string
-  text: string
-  timestamp: string
-  status: string
-  errorDetail?: string | null
-}
+export type WhatsAppFeedItem = WhatsAppThreadMessage
 
 const INITIAL_STATE: CommsFormState = { ok: false }
 
@@ -25,47 +18,15 @@ function formatTimestamp(input: string) {
 }
 
 function statusTone(direction: WhatsAppFeedItem['direction'], status: string): 'neutral' | 'green' | 'amber' | 'red' | 'blue' {
-  if (direction === 'outbound') return status === 'failed' ? 'red' : 'green'
+  if (direction === 'outbound') {
+    if (status === 'failed') return 'red'
+    if (status === 'read') return 'green'
+    if (status === 'delivered') return 'blue'
+    return 'neutral'
+  }
   if (status === 'unreviewed') return 'amber'
   if (status === 'dismissed') return 'neutral'
   return 'blue'
-}
-
-type Conversation = {
-  whatsappId: string
-  displayName: string
-  latestTimestamp: string
-  messages: WhatsAppFeedItem[]
-  lastInboundIntakeItemId: string | null
-}
-
-function groupIntoConversations(feed: WhatsAppFeedItem[]): Conversation[] {
-  const byWhatsappId = new Map<string, WhatsAppFeedItem[]>()
-
-  for (const item of feed) {
-    const existing = byWhatsappId.get(item.whatsappId)
-    if (existing) existing.push(item)
-    else byWhatsappId.set(item.whatsappId, [item])
-  }
-
-  const conversations: Conversation[] = []
-  for (const [whatsappId, items] of byWhatsappId) {
-    const chronological = [...items].sort(
-      (a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-    )
-    const latestInbound = [...chronological].reverse().find((item) => item.direction === 'inbound')
-    const inboundDisplayName = chronological.find((item) => item.direction === 'inbound')?.displayName
-
-    conversations.push({
-      whatsappId,
-      displayName: inboundDisplayName || whatsappId,
-      latestTimestamp: chronological[chronological.length - 1].timestamp,
-      messages: chronological,
-      lastInboundIntakeItemId: latestInbound?.id ?? null,
-    })
-  }
-
-  return conversations.sort((a, b) => new Date(b.latestTimestamp).getTime() - new Date(a.latestTimestamp).getTime())
 }
 
 function ReplyForm({ whatsappId, inReplyToIntakeItemId }: { whatsappId: string; inReplyToIntakeItemId: string | null }) {
@@ -111,30 +72,52 @@ function FeedMessage({ item }: { item: WhatsAppFeedItem }) {
         <span className="text-xs text-neutral-500">{formatTimestamp(item.timestamp)}</span>
       </div>
       <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">{item.text}</p>
+      {isOutbound && (item.readAt || item.deliveredAt) && (
+        <p className="mt-1 text-xs text-neutral-500">
+          {item.readAt
+            ? `Read ${formatTimestamp(item.readAt)}`
+            : `Delivered ${formatTimestamp(item.deliveredAt as string)}`}
+        </p>
+      )}
       {item.errorDetail && <p className="mt-1 text-xs text-red-700">Delivery error: {item.errorDetail}</p>}
     </div>
   )
 }
 
 export function WhatsAppInboxShell({ feed }: { feed: WhatsAppFeedItem[] }) {
-  const conversations = useMemo(() => groupIntoConversations(feed), [feed])
+  const conversations = useMemo(() => groupIntoThreads(feed), [feed])
+
+  const header = (
+    <header className="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h1 className="text-xl font-semibold text-neutral-900">WhatsApp inbox</h1>
+        <p className="mt-1 text-sm text-neutral-500">
+          Incoming WhatsApp messages and OCI replies, grouped by conversation. Replies are sent live via the WhatsApp Cloud API.
+        </p>
+      </div>
+      <Link
+        href="/app/comms/whatsapp/health"
+        className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+      >
+        Webhook health →
+      </Link>
+    </header>
+  )
 
   if (conversations.length === 0) {
     return (
-      <div className="rounded-2xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
-        No WhatsApp messages yet. Incoming messages will appear here once the webhook receives them.
+      <div className="space-y-6">
+        {header}
+        <div className="rounded-2xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
+          No WhatsApp messages yet. Incoming messages will appear here once the webhook receives them.
+        </div>
       </div>
     )
   }
 
   return (
     <div className="space-y-6">
-      <header>
-        <h1 className="text-xl font-semibold text-neutral-900">WhatsApp inbox</h1>
-        <p className="mt-1 text-sm text-neutral-500">
-          Incoming WhatsApp messages and OCI replies, grouped by conversation. Replies are sent live via the WhatsApp Cloud API.
-        </p>
-      </header>
+      {header}
 
       <div className="space-y-4">
         {conversations.map((conversation) => (

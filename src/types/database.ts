@@ -2600,33 +2600,39 @@ export type Database = {
       whatsapp_outbound_messages: {
         Row: {
           body: string
+          delivered_at: string | null
           delivery_status: string
           error_detail: string | null
           graph_message_id: string | null
           id: string
           in_reply_to_intake_item_id: string | null
+          read_at: string | null
           recipient_whatsapp_id: string
           sent_at: string
           sent_by: string | null
         }
         Insert: {
           body: string
+          delivered_at?: string | null
           delivery_status?: string
           error_detail?: string | null
           graph_message_id?: string | null
           id?: string
           in_reply_to_intake_item_id?: string | null
+          read_at?: string | null
           recipient_whatsapp_id: string
           sent_at?: string
           sent_by?: string | null
         }
         Update: {
           body?: string
+          delivered_at?: string | null
           delivery_status?: string
           error_detail?: string | null
           graph_message_id?: string | null
           id?: string
           in_reply_to_intake_item_id?: string | null
+          read_at?: string | null
           recipient_whatsapp_id?: string
           sent_at?: string
           sent_by?: string | null

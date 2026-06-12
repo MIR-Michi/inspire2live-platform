@@ -30,7 +30,7 @@ export default async function CommsWhatsAppPage() {
       .limit(100),
     supabase
       .from('whatsapp_outbound_messages')
-      .select('id, recipient_whatsapp_id, body, delivery_status, error_detail, sent_at')
+      .select('id, recipient_whatsapp_id, body, delivery_status, error_detail, sent_at, delivered_at, read_at')
       .order('sent_at', { ascending: false })
       .limit(100),
   ])
@@ -59,6 +59,8 @@ export default async function CommsWhatsAppPage() {
     timestamp: item.sent_at,
     status: item.delivery_status,
     errorDetail: item.error_detail,
+    deliveredAt: item.delivered_at,
+    readAt: item.read_at,
   }))
 
   const feed = [...inbound, ...outbound].sort(
