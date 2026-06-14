@@ -14,6 +14,11 @@ export async function middleware(request: NextRequest) {
   const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   const pathname = request.nextUrl.pathname
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
+  // The OAuth/OTP callback must always run so it can verify the invitation/magic
+  // link and switch the session to the invited user — even if a different user
+  // is already signed in. So it is exempt from the "send signed-in users away
+  // from auth pages" rule below.
+  const isAuthCallback = pathname.startsWith('/auth/callback')
   const isOnboardingPage = pathname.startsWith('/onboarding')
   const isProtected = pathname.startsWith('/app')
   const isCommsRoute = pathname === '/app/comms' || pathname.startsWith('/app/comms/')
@@ -95,7 +100,7 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(redirectUrl)
   }
 
-  if (user && isAuthPage && profile?.status !== 'inactive') {
+  if (user && isAuthPage && !isAuthCallback && profile?.status !== 'inactive') {
     const redirectUrl = request.nextUrl.clone()
     redirectUrl.pathname = getPostLoginLandingPath(profile?.role)
     return NextResponse.redirect(redirectUrl)

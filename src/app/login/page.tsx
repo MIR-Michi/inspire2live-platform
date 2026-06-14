@@ -79,6 +79,7 @@ function LoginContent() {
   const authError = searchParams.get('error')
   const resetStatus = searchParams.get('reset')
   const accountStatus = searchParams.get('status')
+  const notice = searchParams.get('notice')
 
   // Allow deep-linking like /login?tab=signup, e.g. from invitation emails.
   useEffect(() => {
@@ -233,6 +234,11 @@ function LoginContent() {
         {resetStatus === 'success' && (
           <p className="mb-4 rounded-lg border border-green-200 bg-green-50 px-3 py-2 text-sm text-green-700">
             Password updated successfully. Please sign in with your new password.
+          </p>
+        )}
+        {notice === 'reopen-invite' && (
+          <p className="mb-4 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700">
+            Signed out. Open the invitation link from your email again to finish setting up your account.
           </p>
         )}
 
