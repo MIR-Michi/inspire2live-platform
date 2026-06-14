@@ -439,9 +439,11 @@ export function InviteUserButton() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const router = useRouter()
-  // New invitees have no password yet, so route the confirmation link through
-  // the password-setup screen (which then continues to onboarding).
-  const authCallbackUrl = `${getAuthCallbackUrl()}?next=/setup-password`
+  // New invitees have no password yet. We point the email link at the bare
+  // callback (so it always matches the Supabase redirect-URL allowlist); the
+  // callback then routes the invitee to password setup based on their account
+  // state, rather than relying on a query string that an allowlist might drop.
+  const authCallbackUrl = getAuthCallbackUrl()
 
   const handleInvite = async () => {
     if (!email.trim()) return
