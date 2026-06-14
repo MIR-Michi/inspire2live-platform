@@ -441,9 +441,12 @@ function ContactDetail({
   const [editing, setEditing] = useState(false)
   const [addingInteraction, setAddingInteraction] = useState(false)
 
-  // Admins can delete external contacts; internal people are owned by their
-  // profile and are never deletable from the CRM.
-  const canDelete = isAdmin && contact.segment === 'external' && Boolean(contact.crmContactId)
+  // Admins can delete external contacts — either a dedicated CRM row or a campus
+  // stakeholder record. Internal people are profile-owned and never deletable.
+  const canDelete =
+    isAdmin &&
+    contact.segment === 'external' &&
+    (Boolean(contact.crmContactId) || (contact.sourceType === 'campus_member' && Boolean(contact.sourceId)))
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
@@ -473,34 +476,38 @@ function ContactDetail({
         </div>
         <div className="flex flex-wrap gap-2">
           {!editing && (
-            <button
-              type="button"
-              onClick={() => setEditing(true)}
-              className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-            >
-              Edit
-            </button>
+            <>
+              <button
+                type="button"
+                onClick={() => setEditing(true)}
+                className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+              >
+                Edit
+              </button>
+              {canDelete && (
+                <form
+                  action={deleteCrmContact}
+                  onSubmit={(event) => {
+                    if (!confirm(`Delete ${contact.fullName}? This permanently removes this external contact and its CRM history.`)) {
+                      event.preventDefault()
+                    }
+                  }}
+                >
+                  <input type="hidden" name="crm_contact_id" value={contact.crmContactId ?? ''} />
+                  <input type="hidden" name="source_type" value={contact.sourceType} />
+                  <input type="hidden" name="source_id" value={contact.sourceId ?? ''} />
+                  <button className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">
+                    Delete
+                  </button>
+                </form>
+              )}
+            </>
           )}
           {contact.crmContactId && (
             <form action={markCrmFollowUpDone}>
               <input type="hidden" name="crm_contact_id" value={contact.crmContactId} />
               <button className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
                 Mark followed up
-              </button>
-            </form>
-          )}
-          {canDelete && (
-            <form
-              action={deleteCrmContact}
-              onSubmit={(event) => {
-                if (!confirm(`Delete ${contact.fullName}? This permanently removes this external contact and its CRM history.`)) {
-                  event.preventDefault()
-                }
-              }}
-            >
-              <input type="hidden" name="crm_contact_id" value={contact.crmContactId ?? ''} />
-              <button className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">
-                Delete
               </button>
             </form>
           )}

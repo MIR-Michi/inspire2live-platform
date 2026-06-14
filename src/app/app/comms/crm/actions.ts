@@ -306,10 +306,13 @@ export async function markCrmFollowUpDone(formData: FormData) {
 }
 
 /**
- * Deletes an external CRM contact. Restricted to platform admins. Internal
- * people are owned by their platform profile and can never be deleted here.
- * Deleting the contact row cascades to its initiative/event links,
- * interactions, and pipeline memberships (FK on delete cascade).
+ * Deletes an external contact from the CRM. Restricted to platform admins.
+ * Handles both shapes shown in the directory:
+ *   - a dedicated CRM row (comms_crm_contacts) — deletes it; FKs cascade to its
+ *     links, interactions and pipeline memberships;
+ *   - a campus stakeholder record (campus_members) with no CRM row yet —
+ *     deletes the campus member.
+ * Internal people are owned by their platform profile and are never deletable.
  */
 export async function deleteCrmContact(formData: FormData) {
   const supabase = await createClient()
@@ -329,24 +332,43 @@ export async function deleteCrmContact(formData: FormData) {
   }
 
   const contactId = asText(formData.get('crm_contact_id'))
-  if (!contactId) throw new Error('Contact is required.')
+  const sourceType = normalizeSourceType(asText(formData.get('source_type')))
+  const sourceId = asNullableText(formData.get('source_id'))
 
-  const crmSupabase = supabase as unknown as CrmTableClient
-
-  // Guard: only external contacts may be deleted.
-  const { data: existing, error: readError } = await crmSupabase
-    .from('comms_crm_contacts')
-    .select('id, segment')
-    .eq('id', contactId)
-    .maybeSingle()
-  if (readError) throw new Error(readError.message)
-  if (!existing) throw new Error('Contact not found.')
-  if (existing.segment !== 'external') {
-    throw new Error('Only external contacts can be deleted.')
+  // Internal people are managed via their profile.
+  if (sourceType === 'profile') {
+    throw new Error('Internal contacts are managed via their profile and cannot be deleted here.')
   }
 
-  const { error } = await crmSupabase.from('comms_crm_contacts').delete().eq('id', contactId)
-  if (error) throw new Error(error.message)
+  const crmSupabase = supabase as unknown as CrmTableClient
+  let deleted = false
+
+  // 1. Delete the dedicated CRM row, if there is one (external only).
+  if (contactId) {
+    const { data: existing, error: readError } = await crmSupabase
+      .from('comms_crm_contacts')
+      .select('id, segment')
+      .eq('id', contactId)
+      .maybeSingle()
+    if (readError) throw new Error(readError.message)
+    if (existing) {
+      if (existing.segment !== 'external') {
+        throw new Error('Only external contacts can be deleted.')
+      }
+      const { error } = await crmSupabase.from('comms_crm_contacts').delete().eq('id', contactId)
+      if (error) throw new Error(error.message)
+      deleted = true
+    }
+  }
+
+  // 2. Delete the underlying campus stakeholder record, if this came from one.
+  if (sourceType === 'campus_member' && sourceId) {
+    const { error } = await crmSupabase.from('campus_members').delete().eq('id', sourceId)
+    if (error) throw new Error(error.message)
+    deleted = true
+  }
+
+  if (!deleted) throw new Error('Nothing to delete for this contact.')
 
   revalidatePath('/app/comms/crm')
   revalidatePath('/app/comms/crm/people')
