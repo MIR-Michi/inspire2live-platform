@@ -125,6 +125,22 @@ export async function saveCrmContact(formData: FormData) {
 
   if (!fullName) throw new Error('Contact name is required.')
 
+  // Internal people are owned by their platform profile. Their core identity is
+  // edited only by the person themselves (via Profile & settings) and must never
+  // be overwritten from the CRM, so we persist only the relationship fields here
+  // and leave the core columns empty — the directory always reads core identity
+  // live from the profile. (full_name is NOT NULL, so we mirror the profile's.)
+  const isInternalProfile = segment === 'internal' && sourceType === 'profile' && Boolean(sourceId)
+  let resolvedFullName = fullName
+  if (isInternalProfile && sourceId) {
+    const { data: ownerProfile } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', sourceId)
+      .maybeSingle()
+    resolvedFullName = ownerProfile?.name ?? fullName
+  }
+
   const payload = {
     segment,
     source_type: sourceType,
@@ -155,6 +171,21 @@ export async function saveCrmContact(formData: FormData) {
     notes: asNullableText(formData.get('notes')),
     updated_by: user.id,
     updated_at: new Date().toISOString(),
+  }
+
+  if (isInternalProfile) {
+    // Strip core identity — it lives on the profile, not the CRM row.
+    payload.full_name = resolvedFullName
+    payload.segment = 'internal'
+    payload.picture_url = null
+    payload.bio = null
+    payload.title = null
+    payload.organisation = null
+    payload.email = null
+    payload.city = null
+    payload.country = null
+    payload.field_of_expertise = []
+    payload.skills = []
   }
 
   let resolvedContactId = contactId

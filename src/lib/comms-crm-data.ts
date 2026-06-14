@@ -1,5 +1,6 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
+import { getRoleLabel } from '@/lib/role-access'
 import {
   deriveRelationshipHealth,
   normalizeCrmConsent,
@@ -117,7 +118,7 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
       skills: profile.expertise_tags ?? [],
       pictureUrl: profile.avatar_url,
       bio: profile.bio,
-      title: profile.role,
+      title: getRoleLabel(profile.role),
       organisation: profile.organization,
       associatedProjects: membershipMap.get(profile.id) ?? [],
       associatedProjectIds: (initiativeMembers ?? [])
@@ -242,6 +243,12 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
 
   for (const contact of crmContacts) {
     const base = contact.source_id ? baseBySource.get(`${contact.source_type}:${contact.source_id}`) ?? null : null
+    // Internal people are owned by their platform profile: their core identity
+    // (name, picture, bio, role, organisation, expertise, location, email) is the
+    // single source of truth and always wins over anything stored on the CRM row,
+    // so the profile and the CRM stay synchronised. The CRM row only contributes
+    // relationship data (owner, lifecycle, consent, follow-up, tags, notes).
+    const isInternalProfile = Boolean(base) && base!.sourceType === 'profile'
     const projectIds = projectIdsByContact.get(contact.id) ?? base?.associatedProjectIds ?? []
     const eventIds = eventIdsByContact.get(contact.id) ?? []
     const ownerLabel = contact.relationship_owner_id
@@ -253,23 +260,23 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
       crmContactId: contact.id,
       sourceType: contact.source_type as CrmSourceType,
       sourceId: contact.source_id,
-      fullName: contact.full_name,
-      segment: contact.segment as CrmSegment,
+      fullName: isInternalProfile ? base!.fullName : contact.full_name,
+      segment: isInternalProfile ? 'internal' : (contact.segment as CrmSegment),
       personType: normalizeCrmPersonType(contact.person_type) ?? base?.personType ?? null,
-      fieldOfExpertise: mergeArray(contact.field_of_expertise, base?.fieldOfExpertise),
-      skills: mergeArray(contact.skills, base?.skills),
-      pictureUrl: mergeText(contact.picture_url, base?.pictureUrl),
-      bio: mergeText(contact.bio, base?.bio),
-      title: mergeText(contact.title, base?.title),
-      organisation: mergeText(contact.organisation, base?.organisation),
+      fieldOfExpertise: isInternalProfile ? base!.fieldOfExpertise : mergeArray(contact.field_of_expertise, base?.fieldOfExpertise),
+      skills: isInternalProfile ? base!.skills : mergeArray(contact.skills, base?.skills),
+      pictureUrl: isInternalProfile ? base!.pictureUrl : mergeText(contact.picture_url, base?.pictureUrl),
+      bio: isInternalProfile ? base!.bio : mergeText(contact.bio, base?.bio),
+      title: isInternalProfile ? base!.title : mergeText(contact.title, base?.title),
+      organisation: isInternalProfile ? base!.organisation : mergeText(contact.organisation, base?.organisation),
       associatedProjects: projectIds.map((id) => initiativeMap.get(id)).filter(Boolean) as string[],
       associatedProjectIds: projectIds,
       associatedEvents: eventIds.map((id) => eventMap.get(id)).filter(Boolean) as string[],
       associatedEventIds: eventIds,
-      email: mergeText(contact.email, base?.email),
+      email: isInternalProfile ? base!.email : mergeText(contact.email, base?.email),
       phone: contact.phone,
-      city: mergeText(contact.city, base?.city),
-      country: mergeText(contact.country, base?.country),
+      city: isInternalProfile ? base!.city : mergeText(contact.city, base?.city),
+      country: isInternalProfile ? base!.country : mergeText(contact.country, base?.country),
       preferredChannel: mergeText(contact.preferred_channel, base?.preferredChannel),
       relationshipOwner: ownerLabel ?? base?.relationshipOwner ?? null,
       relationshipOwnerId: contact.relationship_owner_id,
