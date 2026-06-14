@@ -5,9 +5,9 @@ import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { getNextMeetingDate } from '@/lib/comms-agenda'
 
-// Loosely-typed client for the comms_weekly_agenda_items table, which is
-// not yet present in the generated Database types.
-type AgendaClient = {
+// Loosely-typed client for the comms_* tables that are not yet present in the
+// generated Database types.
+type CommsDbClient = {
   from: (table: string) => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     insert: (...args: unknown[]) => any
@@ -20,6 +20,11 @@ const VALID_STATUSES = new Set(['not_started', 'in_progress', 'completed', 'skip
 
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function asNullableText(value: FormDataEntryValue | null) {
+  const text = asText(value)
+  return text || null
 }
 
 async function requireCommsOperator() {
@@ -43,9 +48,11 @@ async function requireCommsOperator() {
   return { supabase, user }
 }
 
+// ─── Weekly agenda ───────────────────────────────────────────────────────────
+
 export async function addAgendaItem(formData: FormData) {
   const { supabase, user } = await requireCommsOperator()
-  const agendaSupabase = supabase as unknown as AgendaClient
+  const agendaSupabase = supabase as unknown as CommsDbClient
 
   const title = asText(formData.get('title'))
   if (!title) throw new Error('An agenda title is required.')
@@ -61,29 +68,55 @@ export async function addAgendaItem(formData: FormData) {
     summary,
     owner_id: user.id,
     created_by: user.id,
-    status: 'not_started',
   })
   if (error) throw new Error(error.message)
 
   revalidatePath('/app/comms/dashboard')
 }
 
-export async function updateAgendaItemStatus(formData: FormData) {
+// ─── Team tasks ──────────────────────────────────────────────────────────────
+
+export async function createCommsTask(formData: FormData) {
   const { supabase, user } = await requireCommsOperator()
-  const agendaSupabase = supabase as unknown as AgendaClient
+  const tasksSupabase = supabase as unknown as CommsDbClient
 
-  const id = asText(formData.get('agenda_item_id'))
-  const status = asText(formData.get('status'))
-  if (!id) throw new Error('Agenda item is required.')
-  if (!VALID_STATUSES.has(status)) throw new Error('Invalid status.')
+  const title = asText(formData.get('title'))
+  if (!title) throw new Error('A task title is required.')
 
-  // RLS additionally enforces that only the owner can update.
-  const { error } = await agendaSupabase
-    .from('comms_weekly_agenda_items')
-    .update({ status, updated_at: new Date().toISOString() })
-    .eq('id', id)
-    .eq('owner_id', user.id)
+  const description = asNullableText(formData.get('description'))
+  const ownerId = asNullableText(formData.get('owner_id'))
+  const dueInput = asText(formData.get('due_date'))
+  const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(dueInput) ? dueInput : null
+
+  const { error } = await tasksSupabase.from('comms_tasks').insert({
+    title,
+    description,
+    owner_id: ownerId ?? user.id,
+    due_date: dueDate,
+    status: 'not_started',
+    created_by: user.id,
+  })
   if (error) throw new Error(error.message)
 
   revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/dashboard')
+}
+
+export async function updateCommsTaskStatus(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const tasksSupabase = supabase as unknown as CommsDbClient
+
+  const id = asText(formData.get('task_id'))
+  const status = asText(formData.get('status'))
+  if (!id) throw new Error('Task is required.')
+  if (!VALID_STATUSES.has(status)) throw new Error('Invalid status.')
+
+  const { error } = await tasksSupabase
+    .from('comms_tasks')
+    .update({ status, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/dashboard')
 }

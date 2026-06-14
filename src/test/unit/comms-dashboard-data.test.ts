@@ -101,16 +101,15 @@ describe('loadCommsTeamDashboardData', () => {
     expect(campus?.recent[0].summary).toBe('Hello world this is a message')
   })
 
-  it('builds a deadline-sorted feed spanning content, tasks, events, campus, CRM and agenda', async () => {
+  it('builds a deadline-sorted feed spanning content, tasks, events, campus and CRM', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = await loadCommsTeamDashboardData(supabase as any)
 
-    // Sorted ascending by date: campus (2024) < task (06-05) < agenda (06-08)
-    // < content (06-10) < event (06-15) < CRM (06-20).
+    // Sorted ascending by date: campus (2024) < task (06-05) < content (06-10)
+    // < event (06-15) < CRM (06-20). Agenda items are no longer in the feed.
     expect(data.feed.map((entry) => entry.id)).toEqual([
       'campus-cs1',
       'task-t1',
-      'agenda-ag1',
       'content-c1',
       'event-ev1',
       'crm-cr1',
@@ -162,18 +161,12 @@ describe('loadCommsTeamDashboardData', () => {
     })
   })
 
-  it('groups weekly agenda items and surfaces them in the feed', async () => {
+  it('groups weekly agenda items (without a completion status)', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = await loadCommsTeamDashboardData(supabase as any)
 
-    const agendaEntry = data.feed.find((e) => e.id === 'agenda-ag1')
-    expect(agendaEntry).toMatchObject({
-      kind: 'agenda',
-      title: 'Plan launch',
-      ownerLabel: 'Ana',
-      status: 'in_progress',
-      href: '/app/comms/dashboard?view=team',
-    })
+    // Agenda items are discussion points, not tracked tasks — not in the feed.
+    expect(data.feed.some((e) => e.id === 'agenda-ag1')).toBe(false)
 
     const group = data.agendaGroups.find((g) => g.items.some((item) => item.id === 'ag1'))
     expect(group?.items[0]).toMatchObject({ title: 'Plan launch', summary: 'Discuss launch plan', ownerLabel: 'Ana' })

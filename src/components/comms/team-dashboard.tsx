@@ -3,26 +3,20 @@ import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { TileGroup } from '@/components/ui/tile-group'
 import type { TeamDashboardData } from '@/lib/comms-dashboard-data'
 import { EVENT_STAGE_META, type EventStage } from '@/lib/comms-workflow'
-import { UNIFIED_STATUS_META } from '@/lib/comms-status'
 import { formatMeetingLabel } from '@/lib/comms-agenda'
 import { RoleBadge } from '@/components/comms/role-badge'
 import { TeamFeed } from '@/components/comms/team-feed'
 import { AgendaAddForm } from '@/components/comms/agenda-add-form'
-import { AgendaStatusControl } from '@/components/comms/agenda-status-control'
+import { TaskCreateForm } from '@/components/comms/task-create-form'
+import { TaskStatusControl } from '@/components/comms/task-status-control'
 
 function formatShortDate(value: string | null) {
   if (!value) return 'No date'
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
 }
 
-export function TeamDashboard({
-  data,
-  currentUserId,
-}: {
-  data: TeamDashboardData
-  currentUserId: string | null
-}) {
-  const { channels, events, agendaGroups, feed, owners } = data
+export function TeamDashboard({ data }: { data: TeamDashboardData }) {
+  const { channels, events, agendaGroups, tasks, teamMembers, feed, owners } = data
 
   return (
     <TileGroup groupId="comms-team-dashboard" className="space-y-6">
@@ -122,6 +116,36 @@ export function TeamDashboard({
         </div>
       </CollapsibleCard>
 
+      {/* ── Team tasks ── */}
+      <CollapsibleCard
+        key="comms-team-tasks"
+        title="Team tasks"
+        storageKey="comms-team-tasks"
+        actions={<TaskCreateForm teamMembers={teamMembers} />}
+      >
+        <div className="space-y-2">
+          {tasks.map((task) => (
+            <div key={task.id} className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5">
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-medium text-neutral-900">{task.title}</p>
+                {task.description && <p className="mt-0.5 text-xs text-neutral-600">{task.description}</p>}
+                <p className="mt-1 flex items-center gap-1.5 text-xs text-neutral-500">
+                  {task.ownerLabel ?? 'Unassigned'}
+                  <RoleBadge role={task.ownerRole} />
+                  {task.dueDate && <span>· due {formatShortDate(task.dueDate)}</span>}
+                </p>
+              </div>
+              <TaskStatusControl taskId={task.id} status={task.status} />
+            </div>
+          ))}
+          {tasks.length === 0 && (
+            <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
+              No team tasks yet. Use “New Task” to create one and assign an owner.
+            </p>
+          )}
+        </div>
+      </CollapsibleCard>
+
       {/* ── Weekly meeting agenda ── */}
       <CollapsibleCard key="comms-team-agenda" title="Weekly meeting agenda" storageKey="comms-team-agenda">
         <div className="space-y-4">
@@ -147,27 +171,15 @@ export function TeamDashboard({
                 {group.items.map((item) => (
                   <div
                     key={item.id}
-                    className="flex flex-wrap items-start justify-between gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2.5"
+                    className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5"
                   >
-                    <div className="min-w-0 flex-1">
-                      <p className="text-sm font-medium text-neutral-900">{item.title}</p>
-                      {item.summary && <p className="mt-0.5 text-xs text-neutral-600">{item.summary}</p>}
-                      {item.ownerLabel && (
-                        <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
-                          {item.ownerLabel}
-                          <RoleBadge role={item.ownerRole} />
-                        </p>
-                      )}
-                    </div>
-                    {currentUserId && item.ownerId === currentUserId ? (
-                      <AgendaStatusControl itemId={item.id} status={item.status} />
-                    ) : (
-                      <span
-                        className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${UNIFIED_STATUS_META[item.status].badgeClass}`}
-                      >
-                        <span aria-hidden>{UNIFIED_STATUS_META[item.status].marker}</span>
-                        {UNIFIED_STATUS_META[item.status].label}
-                      </span>
+                    <p className="text-sm font-medium text-neutral-900">{item.title}</p>
+                    {item.summary && <p className="mt-0.5 text-xs text-neutral-600">{item.summary}</p>}
+                    {item.ownerLabel && (
+                      <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
+                        {item.ownerLabel}
+                        <RoleBadge role={item.ownerRole} />
+                      </p>
                     )}
                   </div>
                 ))}

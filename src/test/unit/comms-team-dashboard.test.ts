@@ -59,7 +59,6 @@ describe('weekly agenda helpers', () => {
         ownerId: 'a',
         ownerLabel: 'Ana',
         ownerRole: 'Comms',
-        status: 'completed',
         createdAt: '2026-06-01T10:00:00Z',
       },
     ]

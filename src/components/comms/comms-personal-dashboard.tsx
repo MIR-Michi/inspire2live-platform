@@ -1,6 +1,8 @@
 import Link from 'next/link'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { TileGroup } from '@/components/ui/tile-group'
+import { TaskStatusControl } from '@/components/comms/task-status-control'
+import type { CommsTaskRecord } from '@/lib/comms-tasks'
 import type {
   PersonalTask,
   PersonalContentItem,
@@ -27,6 +29,7 @@ function formatShortDate(value: string | null) {
 export function CommsDashboardPanel({
   name,
   tasks,
+  commsTasks,
   contentItems,
   incomingItems,
   projectSummaries,
@@ -34,6 +37,7 @@ export function CommsDashboardPanel({
 }: {
   name: string | null | undefined
   tasks: PersonalTask[]
+  commsTasks: CommsTaskRecord[]
   contentItems: PersonalContentItem[]
   incomingItems: PersonalIncomingItem[]
   projectSummaries: PersonalProjectSummary[]
@@ -41,6 +45,7 @@ export function CommsDashboardPanel({
 }) {
   const firstName = (name ?? 'there').split(' ')[0]
   const openTasks = tasks.filter((task) => task.status !== 'done')
+  const openCommsTasks = commsTasks.filter((task) => task.status !== 'completed' && task.status !== 'skipped')
   const dueSoon = [
     ...openTasks.map((task) => ({
       id: `task-${task.id}`,
@@ -81,7 +86,7 @@ export function CommsDashboardPanel({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="My Open Tasks" value={openTasks.length} sub="assigned to you" />
+        <StatCard label="My Open Tasks" value={openTasks.length + openCommsTasks.length} sub="assigned to you" />
         <StatCard label="My Content" value={contentItems.length} sub="drafts and scheduled cards" />
         <StatCard label="Incoming Messages" value={incomingItems.length} sub="waiting for review" />
         <StatCard label="Project Summaries" value={projectSummaries.length} sub="campus and events" />
@@ -111,6 +116,31 @@ export function CommsDashboardPanel({
             {dueSoon.length === 0 && (
               <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
                 No personal deadlines are assigned right now.
+              </p>
+            )}
+          </div>
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          key="comms-personal-tasks"
+          tone="orange"
+          title="My tasks"
+          storageKey="comms-personal-tasks"
+        >
+          <div className="space-y-2">
+            {commsTasks.map((task) => (
+              <div key={task.id} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-neutral-900">{task.title}</p>
+                  {task.description && <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">{task.description}</p>}
+                  {task.dueDate && <p className="mt-1 text-xs text-neutral-500">Due {formatShortDate(task.dueDate)}</p>}
+                </div>
+                <TaskStatusControl taskId={task.id} status={task.status} />
+              </div>
+            ))}
+            {commsTasks.length === 0 && (
+              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
+                No tasks assigned to you yet.
               </p>
             )}
           </div>

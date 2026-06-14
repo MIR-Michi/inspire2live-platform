@@ -7,6 +7,7 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
 
 export type PersonalTask = {
   id: string
@@ -36,6 +37,7 @@ export type PersonalDecision = { id: string; decision: string; owner: string; hr
 
 export type CommsPersonalDashboardData = {
   tasks: PersonalTask[]
+  commsTasks: CommsTaskRecord[]
   contentItems: PersonalContentItem[]
   incomingItems: PersonalIncomingItem[]
   projectSummaries: PersonalProjectSummary[]
@@ -62,8 +64,13 @@ export async function loadCommsPersonalDashboardData(
   const today = new Date()
   const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()).toISOString()
 
+  // Loosely-typed handle for comms_tasks (not yet in generated Database types).
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any
+
   const [
     { data: personalTaskRows },
+    { data: commsTaskRows },
     { data: contentRows },
     { data: incomingRows },
     { data: campusRows },
@@ -76,6 +83,12 @@ export async function loadCommsPersonalDashboardData(
       .neq('status', 'done')
       .order('due_date', { ascending: true })
       .limit(8),
+    db
+      .from('comms_tasks')
+      .select('id, title, description, due_date, status')
+      .eq('owner_id', userId)
+      .order('due_date', { ascending: true, nullsFirst: false })
+      .limit(20),
     supabase
       .from('content_calendar')
       .select('id, title, status, scheduled_at, source_link')
@@ -151,8 +164,26 @@ export async function loadCommsPersonalDashboardData(
     )
     .slice(0, 4)
 
+  const commsTasks: CommsTaskRecord[] = ((commsTaskRows ?? []) as Array<{
+    id: string
+    title: string
+    description: string | null
+    due_date: string | null
+    status: string
+  }>).map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    ownerId: userId,
+    ownerLabel: null,
+    ownerRole: null,
+    dueDate: row.due_date,
+    status: normalizeCommsTaskStatus(row.status),
+  }))
+
   return {
     tasks: (personalTaskRows ?? []) as PersonalTask[],
+    commsTasks,
     contentItems: (contentRows ?? []) as PersonalContentItem[],
     incomingItems: (incomingRows ?? []) as PersonalIncomingItem[],
     projectSummaries,

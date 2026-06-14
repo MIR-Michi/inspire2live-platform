@@ -1,23 +1,17 @@
 'use client'
 
-import { updateAgendaItemStatus } from '@/app/app/comms/dashboard/actions'
+import { updateCommsTaskStatus } from '@/app/app/comms/dashboard/actions'
 import { UNIFIED_STATUS_ORDER, UNIFIED_STATUS_META, type UnifiedStatus } from '@/lib/comms-status'
 
-export function AgendaStatusControl({
-  itemId,
-  status,
-}: {
-  itemId: string
-  status: UnifiedStatus
-}) {
+export function TaskStatusControl({ taskId, status }: { taskId: string; status: UnifiedStatus }) {
   return (
-    <form action={updateAgendaItemStatus} className="inline-flex">
-      <input type="hidden" name="agenda_item_id" value={itemId} />
+    <form action={updateCommsTaskStatus} className="inline-flex">
+      <input type="hidden" name="task_id" value={taskId} />
       <select
         name="status"
         defaultValue={status}
         onChange={(e) => e.currentTarget.form?.requestSubmit()}
-        aria-label="Update agenda item status"
+        aria-label="Update task status"
         className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold focus:outline-none ${UNIFIED_STATUS_META[status].badgeClass}`}
       >
         {UNIFIED_STATUS_ORDER.map((s) => (
