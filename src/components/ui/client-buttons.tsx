@@ -4,8 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ROLE_LABELS } from '@/lib/role-access'
-import { getAuthCallbackUrl } from '@/lib/auth-redirect-url'
-import { setUserStatus, deleteUser, purgeDemo, type AccountStatus, type PurgeDemoResult } from '@/app/app/admin/users/actions'
+import { setUserStatus, deleteUser, purgeDemo, inviteUserAccount, type AccountStatus, type PurgeDemoResult } from '@/app/app/admin/users/actions'
 
 /** Derived from the canonical ROLE_LABELS so labels never diverge from the source of truth. */
 const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
@@ -438,35 +437,34 @@ export function InviteUserButton() {
   const [role, setRole] = useState('PatientAdvocate')
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
-  // New invitees have no password yet. We point the email link at the bare
-  // callback (so it always matches the Supabase redirect-URL allowlist); the
-  // callback then routes the invitee to password setup based on their account
-  // state, rather than relying on a query string that an allowlist might drop.
-  const authCallbackUrl = getAuthCallbackUrl()
 
   const handleInvite = async () => {
     if (!email.trim()) return
     setSending(true)
-    // Use Supabase's invite mechanism
-    const supabase = createClient()
-    const { error } = await supabase.auth.signInWithOtp({
-      email: email.trim(),
-      options: {
-        data: { role, name: '' },
-        emailRedirectTo: authCallbackUrl,
-      },
-    })
+    setError(null)
+    // Invitations are sent server-side via the Supabase Admin API. Sending them
+    // from the browser with signInWithOtp bound the PKCE verifier to the admin's
+    // browser, so the invitee could never complete the link.
+    const { error: inviteError } = await inviteUserAccount(
+      email.trim(),
+      role,
+      window.location.origin,
+    )
     setSending(false)
-    if (!error) {
-      setSent(true)
-      setTimeout(() => {
-        setOpen(false)
-        setSent(false)
-        setEmail('')
-        router.refresh()
-      }, 2000)
+    if (inviteError) {
+      setError(inviteError)
+      return
     }
+    setSent(true)
+    setTimeout(() => {
+      setOpen(false)
+      setSent(false)
+      setEmail('')
+      setError(null)
+      router.refresh()
+    }, 2000)
   }
 
   return (
@@ -482,7 +480,7 @@ export function InviteUserButton() {
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setOpen(false)}>
           <div className="mx-4 w-full max-w-md rounded-xl border border-neutral-200 bg-white p-6 shadow-xl" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold text-neutral-900">Invite a new user</h3>
-            <p className="mt-1 text-sm text-neutral-500">They&apos;ll receive a magic link to join the platform.</p>
+            <p className="mt-1 text-sm text-neutral-500">They&apos;ll receive an invitation link to set their password and join.</p>
             <div className="mt-4 space-y-3">
               <label className="block text-sm">
                 <span className="mb-1 block font-medium text-neutral-700">Email address</span>
@@ -510,6 +508,11 @@ export function InviteUserButton() {
             {sent && (
               <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
                 ✓ Invitation sent to {email}!
+              </div>
+            )}
+            {error && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                {error}
               </div>
             )}
             <div className="mt-4 flex gap-2 justify-end">

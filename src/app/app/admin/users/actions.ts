@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { normalizeRole } from '@/lib/role-access'
+import { normalizeRole, ROLE_LABELS } from '@/lib/role-access'
 import { DEMO_EMAILS } from './constants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -73,6 +73,90 @@ export async function setUserStatus(
       previous_value: existing?.status ? { status: existing.status } : null,
       new_value: { status },
     })
+
+  revalidatePath('/app/admin/users')
+  return { error: null }
+}
+
+// ─── inviteUserAccount ──────────────────────────────────────────────────────
+
+/**
+ * Invites a new user by email using the Supabase **Admin API**, server-side.
+ *
+ * This replaces the previous client-side `signInWithOtp` invite, which used the
+ * PKCE flow and bound the code verifier to the *admin's* browser — so the link
+ * could never be completed by the invitee (it failed as "expired or already
+ * used"). `inviteUserByEmail` sends a token-hash invite link that any device can
+ * complete, and the `/auth/callback` route verifies it via `verifyOtp`.
+ *
+ * If a *pending* (un-onboarded) account or an orphan profile already exists for
+ * the email — e.g. a previous delete did not fully propagate — it is cleared
+ * first so the invite is not rejected as a duplicate. A fully onboarded account
+ * is never wiped.
+ *
+ * @param origin Browser origin (e.g. https://app.example.org) used to build the
+ *   absolute callback URL — passed from the client so it is correct in every
+ *   environment without relying on a server env var.
+ */
+export async function inviteUserAccount(
+  email: string,
+  role: string,
+  origin: string,
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error: authError } = await requireAdmin(supabase)
+  if (authError) return { error: authError }
+
+  const normalizedEmail = email.trim().toLowerCase()
+  if (!normalizedEmail || !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) {
+    return { error: 'Please enter a valid email address.' }
+  }
+
+  let redirectTo: string
+  try {
+    const url = new URL(origin)
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('bad protocol')
+    redirectTo = `${url.origin}/auth/callback`
+  } catch {
+    return { error: 'Could not determine the app URL for the invitation link.' }
+  }
+
+  const inviteRole = role in ROLE_LABELS ? role : 'PatientAdvocate'
+
+  let admin: AdminClient
+  try {
+    admin = createAdminClient()
+  } catch {
+    return { error: 'Server is not configured for invitations (missing service role key).' }
+  }
+
+  // Clear a lingering pending/orphan record for this email before inviting.
+  const { data: existing } = await admin
+    .from('profiles')
+    .select('id, onboarding_completed')
+    .ilike('email', normalizedEmail)
+    .maybeSingle()
+
+  if (existing?.id) {
+    if (existing.onboarding_completed) {
+      return { error: 'This email already has an active account. Deactivate or delete it first.' }
+    }
+    await cleanupUserContent(admin, [existing.id])
+    await removeAccount(admin, existing.id)
+  }
+
+  const { error } = await admin.auth.admin.inviteUserByEmail(normalizedEmail, {
+    data: { role: inviteRole, name: '' },
+    redirectTo,
+  })
+
+  if (error) {
+    const message = error.message || 'Could not send the invitation.'
+    if (/already.*registered|already.*exists/i.test(message)) {
+      return { error: 'This email already has an account. Delete it first, then invite again.' }
+    }
+    return { error: message }
+  }
 
   revalidatePath('/app/admin/users')
   return { error: null }
