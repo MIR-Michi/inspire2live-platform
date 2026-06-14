@@ -60,7 +60,6 @@ export default async function CommsCrmPeoplePage({
       people={directory.people}
       initiatives={directory.initiatives}
       events={directory.events}
-      connectorBacklog={directory.connectorBacklog}
       crmReady={directory.crmReady}
     />
   )

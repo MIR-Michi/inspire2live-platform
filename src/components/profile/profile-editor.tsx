@@ -36,10 +36,41 @@ export function ProfileEditor({
   const [expertiseInput, setExpertiseInput] = useState((profile.expertise_tags ?? []).join(', '))
 
   const [saving, setSaving] = useState(false)
+  const [uploading, setUploading] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
 
   const [saveSuccess, setSaveSuccess] = useState(false)
-  const canSave = name.trim().length > 1 && country.trim().length > 0 && !saving
+  const canSave = name.trim().length > 1 && country.trim().length > 0 && !saving && !uploading
+
+  const onUploadAvatar = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
+
+    setUploading(true)
+    setMessage(null)
+    setSaveSuccess(false)
+
+    const extension = file.name.split('.').pop()?.toLowerCase() || 'jpg'
+    // Files live under a folder named by the user id — required by the avatars
+    // bucket storage policy (avatar_upload).
+    const path = `${userId}/portrait-${Date.now()}.${extension}`
+
+    const { error: uploadError } = await supabase.storage
+      .from('avatars')
+      .upload(path, file, { upsert: true, contentType: file.type })
+
+    if (uploadError) {
+      setMessage(`Could not upload picture: ${uploadError.message}`)
+      setUploading(false)
+      return
+    }
+
+    const { data } = supabase.storage.from('avatars').getPublicUrl(path)
+    setAvatarUrl(data.publicUrl)
+    setUploading(false)
+    setMessage('✓ Picture uploaded — click Save Changes to apply it everywhere.')
+    event.target.value = ''
+  }
 
   const onSave = async () => {
     if (!canSave) return
@@ -135,10 +166,38 @@ export function ProfileEditor({
           </select>
         </label>
 
-        <label className="text-sm sm:col-span-2">
-          <span className="mb-1 block text-neutral-600">Avatar URL</span>
-          <input value={avatarUrl} onChange={(e) => setAvatarUrl(e.target.value)} className="w-full rounded-lg border border-neutral-300 px-3 py-2" placeholder="https://..." />
-        </label>
+        <div className="text-sm sm:col-span-2">
+          <span className="mb-1 block text-neutral-600">Portrait picture</span>
+          <div className="flex flex-wrap items-center gap-4">
+            {avatarUrl ? (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img src={avatarUrl} alt="Your portrait" className="h-20 w-20 rounded-lg border border-neutral-200 object-cover" />
+            ) : (
+              <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-neutral-50 text-xs text-neutral-400">
+                No photo
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="inline-flex cursor-pointer items-center rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
+                {uploading ? 'Uploading…' : 'Upload picture'}
+                <input
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  onChange={onUploadAvatar}
+                  disabled={uploading}
+                  className="hidden"
+                />
+              </label>
+              <p className="text-xs text-neutral-400">PNG, JPG, WEBP or GIF, up to 5MB. Your picture is shared with the CRM.</p>
+            </div>
+          </div>
+          <input
+            value={avatarUrl}
+            onChange={(e) => setAvatarUrl(e.target.value)}
+            className="mt-2 w-full rounded-lg border border-neutral-300 px-3 py-2"
+            placeholder="…or paste an image URL"
+          />
+        </div>
 
         <label className="text-sm sm:col-span-2">
           <span className="mb-1 block text-neutral-600">Bio</span>
