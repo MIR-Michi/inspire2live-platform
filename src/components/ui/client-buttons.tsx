@@ -439,7 +439,9 @@ export function InviteUserButton() {
   const [sending, setSending] = useState(false)
   const [sent, setSent] = useState(false)
   const router = useRouter()
-  const authCallbackUrl = getAuthCallbackUrl()
+  // New invitees have no password yet, so route the confirmation link through
+  // the password-setup screen (which then continues to onboarding).
+  const authCallbackUrl = `${getAuthCallbackUrl()}?next=/setup-password`
 
   const handleInvite = async () => {
     if (!email.trim()) return
