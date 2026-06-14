@@ -26,6 +26,15 @@ function formatShortDate(value: string | null) {
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
 }
 
+function isOverdueTask(task: CommsTaskRecord, todayKey: string) {
+  return Boolean(
+    task.dueDate &&
+      task.dueDate < todayKey &&
+      task.status !== 'completed' &&
+      task.status !== 'skipped'
+  )
+}
+
 export function CommsDashboardPanel({
   name,
   tasks,
@@ -46,26 +55,8 @@ export function CommsDashboardPanel({
   const firstName = (name ?? 'there').split(' ')[0]
   const openTasks = tasks.filter((task) => task.status !== 'done')
   const openCommsTasks = commsTasks.filter((task) => task.status !== 'completed' && task.status !== 'skipped')
-  const dueSoon = [
-    ...openTasks.map((task) => ({
-      id: `task-${task.id}`,
-      title: task.title,
-      date: task.due_date,
-      label: task.priority,
-      href: `/app/initiatives/${task.initiative_id}/tasks`,
-    })),
-    ...contentItems.map((item) => ({
-      id: `content-${item.id}`,
-      title: item.title,
-      date: item.scheduled_at,
-      label: item.status,
-      href: '/app/comms/planner?view=my_items',
-    })),
-  ].sort((a, b) => {
-    if (!a.date) return 1
-    if (!b.date) return -1
-    return new Date(a.date).getTime() - new Date(b.date).getTime()
-  })
+  const todayKey = new Date().toISOString().slice(0, 10)
+  const overdueCommsTasks = openCommsTasks.filter((task) => isOverdueTask(task, todayKey))
 
   return (
     <section className="space-y-5 rounded-2xl border border-orange-200 bg-orange-50/70 p-5 shadow-sm">
@@ -74,7 +65,7 @@ export function CommsDashboardPanel({
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">My communications dashboard</p>
           <h2 className="mt-1 text-xl font-semibold text-neutral-950">Hello {firstName}, here is what needs your attention.</h2>
           <p className="mt-1 text-sm text-orange-900/80">
-            Your deadlines, assigned content, incoming WhatsApp signals, and project summaries are gathered in one place.
+            Your assigned tasks, content, incoming WhatsApp signals, and project summaries are gathered in one place.
           </p>
         </div>
         <Link
@@ -87,40 +78,12 @@ export function CommsDashboardPanel({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard label="My Open Tasks" value={openTasks.length + openCommsTasks.length} sub="assigned to you" />
-        <StatCard label="My Content" value={contentItems.length} sub="drafts and scheduled cards" />
+        <StatCard label="Overdue Tasks" value={overdueCommsTasks.length} sub="need attention" />
         <StatCard label="Incoming Messages" value={incomingItems.length} sub="waiting for review" />
         <StatCard label="Project Summaries" value={projectSummaries.length} sub="campus and events" />
       </div>
 
       <TileGroup groupId="comms-personal-dashboard" className="grid gap-4 lg:grid-cols-2">
-        <CollapsibleCard
-          key="comms-personal-deadlines"
-          tone="orange"
-          title="Deadlines"
-          storageKey="comms-personal-deadlines"
-          actions={
-            <Link href="/app/comms/planner?view=my_items" className="text-xs font-semibold text-orange-700 hover:underline">
-              My items
-            </Link>
-          }
-        >
-          <div className="space-y-2">
-            {dueSoon.slice(0, 6).map((item) => (
-              <Link key={item.id} href={item.href} className="flex items-center justify-between gap-3 rounded-lg border border-neutral-200 px-3 py-2 hover:bg-neutral-50">
-                <span className="line-clamp-1 text-sm font-medium text-neutral-900">{item.title}</span>
-                <span className="shrink-0 rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">
-                  {formatShortDate(item.date)}
-                </span>
-              </Link>
-            ))}
-            {dueSoon.length === 0 && (
-              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
-                No personal deadlines are assigned right now.
-              </p>
-            )}
-          </div>
-        </CollapsibleCard>
-
         <CollapsibleCard
           key="comms-personal-tasks"
           tone="orange"
@@ -128,16 +91,36 @@ export function CommsDashboardPanel({
           storageKey="comms-personal-tasks"
         >
           <div className="space-y-2">
-            {commsTasks.map((task) => (
-              <div key={task.id} className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2">
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-neutral-900">{task.title}</p>
-                  {task.description && <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">{task.description}</p>}
-                  {task.dueDate && <p className="mt-1 text-xs text-neutral-500">Due {formatShortDate(task.dueDate)}</p>}
+            {commsTasks.map((task) => {
+              const overdue = isOverdueTask(task, todayKey)
+              return (
+                <div
+                  key={task.id}
+                  className={[
+                    'flex flex-wrap items-start justify-between gap-2 rounded-lg border px-3 py-2',
+                    overdue ? 'border-red-200 bg-red-50' : 'border-neutral-200',
+                  ].join(' ')}
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="text-sm font-medium text-neutral-900">{task.title}</p>
+                      {overdue && (
+                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
+                          Overdue
+                        </span>
+                      )}
+                    </div>
+                    {task.description && <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">{task.description}</p>}
+                    {task.dueDate && (
+                      <p className={`mt-1 text-xs ${overdue ? 'font-semibold text-red-700' : 'text-neutral-500'}`}>
+                        Due {formatShortDate(task.dueDate)}
+                      </p>
+                    )}
+                  </div>
+                  <TaskStatusControl taskId={task.id} status={task.status} />
                 </div>
-                <TaskStatusControl taskId={task.id} status={task.status} />
-              </div>
-            ))}
+              )
+            })}
             {commsTasks.length === 0 && (
               <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
                 No tasks assigned to you yet.
