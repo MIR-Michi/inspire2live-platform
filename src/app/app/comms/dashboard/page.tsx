@@ -42,14 +42,7 @@ export default async function CommsDashboardPage({
   return (
     <div className="mx-auto max-w-5xl space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Communications dashboard</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            {view === 'team'
-              ? 'Shared common ground — channels, events, agenda, and team activity.'
-              : 'Your personal deadlines, content, and signals.'}
-          </p>
-        </div>
+        <h1 className="text-2xl font-bold text-neutral-900">Communications dashboard</h1>
         <CommsDashboardToggle view={view} />
       </div>
 
