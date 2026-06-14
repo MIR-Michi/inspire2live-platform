@@ -4,6 +4,8 @@
  * Helpers for the weekly meeting agenda on the comms team dashboard.
  */
 
+import type { CommsTaskRecord } from '@/lib/comms-tasks'
+
 export type AgendaItemRecord = {
   id: string
   meetingDate: string // YYYY-MM-DD
@@ -13,6 +15,7 @@ export type AgendaItemRecord = {
   ownerLabel: string | null
   ownerRole: string | null
   createdAt: string
+  linkedTasks: CommsTaskRecord[]
 }
 
 export type AgendaMeetingGroup = {
