@@ -44,11 +44,35 @@ export function CommsCrmPipelineBoard({
   const [busy, setBusy] = useState(false)
   const [dragMemberId, setDragMemberId] = useState<string | null>(null)
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
+  // Optimistic stage moves (memberId -> stageId). Applied to the rendered board
+  // immediately on drop so the card moves with no latency, then reconciled when
+  // the server data comes back via router.refresh().
+  const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({})
 
   const memberContactIds = useMemo(
     () => new Set(pipeline.stages.flatMap((stage) => stage.members.map((member) => member.contactId))),
     [pipeline.stages],
   )
+
+  // Apply optimistic moves on top of the server-provided stages.
+  const displayStages = useMemo(() => {
+    if (Object.keys(optimisticMoves).length === 0) return pipeline.stages
+    const stages = pipeline.stages.map((stage) => ({
+      ...stage,
+      members: stage.members.filter((member) => {
+        const target = optimisticMoves[member.id]
+        return !target || target === stage.id
+      }),
+    }))
+    const byId = new Map(stages.map((stage) => [stage.id, stage]))
+    for (const stage of pipeline.stages) {
+      for (const member of stage.members) {
+        const target = optimisticMoves[member.id]
+        if (target && target !== stage.id) byId.get(target)?.members.push(member)
+      }
+    }
+    return stages
+  }, [pipeline.stages, optimisticMoves])
 
   const matches = useMemo(() => {
     const q = query.trim().toLowerCase()
@@ -106,14 +130,27 @@ export function CommsCrmPipelineBoard({
     setDragMemberId(null)
     setDragOverStageId(null)
     if (!memberId) return
+
+    // Already in this stage? Nothing to do.
+    const currentStage = pipeline.stages.find((stage) => stage.members.some((member) => member.id === memberId))
+    if (currentStage?.id === stageId) return
+
+    // Move the card right away, then persist in the background.
+    setOptimisticMoves((prev) => ({ ...prev, [memberId]: stageId }))
+
     const fd = new FormData()
     fd.set('member_id', memberId)
     fd.set('pipeline_id', pipeline.id)
     fd.set('target_stage_id', stageId)
     try {
       await movePipelineMember(fd)
-    } finally {
       router.refresh()
+    } finally {
+      setOptimisticMoves((prev) => {
+        const next = { ...prev }
+        delete next[memberId]
+        return next
+      })
     }
   }
 
@@ -200,7 +237,7 @@ export function CommsCrmPipelineBoard({
 
           {/* Board — drag cards between stages */}
           <div className="flex gap-4 overflow-x-auto pb-2">
-            {pipeline.stages.map((stage) => {
+            {displayStages.map((stage) => {
               const isDropTarget = dragOverStageId === stage.id
               return (
                 <div
