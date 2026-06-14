@@ -60,6 +60,7 @@ describe('weekly agenda helpers', () => {
         ownerLabel: 'Ana',
         ownerRole: 'Comms',
         createdAt: '2026-06-01T10:00:00Z',
+        linkedTasks: [],
       },
     ]
     const groups = groupAgendaByMeeting(items, now)
