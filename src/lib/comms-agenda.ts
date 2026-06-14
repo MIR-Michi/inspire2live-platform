@@ -4,8 +4,6 @@
  * Helpers for the weekly meeting agenda on the comms team dashboard.
  */
 
-import type { UnifiedStatus } from '@/lib/comms-status'
-
 export type AgendaItemRecord = {
   id: string
   meetingDate: string // YYYY-MM-DD
@@ -14,7 +12,6 @@ export type AgendaItemRecord = {
   ownerId: string | null
   ownerLabel: string | null
   ownerRole: string | null
-  status: UnifiedStatus
   createdAt: string
 }
 

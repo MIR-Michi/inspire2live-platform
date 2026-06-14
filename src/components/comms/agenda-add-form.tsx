@@ -67,7 +67,7 @@ export function AgendaAddForm({ meetingDate }: { meetingDate: string }) {
         />
       </div>
       <p className="text-[11px] text-neutral-500">
-        You&apos;ll be set as the owner and a task will appear on the dashboard.
+        You&apos;ll be set as the owner and it will appear on the upcoming meeting agenda.
       </p>
       {error && <p className="text-xs font-medium text-red-600">{error}</p>}
       <div className="flex items-center gap-2">

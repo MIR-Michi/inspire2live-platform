@@ -8,14 +8,15 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { loadCommsEventPipelineData, type EventScopeFilter } from '@/lib/comms-event-pipeline'
+import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import {
-  normalizeAgendaStatus,
   normalizeCalendarStatus,
   normalizeEventStage,
   normalizeTaskStatus,
   type UnifiedStatus,
 } from '@/lib/comms-status'
 import { groupAgendaByMeeting, type AgendaItemRecord, type AgendaMeetingGroup } from '@/lib/comms-agenda'
+import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
 
 export type ChannelKey = 'campus' | 'communications'
 
@@ -58,6 +59,8 @@ export type TeamDashboardData = {
   channels: ChannelCard[]
   events: Awaited<ReturnType<typeof loadCommsEventPipelineData>>['events']
   agendaGroups: AgendaMeetingGroup[]
+  tasks: CommsTaskRecord[]
+  teamMembers: TeamMemberOption[]
   feed: FeedEntry[]
   owners: TeamMemberOption[]
 }
@@ -94,6 +97,7 @@ export async function loadCommsTeamDashboardData(
     { data: campusData },
     { data: crmData },
     { data: agendaData },
+    { data: commsTaskData },
     eventPipeline,
   ] = await Promise.all([
     supabase.from('profiles').select('id, name, email, role').order('name'),
@@ -127,8 +131,13 @@ export async function loadCommsTeamDashboardData(
       .limit(100),
     db
       .from('comms_weekly_agenda_items')
-      .select('id, meeting_date, title, summary, owner_id, status, created_at')
+      .select('id, meeting_date, title, summary, owner_id, created_at')
       .order('meeting_date', { ascending: false })
+      .limit(200),
+    db
+      .from('comms_tasks')
+      .select('id, title, description, owner_id, due_date, status')
+      .order('due_date', { ascending: true, nullsFirst: false })
       .limit(200),
     loadCommsEventPipelineData({ scopeFilter }),
   ])
@@ -173,7 +182,6 @@ export async function loadCommsTeamDashboardData(
     title: string
     summary: string | null
     owner_id: string | null
-    status: string
     created_at: string
   }>).map((row) => ({
     id: row.id,
@@ -183,10 +191,34 @@ export async function loadCommsTeamDashboardData(
     ownerId: row.owner_id,
     ownerLabel: labelFor(row.owner_id),
     ownerRole: roleFor(row.owner_id),
-    status: normalizeAgendaStatus(row.status),
     createdAt: row.created_at,
   }))
   const agendaGroups = groupAgendaByMeeting(agendaItems)
+
+  // ── Team tasks ─────────────────────────────────────────────────────
+  const tasks: CommsTaskRecord[] = ((commsTaskData ?? []) as Array<{
+    id: string
+    title: string
+    description: string | null
+    owner_id: string | null
+    due_date: string | null
+    status: string
+  }>).map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    ownerId: row.owner_id,
+    ownerLabel: labelFor(row.owner_id),
+    ownerRole: roleFor(row.owner_id),
+    dueDate: row.due_date,
+    status: normalizeCommsTaskStatus(row.status),
+  }))
+
+  // Comms-workspace members, for assigning task owners.
+  const teamMembers: TeamMemberOption[] = profiles
+    .filter((p) => canAccessCommsWorkspace(p.role))
+    .map((p) => ({ id: p.id, label: p.name ?? p.email ?? 'Unknown', role: p.role }))
+    .sort((a, b) => a.label.localeCompare(b.label))
 
   // ── Update feed ────────────────────────────────────────────────────
   const feed: FeedEntry[] = []
@@ -292,17 +324,17 @@ export async function loadCommsTeamDashboardData(
     })
   }
 
-  for (const item of agendaItems) {
+  for (const task of tasks) {
     feed.push({
-      id: `agenda-${item.id}`,
-      kind: 'agenda',
-      kindLabel: 'Agenda item',
-      title: item.title,
-      ownerId: item.ownerId,
-      ownerLabel: item.ownerLabel,
-      ownerRole: item.ownerRole,
-      status: item.status,
-      date: item.meetingDate,
+      id: `comms-task-${task.id}`,
+      kind: 'task',
+      kindLabel: 'Task',
+      title: task.title,
+      ownerId: task.ownerId,
+      ownerLabel: task.ownerLabel,
+      ownerRole: task.ownerRole,
+      status: task.status,
+      date: task.dueDate,
       href: '/app/comms/dashboard?view=team',
     })
   }
@@ -322,5 +354,5 @@ export async function loadCommsTeamDashboardData(
     .map((id) => ({ id, label: labelFor(id) ?? 'Unknown', role: roleFor(id) }))
     .sort((a, b) => a.label.localeCompare(b.label))
 
-  return { channels, events: eventPipeline.events, agendaGroups, feed, owners }
+  return { channels, events: eventPipeline.events, agendaGroups, tasks, teamMembers, feed, owners }
 }

@@ -56,10 +56,7 @@ export default async function CommsDashboardPage({
       {view === 'personal' ? (
         <CommsDashboardPanel name={profile?.name} {...(await loadCommsPersonalDashboardData(supabase, user.id))} />
       ) : (
-        <TeamDashboard
-          data={await loadCommsTeamDashboardData(supabase, { scopeFilter: scope })}
-          currentUserId={user.id}
-        />
+        <TeamDashboard data={await loadCommsTeamDashboardData(supabase, { scopeFilter: scope })} />
       )}
     </div>
   )
