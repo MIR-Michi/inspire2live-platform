@@ -52,8 +52,8 @@ function LoginContent() {
     switch (value.toLowerCase()) {
       case 'signin':
         return 'signin'
-      case 'signup':
-        return 'signup'
+      // Self-service sign-up is disabled — new users join by invitation only.
+      // A `?tab=signup` deep link therefore falls back to the sign-in tab.
       case 'magic':
         return 'magic'
       case 'forgot':
@@ -238,22 +238,40 @@ function LoginContent() {
 
         {/* Tabs — only shown for signin / signup */}
         {(tab === 'signin' || tab === 'signup') && (
-          <div className="mb-6 flex rounded-lg border border-neutral-200 bg-neutral-50 p-1 gap-1">
-            {tabs.map(({ key, label }) => (
-              <button
-                key={key}
-                onClick={() => switchTab(key)}
-                className={[
-                  'flex-1 rounded-md py-1.5 text-sm font-medium transition-colors',
-                  tab === key
-                    ? 'bg-white text-neutral-900 shadow-sm'
-                    : 'text-neutral-500 hover:text-neutral-700',
-                ].join(' ')}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
+          <>
+            <div className="mb-3 flex rounded-lg border border-neutral-200 bg-neutral-50 p-1 gap-1">
+              {tabs.map(({ key, label }) => {
+                // Self-service sign-up is disabled: new users join by invitation
+                // only, via the link in their invitation email. The tab is shown
+                // but greyed out so the intent is clear.
+                const disabled = key === 'signup'
+                return (
+                  <button
+                    key={key}
+                    type="button"
+                    onClick={() => !disabled && switchTab(key)}
+                    disabled={disabled}
+                    aria-disabled={disabled}
+                    title={disabled ? 'Sign-up is by invitation only' : undefined}
+                    className={[
+                      'flex-1 rounded-md py-1.5 text-sm font-medium transition-colors',
+                      disabled
+                        ? 'cursor-not-allowed text-neutral-300'
+                        : tab === key
+                          ? 'bg-white text-neutral-900 shadow-sm'
+                          : 'text-neutral-500 hover:text-neutral-700',
+                    ].join(' ')}
+                  >
+                    {label}
+                  </button>
+                )
+              })}
+            </div>
+            <p className="mb-6 text-center text-xs text-neutral-400">
+              New to Inspire2Live? Accounts are by invitation only — check your
+              email for an invitation link to join.
+            </p>
+          </>
         )}
 
         {/* ── Sign in ── */}
