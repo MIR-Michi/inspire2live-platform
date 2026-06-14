@@ -95,7 +95,26 @@ export async function createPipeline(formData: FormData) {
   }
 
   revalidatePipelinePaths(pipelineId)
-  redirect(`/app/comms/crm/pipelines/${pipelineId}`)
+  redirect(`/app/comms/crm/pipelines?pipeline=${pipelineId}`)
+}
+
+export async function updatePipeline(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const crmSupabase = supabase as unknown as CrmTableClient
+  const pipelineId = asText(formData.get('pipeline_id'))
+  const name = asText(formData.get('name'))
+  const description = asNullableText(formData.get('description'))
+
+  if (!pipelineId) throw new Error('Pipeline is required.')
+  if (!name) throw new Error('Pipeline name is required.')
+
+  const { error } = await crmSupabase
+    .from('comms_crm_pipelines')
+    .update({ name, description, updated_at: new Date().toISOString() })
+    .eq('id', pipelineId)
+  if (error) throw new Error(error.message)
+
+  revalidatePipelinePaths(pipelineId)
 }
 
 export async function deletePipeline(formData: FormData) {
