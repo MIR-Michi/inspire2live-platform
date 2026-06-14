@@ -43,7 +43,15 @@ export default async function CommsCrmPipelinesPage({
               </p>
             )}
           </div>
-          <PipelineControls pipelines={pipelines} activeId={activeId} />
+          <PipelineControls
+            pipelines={pipelines}
+            activeId={activeId}
+            activeStages={(pipeline?.stages ?? []).map((stage) => ({
+              id: stage.id,
+              name: stage.name,
+              memberCount: stage.members.length,
+            }))}
+          />
         </div>
       </div>
 

@@ -250,6 +250,46 @@ export async function addPipelineMember(formData: FormData) {
   if (mode === 'existing') {
     contactId = asText(formData.get('contact_id'))
     if (!contactId) throw new Error('Choose a person to add.')
+  } else if (mode === 'directory') {
+    // A directory record (internal profile / campus member) that has no CRM row
+    // yet. Materialise one, keyed by its source so it stays in sync, then link it.
+    const rawSourceType = asText(formData.get('source_type'))
+    const sourceType = rawSourceType === 'profile' || rawSourceType === 'campus_member' ? rawSourceType : 'manual'
+    const sourceId = asNullableText(formData.get('source_id'))
+    const fullName = asText(formData.get('full_name'))
+    const segment = asText(formData.get('segment')) === 'internal' ? 'internal' : 'external'
+    if (!fullName) throw new Error('A name is required.')
+
+    if (sourceId) {
+      const existing = await crmSupabase
+        .from('comms_crm_contacts')
+        .select('id')
+        .eq('source_type', sourceType)
+        .eq('source_id', sourceId)
+        .maybeSingle()
+      if (existing.error) throw new Error(existing.error.message)
+      contactId = existing.data?.id ?? ''
+    }
+
+    if (!contactId) {
+      const { data, error } = await crmSupabase
+        .from('comms_crm_contacts')
+        .insert({
+          segment,
+          source_type: sourceType,
+          source_id: sourceId,
+          full_name: fullName,
+          source_label: 'Added from pipeline',
+          lifecycle_stage: 'nurture',
+          consent_status: segment === 'internal' ? 'not_required' : 'unknown',
+          created_by: user.id,
+          updated_by: user.id,
+        })
+        .select('id')
+        .maybeSingle()
+      if (error) throw new Error(error.message)
+      contactId = data?.id ?? ''
+    }
   } else if (mode === 'ad_hoc') {
     const fullName = asText(formData.get('full_name'))
     if (!fullName) throw new Error('A name is required.')

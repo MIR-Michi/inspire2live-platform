@@ -2,8 +2,17 @@
 
 import { useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { createPipeline, updatePipeline } from '@/app/app/comms/crm/pipeline-actions'
+import {
+  addPipelineStage,
+  createPipeline,
+  moveStage,
+  removePipelineStage,
+  renamePipelineStage,
+  updatePipeline,
+} from '@/app/app/comms/crm/pipeline-actions'
 import type { CrmPipelineSummary } from '@/lib/comms-crm'
+
+export type PipelineStageSummary = { id: string; name: string; memberCount: number }
 
 // Sensible starting stages, in the spirit of HubSpot's default deal stages but
 // trimmed down. Editable in the wizard before the pipeline is created.
@@ -187,7 +196,89 @@ function CreateWizard({ onClose }: { onClose: () => void }) {
   )
 }
 
-function EditModal({ pipeline, onClose }: { pipeline: CrmPipelineSummary; onClose: () => void }) {
+function StageRow({
+  pipelineId,
+  stage,
+  index,
+  count,
+  onChanged,
+}: {
+  pipelineId: string
+  stage: PipelineStageSummary
+  index: number
+  count: number
+  onChanged: () => void
+}) {
+  const [name, setName] = useState(stage.name)
+  const dirty = name.trim() !== stage.name && name.trim().length > 0
+
+  const call = async (action: (fd: FormData) => Promise<void>, extra: Record<string, string>) => {
+    const fd = new FormData()
+    fd.set('pipeline_id', pipelineId)
+    fd.set('stage_id', stage.id)
+    Object.entries(extra).forEach(([key, value]) => fd.set(key, value))
+    await action(fd)
+    onChanged()
+  }
+
+  return (
+    <div className="flex items-center gap-1.5">
+      <span className="w-5 shrink-0 text-right text-xs font-semibold text-neutral-400">{index + 1}</span>
+      <input
+        value={name}
+        onChange={(event) => setName(event.target.value)}
+        className="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm outline-none ring-orange-300 focus:ring"
+      />
+      {dirty && (
+        <button
+          type="button"
+          onClick={() => call(renamePipelineStage, { name: name.trim() })}
+          className="shrink-0 rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+        >
+          Save
+        </button>
+      )}
+      <button type="button" onClick={() => call(moveStage, { direction: 'up' })} disabled={index === 0} aria-label="Move stage up" className="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">↑</button>
+      <button type="button" onClick={() => call(moveStage, { direction: 'down' })} disabled={index === count - 1} aria-label="Move stage down" className="shrink-0 rounded-md border border-neutral-200 bg-white px-2 py-1.5 text-xs text-neutral-600 hover:bg-neutral-50 disabled:opacity-40">↓</button>
+      <button
+        type="button"
+        onClick={() => {
+          if (stage.memberCount > 0 && !confirm(`Remove "${stage.name}" and its ${stage.memberCount} ${stage.memberCount === 1 ? 'person' : 'people'}?`)) return
+          call(removePipelineStage, {})
+        }}
+        aria-label="Remove stage"
+        className="shrink-0 rounded-md border border-rose-200 bg-rose-50 px-2 py-1.5 text-xs text-rose-600 hover:bg-rose-100"
+      >
+        ✕
+      </button>
+    </div>
+  )
+}
+
+function EditModal({
+  pipeline,
+  stages,
+  onClose,
+}: {
+  pipeline: CrmPipelineSummary
+  stages: PipelineStageSummary[]
+  onClose: () => void
+}) {
+  const router = useRouter()
+  const [newStage, setNewStage] = useState('')
+  const refresh = () => router.refresh()
+
+  const addStage = async () => {
+    const name = newStage.trim()
+    if (!name) return
+    const fd = new FormData()
+    fd.set('pipeline_id', pipeline.id)
+    fd.set('name', name)
+    await addPipelineStage(fd)
+    setNewStage('')
+    refresh()
+  }
+
   return (
     <Modal title="Edit pipeline" onClose={onClose}>
       <form action={updatePipeline} onSubmit={onClose} className="space-y-4">
@@ -210,18 +301,55 @@ function EditModal({ pipeline, onClose }: { pipeline: CrmPipelineSummary; onClos
             className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none ring-orange-300 focus:ring"
           />
         </label>
-        <p className="rounded-lg bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
-          Stages and people are managed directly on the board below.
-        </p>
-        <div className="flex justify-end gap-2 pt-2">
+        <div className="flex justify-end gap-2">
           <button type="button" onClick={onClose} className="rounded-lg border border-neutral-300 bg-white px-4 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50">
             Cancel
           </button>
           <button type="submit" className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
-            Save changes
+            Save details
           </button>
         </div>
       </form>
+
+      {/* Stages are managed here (not on the board), saved immediately. */}
+      <div className="mt-5 space-y-3 border-t border-neutral-200 pt-5">
+        <p className="text-sm font-semibold text-neutral-800">Stages</p>
+        <div className="space-y-2">
+          {stages.map((stage, index) => (
+            <StageRow
+              key={`${stage.id}:${stage.name}`}
+              pipelineId={pipeline.id}
+              stage={stage}
+              index={index}
+              count={stages.length}
+              onChanged={refresh}
+            />
+          ))}
+          {stages.length === 0 && <p className="text-xs text-neutral-500">No stages yet — add the first one below.</p>}
+        </div>
+        <div className="flex items-center gap-2">
+          <input
+            value={newStage}
+            onChange={(event) => setNewStage(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') {
+                event.preventDefault()
+                addStage()
+              }
+            }}
+            placeholder="New stage name"
+            className="min-w-0 flex-1 rounded-lg border border-neutral-300 px-2.5 py-1.5 text-sm outline-none ring-orange-300 focus:ring"
+          />
+          <button
+            type="button"
+            onClick={addStage}
+            disabled={!newStage.trim()}
+            className="shrink-0 rounded-lg border border-neutral-300 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            + Add stage
+          </button>
+        </div>
+      </div>
     </Modal>
   )
 }
@@ -229,9 +357,11 @@ function EditModal({ pipeline, onClose }: { pipeline: CrmPipelineSummary; onClos
 export function PipelineControls({
   pipelines,
   activeId,
+  activeStages,
 }: {
   pipelines: CrmPipelineSummary[]
   activeId: string | null
+  activeStages: PipelineStageSummary[]
 }) {
   const router = useRouter()
   const [modal, setModal] = useState<'none' | 'create' | 'edit'>('none')
@@ -275,7 +405,9 @@ export function PipelineControls({
       </div>
 
       {modal === 'create' && <CreateWizard onClose={() => setModal('none')} />}
-      {modal === 'edit' && active && <EditModal pipeline={active} onClose={() => setModal('none')} />}
+      {modal === 'edit' && active && (
+        <EditModal pipeline={active} stages={activeStages} onClose={() => setModal('none')} />
+      )}
     </>
   )
 }
