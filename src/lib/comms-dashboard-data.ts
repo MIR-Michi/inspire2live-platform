@@ -55,10 +55,17 @@ export type TeamMemberOption = {
   role: string | null
 }
 
+export type AgendaItemOption = {
+  id: string
+  label: string
+  meetingDate: string
+}
+
 export type TeamDashboardData = {
   channels: ChannelCard[]
   events: Awaited<ReturnType<typeof loadCommsEventPipelineData>>['events']
   agendaGroups: AgendaMeetingGroup[]
+  agendaItems: AgendaItemOption[]
   tasks: CommsTaskRecord[]
   teamMembers: TeamMemberOption[]
   feed: FeedEntry[]
@@ -136,7 +143,7 @@ export async function loadCommsTeamDashboardData(
       .limit(200),
     db
       .from('comms_tasks')
-      .select('id, title, description, owner_id, due_date, status')
+      .select('id, title, description, owner_id, due_date, status, agenda_item_id')
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(200),
     loadCommsEventPipelineData({ scopeFilter }),
@@ -175,27 +182,17 @@ export async function loadCommsTeamDashboardData(
     }
   })
 
-  // ── Weekly agenda ──────────────────────────────────────────────────
-  const agendaItems: AgendaItemRecord[] = ((agendaData ?? []) as Array<{
+  const agendaRows = (agendaData ?? []) as Array<{
     id: string
     meeting_date: string
     title: string
     summary: string | null
     owner_id: string | null
     created_at: string
-  }>).map((row) => ({
-    id: row.id,
-    meetingDate: row.meeting_date,
-    title: row.title,
-    summary: row.summary,
-    ownerId: row.owner_id,
-    ownerLabel: labelFor(row.owner_id),
-    ownerRole: roleFor(row.owner_id),
-    createdAt: row.created_at,
-  }))
-  const agendaGroups = groupAgendaByMeeting(agendaItems)
+  }>
+  const agendaTitleById = new Map(agendaRows.map((row) => [row.id, row.title]))
 
-  // ── Team tasks ─────────────────────────────────────────────────────
+  // ── Person-owned comms tasks ───────────────────────────────────────
   const tasks: CommsTaskRecord[] = ((commsTaskData ?? []) as Array<{
     id: string
     title: string
@@ -203,6 +200,7 @@ export async function loadCommsTeamDashboardData(
     owner_id: string | null
     due_date: string | null
     status: string
+    agenda_item_id: string | null
   }>).map((row) => ({
     id: row.id,
     title: row.title,
@@ -212,7 +210,34 @@ export async function loadCommsTeamDashboardData(
     ownerRole: roleFor(row.owner_id),
     dueDate: row.due_date,
     status: normalizeCommsTaskStatus(row.status),
+    agendaItemId: row.agenda_item_id,
+    agendaItemTitle: row.agenda_item_id ? agendaTitleById.get(row.agenda_item_id) ?? null : null,
   }))
+
+  const linkedTasksByAgenda = new Map<string, CommsTaskRecord[]>()
+  for (const task of tasks) {
+    if (!task.agendaItemId) continue
+    const list = linkedTasksByAgenda.get(task.agendaItemId) ?? []
+    list.push(task)
+    linkedTasksByAgenda.set(task.agendaItemId, list)
+  }
+
+  // ── Weekly agenda ──────────────────────────────────────────────────
+  const agendaItems: AgendaItemRecord[] = agendaRows.map((row) => ({
+    id: row.id,
+    meetingDate: row.meeting_date,
+    title: row.title,
+    summary: row.summary,
+    ownerId: row.owner_id,
+    ownerLabel: labelFor(row.owner_id),
+    ownerRole: roleFor(row.owner_id),
+    createdAt: row.created_at,
+    linkedTasks: linkedTasksByAgenda.get(row.id) ?? [],
+  }))
+  const agendaGroups = groupAgendaByMeeting(agendaItems)
+  const agendaOptions: AgendaItemOption[] = agendaItems
+    .map((item) => ({ id: item.id, label: item.title, meetingDate: item.meetingDate }))
+    .sort((a, b) => b.meetingDate.localeCompare(a.meetingDate) || a.label.localeCompare(b.label))
 
   // Comms-workspace members, for assigning task owners.
   const teamMembers: TeamMemberOption[] = profiles
@@ -328,7 +353,7 @@ export async function loadCommsTeamDashboardData(
     feed.push({
       id: `comms-task-${task.id}`,
       kind: 'task',
-      kindLabel: 'Task',
+      kindLabel: task.agendaItemId ? 'Action item' : 'Task',
       title: task.title,
       ownerId: task.ownerId,
       ownerLabel: task.ownerLabel,
@@ -354,5 +379,5 @@ export async function loadCommsTeamDashboardData(
     .map((id) => ({ id, label: labelFor(id) ?? 'Unknown', role: roleFor(id) }))
     .sort((a, b) => a.label.localeCompare(b.label))
 
-  return { channels, events: eventPipeline.events, agendaGroups, tasks, teamMembers, feed, owners }
+  return { channels, events: eventPipeline.events, agendaGroups, agendaItems: agendaOptions, tasks, teamMembers, feed, owners }
 }
