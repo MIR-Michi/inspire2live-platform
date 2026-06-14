@@ -4,7 +4,6 @@ import type { Tables } from '@/types/database'
 import { OnboardingWizard } from '@/components/onboarding/onboarding-wizard'
 
 type ProfileRow = Tables<'profiles'>
-type InitiativeRow = Tables<'initiatives'>
 
 export default async function OnboardingPage() {
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
@@ -30,23 +29,5 @@ export default async function OnboardingPage() {
     redirect('/app/dashboard')
   }
 
-  const { data: initiatives } = await supabase
-    .from('initiatives')
-    .select('id, title, status, phase')
-    .in('status', ['active', 'draft'])
-    .order('title')
-    .returns<InitiativeRow[]>()
-
-  return (
-    <OnboardingWizard
-      userId={user.id}
-      initialProfile={profile}
-      initiatives={(initiatives ?? []).map((i) => ({
-        id: i.id,
-        title: i.title,
-        status: i.status,
-        phase: i.phase,
-      }))}
-    />
-  )
+  return <OnboardingWizard userId={user.id} initialProfile={profile} />
 }

@@ -9,6 +9,7 @@ export async function GET(request: Request) {
   const requestedNext = url.searchParams.get('next') ?? '/app/dashboard'
   const next = requestedNext.startsWith('/') ? requestedNext : '/app/dashboard'
   const isResetFlow = next === '/reset-password'
+  const isSetupFlow = next === '/setup-password'
 
   if (!code) {
     const loginUrl = new URL('/login', url.origin)
@@ -58,6 +59,13 @@ export async function GET(request: Request) {
 
   if (isResetFlow) {
     return NextResponse.redirect(new URL('/reset-password', url.origin))
+  }
+
+  // Invitation flow: a freshly-confirmed invitee has no password yet, so send
+  // them to the password-setup screen. That screen continues to onboarding once
+  // the password is saved.
+  if (isSetupFlow) {
+    return NextResponse.redirect(new URL('/setup-password', url.origin))
   }
 
   const { data: profile } = await supabase

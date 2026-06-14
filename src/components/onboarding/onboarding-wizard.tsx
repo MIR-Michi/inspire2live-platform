@@ -3,16 +3,7 @@
 import { useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
-import { ROLE_LABELS } from '@/lib/role-access'
-
-/** Roles available for self-selection during onboarding (excludes admin/moderator) */
-type RoleOption =
-  | 'PatientAdvocate'
-  | 'Clinician'
-  | 'Researcher'
-  | 'HubCoordinator'
-  | 'IndustryPartner'
-  | 'BoardMember'
+import { ROLE_LABELS, normalizeRole, type PlatformRole } from '@/lib/role-access'
 
 type InitialProfile = {
   name: string
@@ -24,59 +15,79 @@ type InitialProfile = {
   language: string
 } | null
 
-type InitiativeOption = {
-  id: string
-  title: string
-  status: string
-  phase: string
+type Highlight = { title: string; desc: string }
+
+/**
+ * Per-role onboarding content. The platform assigns the role at invitation time
+ * (it is not self-selected here), so the digital onboarding adapts to the user's
+ * type. Today the only invited user type is Communications; the others fall back
+ * to a sensible generic flow until their tailored content is authored.
+ */
+type OnboardingFlow = {
+  intro: string
+  bullets: string[]
+  highlights: Highlight[]
+  /** Where "Finish" lands the user. Defaults to the shared dashboard. */
+  landingPath: string
 }
 
-const ROLE_OPTIONS: { value: RoleOption; hint: string }[] = [
-  {
-    value: 'PatientAdvocate',
-    hint: 'Lived-experience leadership and patient-centered advocacy',
-  },
-  {
-    value: 'Clinician',
-    hint: 'Clinical pathway design, care quality, implementation insights',
-  },
-  {
-    value: 'Researcher',
-    hint: 'Evidence generation, analysis, and knowledge translation',
-  },
-  {
-    value: 'HubCoordinator',
-    hint: 'Regional orchestration, convening, and execution governance',
-  },
-  {
-    value: 'IndustryPartner',
-    hint: 'Scoped contribution under transparency and neutrality rules',
-  },
-  {
-    value: 'BoardMember',
-    hint: 'Strategic oversight and milestone governance',
-  },
-]
+const COMMS_FLOW: OnboardingFlow = {
+  intro:
+    'Your Communications workspace brings campaigns, channels, and community signals into one place so nothing slips through the cracks.',
+  bullets: [
+    'Plan and schedule content across every channel from a single planner',
+    'Triage incoming WhatsApp and intake messages, and route them to the right owner',
+    'Keep the CRM, media library, and Campus log in sync as your work happens',
+  ],
+  highlights: [
+    { title: 'Planner', desc: 'Draft, schedule, and track content across your communication channels.' },
+    { title: 'Campus', desc: 'Log sessions and members, and keep the community knowledge base current.' },
+    { title: 'WhatsApp & Intake', desc: 'Review incoming messages, classify them, and assign follow-ups.' },
+    { title: 'CRM & Library', desc: 'Manage contacts, pipelines, and your shared media assets.' },
+  ],
+  landingPath: '/app/dashboard',
+}
+
+const GENERIC_FLOW: OnboardingFlow = {
+  intro:
+    'This platform turns decisions into traceable action across initiatives, hubs, and congress cycles.',
+  bullets: [
+    'Track tasks, milestones, blockers, and evidence in one place',
+    'Keep patient voices structurally equal in every workflow',
+    'Build institutional memory with traceable decisions and outcomes',
+  ],
+  highlights: [
+    { title: 'Initiatives', desc: 'Follow the initiatives you contribute to and their milestones.' },
+    { title: 'Network', desc: 'Find collaborators across the Inspire2Live community.' },
+    { title: 'Stories', desc: 'Read and share patient stories that anchor the work.' },
+  ],
+  landingPath: '/app/dashboard',
+}
+
+function getFlow(role: PlatformRole): OnboardingFlow {
+  return role === 'Comms' ? COMMS_FLOW : GENERIC_FLOW
+}
 
 export function OnboardingWizard({
   userId,
   initialProfile,
-  initiatives,
 }: {
   userId: string
   initialProfile: InitialProfile
-  initiatives: InitiativeOption[]
 }) {
   const router = useRouter()
   const supabase = useMemo(() => createClient(), [])
 
-  const [step, setStep] = useState<1 | 2 | 3 | 4>(1)
+  // Role is assigned at invitation time — onboarding adapts to it rather than
+  // asking the user to pick one.
+  const role = normalizeRole(initialProfile?.role)
+  const flow = getFlow(role)
+  const roleLabel = ROLE_LABELS[role]
+
+  const [step, setStep] = useState<1 | 2 | 3>(1)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  const [role, setRole] = useState<RoleOption>(
-    (initialProfile?.role as RoleOption) || 'PatientAdvocate'
-  )
   const [name, setName] = useState(initialProfile?.name || '')
   const [country, setCountry] = useState(initialProfile?.country || 'NL')
   const [city, setCity] = useState(initialProfile?.city || '')
@@ -85,9 +96,9 @@ export function OnboardingWizard({
     initialProfile?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC'
   )
   const [language, setLanguage] = useState(initialProfile?.language || 'en')
-  const [firstInitiativeId, setFirstInitiativeId] = useState<string>('')
 
   const canContinueProfile = name.trim().length > 1 && country.trim().length > 0
+  const totalSteps = 3
 
   const handleSubmit = async () => {
     setLoading(true)
@@ -97,7 +108,6 @@ export function OnboardingWizard({
       .from('profiles')
       .update({
         name: name.trim(),
-        role,
         country: country.trim(),
         city: city.trim() || null,
         organization: organization.trim() || null,
@@ -113,13 +123,8 @@ export function OnboardingWizard({
       return
     }
 
-    // Best-effort log to localStorage for later preference handling (no DB schema change in WP-1)
-    if (firstInitiativeId) {
-      localStorage.setItem('i2l:firstInitiativeId', firstInitiativeId)
-    }
-
     setLoading(false)
-    router.push('/app/dashboard')
+    router.push(flow.landingPath)
     router.refresh()
   }
 
@@ -128,12 +133,13 @@ export function OnboardingWizard({
       <div className="mb-6">
         <h1 className="text-3xl font-bold text-neutral-900">Welcome to Inspire2Live Platform</h1>
         <p className="mt-2 text-sm text-neutral-600">
-          Complete your onboarding in 4 quick steps to unlock your workspace.
+          You&apos;re joining as a <span className="font-medium text-neutral-800">{roleLabel}</span>.
+          Let&apos;s set up your workspace in {totalSteps} quick steps.
         </p>
       </div>
 
       <div className="mb-6 flex items-center gap-2">
-        {[1, 2, 3, 4].map((s) => (
+        {Array.from({ length: totalSteps }, (_, i) => i + 1).map((s) => (
           <div key={s} className={`h-1.5 flex-1 rounded-full ${s <= step ? 'bg-orange-600' : 'bg-neutral-200'}`} />
         ))}
       </div>
@@ -142,13 +148,11 @@ export function OnboardingWizard({
         {step === 1 && (
           <div className="space-y-4">
             <h2 className="text-xl font-semibold text-neutral-900">Step 1 — Welcome</h2>
-            <p className="text-sm text-neutral-600">
-              This platform turns decisions into traceable action across initiatives, hubs, and congress cycles.
-            </p>
+            <p className="text-sm text-neutral-600">{flow.intro}</p>
             <ul className="list-disc space-y-1 pl-5 text-sm text-neutral-700">
-              <li>Track tasks, milestones, blockers, and evidence in one place</li>
-              <li>Keep patient voices structurally equal in every workflow</li>
-              <li>Build institutional memory with traceable decisions and outcomes</li>
+              {flow.bullets.map((b) => (
+                <li key={b}>{b}</li>
+              ))}
             </ul>
             <button
               type="button"
@@ -162,46 +166,7 @@ export function OnboardingWizard({
 
         {step === 2 && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-neutral-900">Step 2 — Select your role</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {ROLE_OPTIONS.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  onClick={() => setRole(option.value)}
-                  className={`rounded-lg border p-3 text-left transition ${
-                    role === option.value
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-neutral-200 hover:border-neutral-300'
-                  }`}
-                >
-                  <p className="font-medium text-neutral-900">{ROLE_LABELS[option.value]}</p>
-                  <p className="mt-1 text-xs text-neutral-600">{option.hint}</p>
-                </button>
-              ))}
-            </div>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700"
-              >
-                Back
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {step === 3 && (
-          <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-neutral-900">Step 3 — Set up your profile</h2>
+            <h2 className="text-xl font-semibold text-neutral-900">Step 2 — Set up your profile</h2>
             <div className="grid gap-4 sm:grid-cols-2">
               <label className="text-sm">
                 <span className="mb-1 block font-medium text-neutral-700">Full name</span>
@@ -264,7 +229,7 @@ export function OnboardingWizard({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setStep(2)}
+                onClick={() => setStep(1)}
                 className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700"
               >
                 Back
@@ -272,7 +237,7 @@ export function OnboardingWizard({
               <button
                 type="button"
                 disabled={!canContinueProfile}
-                onClick={() => setStep(4)}
+                onClick={() => setStep(3)}
                 className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
               >
                 Continue
@@ -281,41 +246,21 @@ export function OnboardingWizard({
           </div>
         )}
 
-        {step === 4 && (
+        {step === 3 && (
           <div className="space-y-4">
-            <h2 className="text-xl font-semibold text-neutral-900">Step 4 — Pick your first initiative</h2>
+            <h2 className="text-xl font-semibold text-neutral-900">Step 3 — Your workspace</h2>
             <p className="text-sm text-neutral-600">
-              Select an initiative to start with. This helps personalize your first dashboard view.
+              Here&apos;s what you&apos;ll be working with as a {roleLabel}. You can explore all of it
+              from the menu once you finish.
             </p>
 
-            <div className="max-h-64 space-y-2 overflow-auto rounded-lg border border-neutral-200 p-3">
-              {initiatives.map((initiative) => (
-                <label
-                  key={initiative.id}
-                  className={`flex cursor-pointer items-center justify-between rounded-lg border px-3 py-2 ${
-                    firstInitiativeId === initiative.id
-                      ? 'border-orange-500 bg-orange-50'
-                      : 'border-neutral-200'
-                  }`}
-                >
-                  <div>
-                    <p className="text-sm font-medium text-neutral-900">{initiative.title}</p>
-                    <p className="text-xs capitalize text-neutral-500">
-                      {initiative.status} · {initiative.phase}
-                    </p>
-                  </div>
-                  <input
-                    type="radio"
-                    name="first-initiative"
-                    checked={firstInitiativeId === initiative.id}
-                    onChange={() => setFirstInitiativeId(initiative.id)}
-                  />
-                </label>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {flow.highlights.map((h) => (
+                <div key={h.title} className="rounded-lg border border-neutral-200 p-3">
+                  <p className="font-medium text-neutral-900">{h.title}</p>
+                  <p className="mt-1 text-xs text-neutral-600">{h.desc}</p>
+                </div>
               ))}
-
-              {initiatives.length === 0 && (
-                <p className="text-sm text-neutral-500">No initiatives are available yet. You can continue now.</p>
-              )}
             </div>
 
             {error ? (
@@ -327,7 +272,7 @@ export function OnboardingWizard({
             <div className="flex gap-2">
               <button
                 type="button"
-                onClick={() => setStep(3)}
+                onClick={() => setStep(2)}
                 className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-700"
               >
                 Back
