@@ -85,7 +85,7 @@ export async function loadCommsPersonalDashboardData(
       .limit(8),
     db
       .from('comms_tasks')
-      .select('id, title, description, due_date, status')
+      .select('id, title, description, due_date, status, agenda_item_id, comms_weekly_agenda_items(title)')
       .eq('owner_id', userId)
       .order('due_date', { ascending: true, nullsFirst: false })
       .limit(20),
@@ -170,6 +170,8 @@ export async function loadCommsPersonalDashboardData(
     description: string | null
     due_date: string | null
     status: string
+    agenda_item_id: string | null
+    comms_weekly_agenda_items?: { title: string | null } | null
   }>).map((row) => ({
     id: row.id,
     title: row.title,
@@ -179,6 +181,8 @@ export async function loadCommsPersonalDashboardData(
     ownerRole: null,
     dueDate: row.due_date,
     status: normalizeCommsTaskStatus(row.status),
+    agendaItemId: row.agenda_item_id,
+    agendaItemTitle: row.comms_weekly_agenda_items?.title ?? null,
   }))
 
   return {

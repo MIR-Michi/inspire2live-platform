@@ -69,6 +69,17 @@ describe('loadCommsTeamDashboardData', () => {
   const agendaRows = [
     { id: 'ag1', meeting_date: '2026-06-08', title: 'Plan launch', summary: 'Discuss launch plan', owner_id: 'u1', status: 'in_progress', created_at: '2026-06-01T09:00:00Z' },
   ]
+  const commsTaskRows = [
+    {
+      id: 'ct1',
+      title: 'Confirm speaker follow-up',
+      description: 'Prepare the concrete action after the agenda discussion.',
+      owner_id: 'u1',
+      due_date: '2026-06-12',
+      status: 'not_started',
+      agenda_item_id: 'ag1',
+    },
+  ]
 
   const supabase = buildSupabase({
     profiles,
@@ -78,6 +89,7 @@ describe('loadCommsTeamDashboardData', () => {
     campus_sessions: campusRows,
     comms_crm_contacts: crmRows,
     comms_weekly_agenda_items: agendaRows,
+    comms_tasks: commsTaskRows,
   })
 
   it('groups WhatsApp intake items by channel and summarises long messages', async () => {
@@ -106,11 +118,12 @@ describe('loadCommsTeamDashboardData', () => {
     const data = await loadCommsTeamDashboardData(supabase as any)
 
     // Sorted ascending by date: campus (2024) < task (06-05) < content (06-10)
-    // < event (06-15) < CRM (06-20). Agenda items are no longer in the feed.
+    // < agenda-linked action item (06-12) < event (06-15) < CRM (06-20).
     expect(data.feed.map((entry) => entry.id)).toEqual([
       'campus-cs1',
       'task-t1',
       'content-c1',
+      'comms-task-ct1',
       'event-ev1',
       'crm-cr1',
     ])
@@ -131,6 +144,15 @@ describe('loadCommsTeamDashboardData', () => {
       ownerLabel: 'bob@x.com', // profile has no `name`, falls back to email
       status: 'not_started',
       href: '/app/initiatives/init1/tasks',
+    })
+
+    const commsTask = data.feed.find((e) => e.id === 'comms-task-ct1')
+    expect(commsTask).toMatchObject({
+      kind: 'task',
+      kindLabel: 'Action item',
+      ownerLabel: 'Ana',
+      status: 'not_started',
+      href: '/app/comms/dashboard?view=team',
     })
 
     const event = data.feed.find((e) => e.id === 'event-ev1')
@@ -161,15 +183,17 @@ describe('loadCommsTeamDashboardData', () => {
     })
   })
 
-  it('groups weekly agenda items (without a completion status)', async () => {
+  it('groups weekly agenda items with linked action tasks', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = await loadCommsTeamDashboardData(supabase as any)
 
-    // Agenda items are discussion points, not tracked tasks — not in the feed.
+    // Agenda items are discussion points; their linked tasks are separate action items.
     expect(data.feed.some((e) => e.id === 'agenda-ag1')).toBe(false)
 
     const group = data.agendaGroups.find((g) => g.items.some((item) => item.id === 'ag1'))
     expect(group?.items[0]).toMatchObject({ title: 'Plan launch', summary: 'Discuss launch plan', ownerLabel: 'Ana' })
+    expect(group?.items[0].linkedTasks[0]).toMatchObject({ id: 'ct1', title: 'Confirm speaker follow-up' })
+    expect(data.agendaItems).toEqual([{ id: 'ag1', label: 'Plan launch', meetingDate: '2026-06-08' }])
   })
 
   it('collects unique feed owners sorted by label', async () => {

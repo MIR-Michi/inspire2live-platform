@@ -2,9 +2,19 @@
 
 import { useRef, useState } from 'react'
 import { createCommsTask } from '@/app/app/comms/dashboard/actions'
-import type { TeamMemberOption } from '@/lib/comms-dashboard-data'
+import type { AgendaItemOption, TeamMemberOption } from '@/lib/comms-dashboard-data'
 
-export function TaskCreateForm({ teamMembers }: { teamMembers: TeamMemberOption[] }) {
+function formatAgendaDate(value: string) {
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(`${value}T00:00:00Z`))
+}
+
+export function TaskCreateForm({
+  teamMembers,
+  agendaItems,
+}: {
+  teamMembers: TeamMemberOption[]
+  agendaItems: AgendaItemOption[]
+}) {
   const formRef = useRef<HTMLFormElement>(null)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -17,7 +27,7 @@ export function TaskCreateForm({ teamMembers }: { teamMembers: TeamMemberOption[
         onClick={() => setOpen(true)}
         className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-orange-700"
       >
-        <span className="text-base leading-none">+</span> New Task
+        <span className="text-base leading-none">+</span> New task
       </button>
 
       {open && (
@@ -72,7 +82,9 @@ export function TaskCreateForm({ teamMembers }: { teamMembers: TeamMemberOption[
               </label>
 
               <label className="block space-y-1.5">
-                <span className="text-sm font-semibold text-neutral-800">Description <span className="font-normal text-neutral-400">(optional)</span></span>
+                <span className="text-sm font-semibold text-neutral-800">
+                  Description <span className="font-normal text-neutral-400">(optional)</span>
+                </span>
                 <textarea
                   name="description"
                   rows={3}
@@ -100,7 +112,9 @@ export function TaskCreateForm({ teamMembers }: { teamMembers: TeamMemberOption[
                 </label>
 
                 <label className="block space-y-1.5">
-                  <span className="text-sm font-semibold text-neutral-800">Deadline <span className="font-normal text-neutral-400">(optional)</span></span>
+                  <span className="text-sm font-semibold text-neutral-800">
+                    Deadline <span className="font-normal text-neutral-400">(optional)</span>
+                  </span>
                   <input
                     name="due_date"
                     type="date"
@@ -108,6 +122,27 @@ export function TaskCreateForm({ teamMembers }: { teamMembers: TeamMemberOption[
                   />
                 </label>
               </div>
+
+              <label className="block space-y-1.5">
+                <span className="text-sm font-semibold text-neutral-800">
+                  Agenda item <span className="font-normal text-neutral-400">(optional)</span>
+                </span>
+                <select
+                  name="agenda_item_id"
+                  defaultValue=""
+                  className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none ring-orange-300 focus:ring"
+                >
+                  <option value="">No agenda link</option>
+                  {agendaItems.map((item) => (
+                    <option key={item.id} value={item.id}>
+                      {item.label} · {formatAgendaDate(item.meetingDate)}
+                    </option>
+                  ))}
+                </select>
+                <span className="text-xs text-neutral-500">
+                  Linked tasks appear as red or green action items on the selected agenda topic.
+                </span>
+              </label>
 
               {error && <p className="rounded-lg bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
 

@@ -1,10 +1,9 @@
 /**
  * lib/comms-tasks.ts
  *
- * Types for standalone communications team tasks. A task has a title,
- * description, an owner, a deadline, and a completion status (the shared
- * unified vocabulary). Created on the team dashboard and surfaced on the
- * owner's personal dashboard.
+ * Types for communications tasks. A task has a title, description, a specific
+ * owner, a deadline, and a completion status. Tasks may optionally be linked to
+ * a weekly agenda item as follow-up action items.
  */
 
 import type { UnifiedStatus } from '@/lib/comms-status'
@@ -18,9 +17,15 @@ export type CommsTaskRecord = {
   ownerRole: string | null
   dueDate: string | null
   status: UnifiedStatus
+  agendaItemId: string | null
+  agendaItemTitle: string | null
 }
 
 export function normalizeCommsTaskStatus(value: string | null | undefined): UnifiedStatus {
   if (value === 'in_progress' || value === 'completed' || value === 'skipped') return value
   return 'not_started'
+}
+
+export function isCommsTaskCompleted(status: UnifiedStatus) {
+  return status === 'completed'
 }
