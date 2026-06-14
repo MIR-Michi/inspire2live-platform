@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
+import { normalizeRole } from '@/lib/role-access'
 import {
   normalizeCrmConsent,
   normalizeCrmInteractionType,
@@ -299,6 +300,53 @@ export async function markCrmFollowUpDone(formData: FormData) {
     created_by: user.id,
   })
   if (interactionError) throw new Error(interactionError.message)
+
+  revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
+}
+
+/**
+ * Deletes an external CRM contact. Restricted to platform admins. Internal
+ * people are owned by their platform profile and can never be deleted here.
+ * Deleting the contact row cascades to its initiative/event links,
+ * interactions, and pipeline memberships (FK on delete cascade).
+ */
+export async function deleteCrmContact(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (profileError) throw new Error(profileError.message)
+  if (normalizeRole(profile?.role) !== 'PlatformAdmin') {
+    throw new Error('Only platform admins can delete contacts.')
+  }
+
+  const contactId = asText(formData.get('crm_contact_id'))
+  if (!contactId) throw new Error('Contact is required.')
+
+  const crmSupabase = supabase as unknown as CrmTableClient
+
+  // Guard: only external contacts may be deleted.
+  const { data: existing, error: readError } = await crmSupabase
+    .from('comms_crm_contacts')
+    .select('id, segment')
+    .eq('id', contactId)
+    .maybeSingle()
+  if (readError) throw new Error(readError.message)
+  if (!existing) throw new Error('Contact not found.')
+  if (existing.segment !== 'external') {
+    throw new Error('Only external contacts can be deleted.')
+  }
+
+  const { error } = await crmSupabase.from('comms_crm_contacts').delete().eq('id', contactId)
+  if (error) throw new Error(error.message)
 
   revalidatePath('/app/comms/crm')
   revalidatePath('/app/comms/crm/people')
