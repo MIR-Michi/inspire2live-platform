@@ -69,6 +69,16 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
+/* ─── Global copy cleanup ─────────────────────────────────────────────────── */
+h1 + p[class*="text-sm"][class*="text-neutral-500"],
+h2 + p[class*="text-sm"][class*="text-neutral-500"],
+h3 + p[class*="text-sm"][class*="text-neutral-500"],
+h1 + p[class*="text-sm"][class*="text-neutral-600"],
+h2 + p[class*="text-sm"][class*="text-neutral-600"],
+h3 + p[class*="text-sm"][class*="text-neutral-600"] {
+  display: none;
+}
+
 /* ─── Utilities (not in Tailwind v4 by default) ──────────────────────────── */
 .text-balance {
   text-wrap: balance;
