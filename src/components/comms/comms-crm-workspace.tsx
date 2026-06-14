@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import {
   addCrmInteraction,
+  deleteCrmContact,
   markCrmFollowUpDone,
   saveCrmContact,
 } from '@/app/app/comms/crm/actions'
@@ -429,14 +430,20 @@ function ContactDetail({
   people,
   initiatives,
   events,
+  isAdmin,
 }: {
   contact: CrmContactRecord
   people: CrmSelectOption[]
   initiatives: CrmSelectOption[]
   events: CrmSelectOption[]
+  isAdmin: boolean
 }) {
   const [editing, setEditing] = useState(false)
   const [addingInteraction, setAddingInteraction] = useState(false)
+
+  // Admins can delete external contacts; internal people are owned by their
+  // profile and are never deletable from the CRM.
+  const canDelete = isAdmin && contact.segment === 'external' && Boolean(contact.crmContactId)
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
@@ -479,6 +486,21 @@ function ContactDetail({
               <input type="hidden" name="crm_contact_id" value={contact.crmContactId} />
               <button className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-800 hover:bg-emerald-100">
                 Mark followed up
+              </button>
+            </form>
+          )}
+          {canDelete && (
+            <form
+              action={deleteCrmContact}
+              onSubmit={(event) => {
+                if (!confirm(`Delete ${contact.fullName}? This permanently removes this external contact and its CRM history.`)) {
+                  event.preventDefault()
+                }
+              }}
+            >
+              <input type="hidden" name="crm_contact_id" value={contact.crmContactId ?? ''} />
+              <button className="rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100">
+                Delete
               </button>
             </form>
           )}
@@ -632,6 +654,7 @@ export function CommsCrmWorkspace({
   initiatives,
   events,
   crmReady,
+  isAdmin,
 }: {
   records: CrmContactRecord[]
   visibleRecords: CrmContactRecord[]
@@ -643,6 +666,7 @@ export function CommsCrmWorkspace({
   initiatives: CrmSelectOption[]
   events: CrmSelectOption[]
   crmReady: boolean
+  isAdmin: boolean
 }) {
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [showNew, setShowNew] = useState(false)
@@ -788,6 +812,7 @@ export function CommsCrmWorkspace({
               people={people}
               initiatives={initiatives}
               events={events}
+              isAdmin={isAdmin}
             />
           ) : (
             <div className="flex h-full min-h-48 items-center justify-center rounded-lg border border-dashed border-neutral-300 bg-white px-6 py-12 text-center">

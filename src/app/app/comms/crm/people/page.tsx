@@ -1,6 +1,7 @@
 import { CommsCrmWorkspace } from '@/components/comms/comms-crm-workspace'
 import { matchesCrmQuery, normalizeCrmPersonType, type CrmSegment } from '@/lib/comms-crm'
 import { loadCrmDirectory } from '@/lib/comms-crm-data'
+import { normalizeRole } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 
 const VALID_SEGMENTS = new Set(['all', 'internal', 'external'])
@@ -21,6 +22,15 @@ export default async function CommsCrmPeoplePage({
   const supabase = await createClient()
   const directory = await loadCrmDirectory(supabase)
   const { records } = directory
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    isAdmin = normalizeRole(profile?.role) === 'PlatformAdmin'
+  }
 
   const visibleRecords = records.filter((record) => {
     if (activeSegment !== 'all' && record.segment !== activeSegment) return false
@@ -61,6 +71,7 @@ export default async function CommsCrmPeoplePage({
       initiatives={directory.initiatives}
       events={directory.events}
       crmReady={directory.crmReady}
+      isAdmin={isAdmin}
     />
   )
 }
