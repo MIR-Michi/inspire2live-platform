@@ -16,9 +16,10 @@ export async function middleware(request: NextRequest) {
   const isAuthPage = pathname.startsWith('/login') || pathname.startsWith('/auth')
   // The OAuth/OTP callback must always run so it can verify the invitation/magic
   // link and switch the session to the invited user — even if a different user
-  // is already signed in. So it is exempt from the "send signed-in users away
-  // from auth pages" rule below.
-  const isAuthCallback = pathname.startsWith('/auth/callback')
+  // is already signed in. The /auth/confirm interstitial (which posts to the
+  // callback) is exempt for the same reason. So both are exempt from the "send
+  // signed-in users away from auth pages" rule below.
+  const isAuthCallback = pathname.startsWith('/auth/callback') || pathname.startsWith('/auth/confirm')
   const isOnboardingPage = pathname.startsWith('/onboarding')
   const isProtected = pathname.startsWith('/app')
   const isCommsRoute = pathname === '/app/comms' || pathname.startsWith('/app/comms/')
