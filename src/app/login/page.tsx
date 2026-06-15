@@ -223,7 +223,9 @@ function LoginContent() {
         {/* Auth callback error */}
         {authError === 'auth_callback_failed' && (
           <p className="mb-4 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
-            Login link expired or already used. Please sign in again.
+            This sign-in link has expired or was already used — each link works only once. If you
+            were just invited or re-invited, open the <strong>most recent</strong> invitation email
+            and use the link there. Otherwise sign in below, or request a new magic link.
           </p>
         )}
         {authError === 'reset_link_invalid' && (
