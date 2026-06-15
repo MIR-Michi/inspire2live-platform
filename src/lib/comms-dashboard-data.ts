@@ -17,6 +17,7 @@ import {
 } from '@/lib/comms-status'
 import { groupAgendaByMeeting, type AgendaItemRecord, type AgendaMeetingGroup } from '@/lib/comms-agenda'
 import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
+import { loadNewMembers, type NewMemberRecord } from '@/lib/member-onboarding'
 
 export type ChannelKey = 'campus' | 'communications'
 
@@ -68,6 +69,7 @@ export type TeamDashboardData = {
   agendaItems: AgendaItemOption[]
   tasks: CommsTaskRecord[]
   teamMembers: TeamMemberOption[]
+  newMembers: NewMemberRecord[]
   feed: FeedEntry[]
   owners: TeamMemberOption[]
 }
@@ -379,5 +381,7 @@ export async function loadCommsTeamDashboardData(
     .map((id) => ({ id, label: labelFor(id) ?? 'Unknown', role: roleFor(id) }))
     .sort((a, b) => a.label.localeCompare(b.label))
 
-  return { channels, events: eventPipeline.events, agendaGroups, agendaItems: agendaOptions, tasks, teamMembers, feed, owners }
+  const newMembers = await loadNewMembers(supabase)
+
+  return { channels, events: eventPipeline.events, agendaGroups, agendaItems: agendaOptions, tasks, teamMembers, newMembers, feed, owners }
 }

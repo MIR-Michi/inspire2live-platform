@@ -8,14 +8,15 @@ import { TeamFeed } from '@/components/comms/team-feed'
 import { AgendaAddForm } from '@/components/comms/agenda-add-form'
 import { AgendaItemCard } from '@/components/comms/agenda-item-card'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
+import { NewMembersSection } from '@/components/comms/new-members-section'
 
 function formatShortDate(value: string | null) {
   if (!value) return 'No date'
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
 }
 
-export function TeamDashboard({ data }: { data: TeamDashboardData }) {
-  const { channels, events, agendaGroups, agendaItems, teamMembers, feed, owners } = data
+export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboardData; canApprove?: boolean }) {
+  const { channels, events, agendaGroups, agendaItems, teamMembers, newMembers, feed, owners } = data
 
   return (
     <div className="space-y-4">
@@ -154,6 +155,11 @@ export function TeamDashboard({ data }: { data: TeamDashboardData }) {
               </div>
             ))}
           </div>
+        </CollapsibleCard>
+
+        {/* ── New members ── */}
+        <CollapsibleCard key="comms-team-new-members" title="New members" storageKey="comms-team-new-members">
+          <NewMembersSection members={newMembers} teamMembers={teamMembers} canApprove={canApprove} />
         </CollapsibleCard>
 
         {/* ── Update feed ── */}

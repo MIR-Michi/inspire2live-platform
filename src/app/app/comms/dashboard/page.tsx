@@ -49,7 +49,10 @@ export default async function CommsDashboardPage({
       {view === 'personal' ? (
         <CommsDashboardPanel name={profile?.name} {...(await loadCommsPersonalDashboardData(supabase, user.id))} />
       ) : (
-        <TeamDashboard data={await loadCommsTeamDashboardData(supabase, { scopeFilter: scope })} />
+        <TeamDashboard
+          data={await loadCommsTeamDashboardData(supabase, { scopeFilter: scope })}
+          canApprove={profile?.role === 'PlatformAdmin'}
+        />
       )}
     </div>
   )

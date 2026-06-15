@@ -17,16 +17,20 @@ export default async function CommsCrmHubPage({
   const query = params.q?.trim() ?? ''
   const supabase = await createClient()
 
-  const [directory, pipelinesResult] = await Promise.all([
+  const [directory, pipelinesResult, newMembersResult] = await Promise.all([
     loadCrmDirectory(supabase),
     (supabase as unknown as CrmCountClient).from('comms_crm_pipelines').select('id', { count: 'exact', head: true }),
+    (supabase as unknown as CrmCountClient)
+      .from('member_onboarding')
+      .select('id', { count: 'exact', head: true })
+      .in('status', ['pending', 'active']),
   ])
 
   const { records, crmReady } = directory
   const pipelineCount: number = pipelinesResult.count ?? 0
+  const newMembersCount: number = newMembersResult.count ?? 0
 
   const followUpCount = records.filter((record) => record.health === 'follow_up' || Boolean(record.nextFollowUpAt)).length
-  const privacyReviewCount = records.filter((record) => record.consentStatus === 'unknown' || Boolean(record.retentionReviewAt)).length
   const internalCount = records.filter((record) => record.segment === 'internal').length
   const externalCount = records.filter((record) => record.segment === 'external').length
 
@@ -53,10 +57,10 @@ export default async function CommsCrmHubPage({
       tone: 'border-rose-200 bg-rose-50 text-rose-700',
     },
     {
-      href: '/app/comms/crm/people?filter=privacy_review',
-      label: 'Privacy review',
-      value: privacyReviewCount,
-      meta: 'Consent or retention to confirm',
+      href: '/app/comms/dashboard?view=team',
+      label: 'New members',
+      value: newMembersCount,
+      meta: 'Members being onboarded',
       tone: 'border-sky-200 bg-sky-50 text-sky-700',
     },
   ]
