@@ -147,6 +147,20 @@ export async function inviteUserAccount(
     }
     await cleanupUserContent(admin, [existing.id])
     await removeAccount(admin, existing.id)
+  } else {
+    // No profile row — but a stale auth.users record may still exist for this
+    // email (e.g. a previous delete removed the profile but not the auth user).
+    // inviteUserByEmail would then *resend* against that stale user, so the
+    // emailed token is already spent and verification fails as "expired or
+    // already used". Purge the orphan so the invite mints a fresh token.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: orphanId } = await (admin as any).rpc('admin_get_auth_user_id', {
+      p_email: normalizedEmail,
+    })
+    if (orphanId) {
+      await cleanupUserContent(admin, [orphanId as string])
+      await removeAccount(admin, orphanId as string)
+    }
   }
 
   const { error } = await admin.auth.admin.inviteUserByEmail(normalizedEmail, {
