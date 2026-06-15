@@ -17,20 +17,35 @@ settings it depends on.
    > verifier was bound to the *admin's* browser, so the invitee could never
    > complete the link (it failed as "expired or already used"). The Admin API
    > requires `SUPABASE_SERVICE_ROLE_KEY` to be set in the deployment env.
-2. The invitee clicks the link. It verifies at **`/auth/callback`**, which
-   establishes their session and forwards to **`/setup-password?email=<their email>`**.
+2. The email link points at the **`/auth/confirm`** interstitial, not directly at
+   the callback. That page does **not** verify on load — it only renders a
+   "Continue" button that **POSTs** the token to `/auth/callback`. See
+   "Email-link scanners" below for why.
+3. Clicking Continue verifies at **`/auth/callback`** (POST), which establishes
+   the invitee's session and forwards to **`/setup-password?email=<their email>`**.
    A `handle_new_user` trigger has already created their `profiles` row with
    `onboarding_completed = false`.
-3. The invitee chooses a password (entered twice, show/hide, remember-me). We set
+4. The invitee chooses a password (entered twice, show/hide, remember-me). We set
    `user_metadata.password_set = true` so future magic-link sign-ins skip this step.
-4. They continue to **`/onboarding`**, then their dashboard.
+5. They continue to **`/onboarding`**, then their dashboard.
 
-`/auth/callback` accepts both verification styles:
+`/auth/callback` accepts both verification styles, over GET (direct link) or POST
+(from `/auth/confirm`):
 
-- `?token_hash=…&type=…` — verified with `verifyOtp`. **Preferred**: no PKCE
+- `token_hash` + `type` — verified with `verifyOtp`. **Preferred**: no PKCE
   verifier needed, so it works when the invitee opens the email on a different
   device than the inviter used.
-- `?code=…` — verified with `exchangeCodeForSession` (PKCE; same-browser only).
+- `code` — verified with `exchangeCodeForSession` (PKCE; same-browser only).
+
+### Email-link scanners (Microsoft 365 SafeLinks etc.)
+
+Single-use tokens are destroyed by mail-security scanners that **pre-fetch** links
+to inspect them (Outlook/Defender "SafeLinks" is the common one). A
+verify-on-GET callback gets consumed by that scan, so the human's later click
+fails as "expired or already used". The `/auth/confirm` interstitial sidesteps
+this: the scanner pre-opens harmless HTML, and the token is only spent on the
+explicit **POST** when the person clicks Continue. This is why the email
+templates must point at `/auth/confirm`, not `/auth/callback`.
 
 If a **different** account is already signed in, `/setup-password` detects the
 mismatch (compares `?email=` to the session) and offers "Sign out & set up
@@ -48,12 +63,14 @@ the Dashboard:
      equivalents too). If this is missing, Supabase falls back to the Site URL and
      the invitee lands on `/` → `/login` instead of password setup.
 2. **Authentication → Email Templates** — set the **Magic Link** and **Invite**
-   templates to link to the callback with a token hash (mirrors
-   `supabase/templates/*.html`):
+   templates to link to the `/auth/confirm` interstitial with a token hash
+   (mirrors `supabase/templates/*.html`):
    ```
-   {{ .SiteURL }}/auth/callback?token_hash={{ .TokenHash }}&type=magiclink&next=/setup-password
+   {{ .SiteURL }}/auth/confirm?token_hash={{ .TokenHash }}&type=magiclink&next=/setup-password
    ```
-   (use `type=invite` for the Invite template).
+   (use `type=invite` for the Invite template). Pointing these at `/auth/callback`
+   directly will break for recipients behind link scanners — see "Email-link
+   scanners" above.
 3. Make sure the deployment env var **`NEXT_PUBLIC_APP_URL`** matches the
    production origin so the callback URL is built correctly.
 
