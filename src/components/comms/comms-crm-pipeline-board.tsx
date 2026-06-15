@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   getCrmPersonTypeLabel,
@@ -41,6 +41,7 @@ export function CommsCrmPipelineBoard({
   const firstStageId = pipeline.stages[0]?.id ?? null
 
   const [query, setQuery] = useState('')
+  const [addOpen, setAddOpen] = useState(false)
   const [busy, setBusy] = useState(false)
   const [dragMemberId, setDragMemberId] = useState<string | null>(null)
   const [dragOverStageId, setDragOverStageId] = useState<string | null>(null)
@@ -48,6 +49,28 @@ export function CommsCrmPipelineBoard({
   // immediately on drop so the card moves with no latency, then reconciled when
   // the server data comes back via router.refresh().
   const [optimisticMoves, setOptimisticMoves] = useState<Record<string, string>>({})
+
+  // Reconcile optimistic moves against fresh server data. An override is dropped
+  // only once the server actually reports the member in the target stage (or the
+  // member is gone). Clearing it eagerly — before router.refresh() repaints —
+  // made the card snap back to its old column and then forward again ("jumping
+  // forth and back").
+  useEffect(() => {
+    setOptimisticMoves((prev) => {
+      if (Object.keys(prev).length === 0) return prev
+      let changed = false
+      const next: Record<string, string> = {}
+      for (const [memberId, targetStageId] of Object.entries(prev)) {
+        const stage = pipeline.stages.find((s) => s.members.some((m) => m.id === memberId))
+        if (!stage || stage.id === targetStageId) {
+          changed = true // server caught up (or member removed) — drop the override
+        } else {
+          next[memberId] = targetStageId
+        }
+      }
+      return changed ? next : prev
+    })
+  }, [pipeline.stages])
 
   const memberContactIds = useMemo(
     () => new Set(pipeline.stages.flatMap((stage) => stage.members.map((member) => member.contactId))),
@@ -135,7 +158,9 @@ export function CommsCrmPipelineBoard({
     const currentStage = pipeline.stages.find((stage) => stage.members.some((member) => member.id === memberId))
     if (currentStage?.id === stageId) return
 
-    // Move the card right away, then persist in the background.
+    // Move the card right away, then persist in the background. The optimistic
+    // override is cleared by the reconcile effect once the server confirms the
+    // move — not here — so the card never flickers back to its old column.
     setOptimisticMoves((prev) => ({ ...prev, [memberId]: stageId }))
 
     const fd = new FormData()
@@ -145,7 +170,8 @@ export function CommsCrmPipelineBoard({
     try {
       await movePipelineMember(fd)
       router.refresh()
-    } finally {
+    } catch {
+      // Roll back the optimistic move if persistence failed.
       setOptimisticMoves((prev) => {
         const next = { ...prev }
         delete next[memberId]
@@ -167,15 +193,6 @@ export function CommsCrmPipelineBoard({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.1em]">
-        <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-violet-700">
-          {pipeline.stageCount === 1 ? '1 stage' : `${pipeline.stageCount} stages`}
-        </span>
-        <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-1 text-orange-700">
-          {pipeline.memberCount === 1 ? '1 person' : `${pipeline.memberCount} people`}
-        </span>
-      </div>
-
       {pipeline.stages.length === 0 ? (
         <div className="rounded-lg border border-dashed border-neutral-300 bg-white p-6 text-sm text-neutral-600">
           This pipeline has no stages yet. Use <span className="font-semibold text-neutral-800">Edit</span> to add stages,
@@ -183,15 +200,39 @@ export function CommsCrmPipelineBoard({
         </div>
       ) : (
         <>
-          {/* Add to pipeline — search-as-you-type; everyone new lands in the first stage. */}
+          {/* Add to pipeline — a "+ Opportunity" button reveals the search-as-you-type
+              workflow; everyone new lands in the first stage. */}
           <div className="relative max-w-md">
+            {!addOpen ? (
+              <button
+                type="button"
+                onClick={() => setAddOpen(true)}
+                className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3 py-2 text-sm font-medium text-white hover:bg-orange-700"
+              >
+                <span className="text-base leading-none">+</span> Opportunity
+              </button>
+            ) : (
+            <>
+            <div className="flex items-center gap-2">
             <input
+              autoFocus
               value={query}
               onChange={(event) => setQuery(event.target.value)}
-              placeholder="Add a person — search by name, organisation or email…"
+              placeholder="Search by name, organisation or email…"
               className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none ring-orange-300 focus:ring"
-              aria-label="Add a person to the pipeline"
+              aria-label="Add an opportunity to the pipeline"
             />
+            <button
+              type="button"
+              onClick={() => {
+                setAddOpen(false)
+                setQuery('')
+              }}
+              className="shrink-0 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-600 hover:bg-neutral-50"
+            >
+              Cancel
+            </button>
+            </div>
             {showResults && (
               <div className="absolute z-20 mt-1 w-full overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-lg">
                 <ul className="max-h-72 overflow-y-auto">
@@ -233,6 +274,8 @@ export function CommsCrmPipelineBoard({
               </div>
             )}
             <p className="mt-1.5 text-xs text-neutral-400">New people are added to the first stage ({pipeline.stages[0]?.name}).</p>
+            </>
+            )}
           </div>
 
           {/* Board — drag cards between stages */}
