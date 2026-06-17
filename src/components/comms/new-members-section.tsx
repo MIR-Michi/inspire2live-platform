@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import type { NewMemberRecord, MemberTaskStatus } from '@/lib/member-onboarding'
 import type { TeamMemberOption } from '@/lib/comms-dashboard-data'
 import {
@@ -88,13 +88,44 @@ function MemberCard({
   labelById: Map<string, string>
   canApprove: boolean
 }) {
+  const isActive = member.status === 'active'
+  // Confirmed members collapse to just their name; expand again (accordion).
+  const [open, setOpen] = useState(true)
+
+  const nameBlock = (
+    <>
+      <span className="block truncate text-sm font-semibold text-neutral-900">{member.fullName}</span>
+      <span className="block truncate text-xs text-neutral-500">{member.email || 'No email yet'}</span>
+    </>
+  )
+
   return (
     <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="min-w-0">
-          <p className="truncate text-sm font-semibold text-neutral-900">{member.fullName}</p>
-          <p className="truncate text-xs text-neutral-500">{member.email || 'No email yet'}</p>
-        </div>
+        {isActive ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            aria-expanded={open}
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+          >
+            <svg
+              className={`h-4 w-4 shrink-0 text-neutral-400 transition-transform ${open ? 'rotate-180' : ''}`}
+              viewBox="0 0 20 20"
+              fill="currentColor"
+              aria-hidden="true"
+            >
+              <path
+                fillRule="evenodd"
+                d="M5.23 7.21a.75.75 0 011.06.02L10 11.06l3.71-3.83a.75.75 0 111.08 1.04l-4.25 4.39a.75.75 0 01-1.08 0L5.21 8.27a.75.75 0 01.02-1.06z"
+                clipRule="evenodd"
+              />
+            </svg>
+            <span className="min-w-0">{nameBlock}</span>
+          </button>
+        ) : (
+          <div className="min-w-0">{nameBlock}</div>
+        )}
         {member.status === 'pending' ? (
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
@@ -124,7 +155,7 @@ function MemberCard({
         )}
       </div>
 
-      {member.status === 'active' && (
+      {isActive && open && (
         <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
           {member.tasks.map((task) => (
             <div key={task.id} className="flex flex-wrap items-center gap-2">
