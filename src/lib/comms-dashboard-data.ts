@@ -385,3 +385,82 @@ export async function loadCommsTeamDashboardData(
 
   return { channels, events: eventPipeline.events, agendaGroups, agendaItems: agendaOptions, tasks, teamMembers, newMembers, feed, owners }
 }
+
+/**
+ * Focused loader for just the weekly meeting agenda groups (profiles for owner
+ * labels, agenda items, and their linked comms tasks). Used by the standalone
+ * "all meetings" screen, which doesn't need the full dashboard payload.
+ */
+export async function loadCommsAgendaGroups(supabase: SupabaseClient): Promise<AgendaMeetingGroup[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any
+
+  const [{ data: profilesData }, { data: agendaData }, { data: commsTaskData }] = await Promise.all([
+    supabase.from('profiles').select('id, name, email, role'),
+    db
+      .from('comms_weekly_agenda_items')
+      .select('id, meeting_date, title, summary, owner_id, created_at')
+      .order('meeting_date', { ascending: false })
+      .limit(500),
+    db.from('comms_tasks').select('id, title, description, owner_id, due_date, status, agenda_item_id').limit(500),
+  ])
+
+  const profiles = (profilesData ?? []) as Array<{ id: string; name: string | null; email: string | null; role: string | null }>
+  const profileMap = new Map(profiles.map((p) => [p.id, p]))
+  const labelFor = (id: string | null) =>
+    id ? profileMap.get(id)?.name ?? profileMap.get(id)?.email ?? 'Unknown' : null
+  const roleFor = (id: string | null) => (id ? profileMap.get(id)?.role ?? null : null)
+
+  const agendaRows = (agendaData ?? []) as Array<{
+    id: string
+    meeting_date: string
+    title: string
+    summary: string | null
+    owner_id: string | null
+    created_at: string
+  }>
+  const agendaTitleById = new Map(agendaRows.map((r) => [r.id, r.title]))
+
+  const tasks: CommsTaskRecord[] = ((commsTaskData ?? []) as Array<{
+    id: string
+    title: string
+    description: string | null
+    owner_id: string | null
+    due_date: string | null
+    status: string
+    agenda_item_id: string | null
+  }>).map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    ownerId: row.owner_id,
+    ownerLabel: labelFor(row.owner_id),
+    ownerRole: roleFor(row.owner_id),
+    dueDate: row.due_date,
+    status: normalizeCommsTaskStatus(row.status),
+    agendaItemId: row.agenda_item_id,
+    agendaItemTitle: row.agenda_item_id ? agendaTitleById.get(row.agenda_item_id) ?? null : null,
+  }))
+
+  const linkedTasksByAgenda = new Map<string, CommsTaskRecord[]>()
+  for (const task of tasks) {
+    if (!task.agendaItemId) continue
+    const list = linkedTasksByAgenda.get(task.agendaItemId) ?? []
+    list.push(task)
+    linkedTasksByAgenda.set(task.agendaItemId, list)
+  }
+
+  const agendaItems: AgendaItemRecord[] = agendaRows.map((row) => ({
+    id: row.id,
+    meetingDate: row.meeting_date,
+    title: row.title,
+    summary: row.summary,
+    ownerId: row.owner_id,
+    ownerLabel: labelFor(row.owner_id),
+    ownerRole: roleFor(row.owner_id),
+    createdAt: row.created_at,
+    linkedTasks: linkedTasksByAgenda.get(row.id) ?? [],
+  }))
+
+  return groupAgendaByMeeting(agendaItems)
+}

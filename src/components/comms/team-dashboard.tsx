@@ -3,10 +3,8 @@ import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { TileGroup } from '@/components/ui/tile-group'
 import type { TeamDashboardData } from '@/lib/comms-dashboard-data'
 import { EVENT_STAGE_META, type EventStage } from '@/lib/comms-workflow'
-import { formatMeetingLabel } from '@/lib/comms-agenda'
 import { TeamFeed } from '@/components/comms/team-feed'
-import { AgendaAddForm } from '@/components/comms/agenda-add-form'
-import { AgendaItemCard } from '@/components/comms/agenda-item-card'
+import { WeeklyAgenda } from '@/components/comms/weekly-agenda'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
 import { NewMembersSection } from '@/components/comms/new-members-section'
 
@@ -123,38 +121,7 @@ export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboar
 
         {/* ── Weekly meeting agenda ── */}
         <CollapsibleCard key="comms-team-agenda" title="Weekly meeting agenda" storageKey="comms-team-agenda">
-          <div className="space-y-4">
-            {agendaGroups.map((group) => (
-              <div
-                key={group.meetingDate}
-                className={`rounded-2xl border p-4 shadow-sm ${
-                  group.isUpcoming ? 'border-orange-200 bg-orange-50/60' : 'border-neutral-200 bg-white'
-                }`}
-              >
-                <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-                  <h3 className="text-sm font-semibold text-neutral-900">
-                    Meeting — {formatMeetingLabel(group.meetingDate)}
-                    {group.isUpcoming && (
-                      <span className="ml-2 rounded-full bg-orange-200 px-2 py-0.5 text-[10px] font-bold text-orange-800">
-                        Upcoming
-                      </span>
-                    )}
-                  </h3>
-                  {group.isUpcoming && <AgendaAddForm meetingDate={group.meetingDate} />}
-                </div>
-                <div className="space-y-2">
-                  {group.items.map((item) => (
-                    <AgendaItemCard key={item.id} item={item} />
-                  ))}
-                  {group.items.length === 0 && (
-                    <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
-                      No agenda items yet. Add the first one for this meeting.
-                    </p>
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
+          <WeeklyAgenda groups={agendaGroups} previousLimit={5} showAllHref="/app/comms/meetings" />
         </CollapsibleCard>
 
         {/* ── New members ── */}

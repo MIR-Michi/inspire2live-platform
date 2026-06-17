@@ -14,6 +14,7 @@ interface TopNavProps {
   userName: string
   userRole: string
   userInitials: string
+  userAvatarUrl?: string | null
   unreadCount?: number
   isAdmin?: boolean
   viewAsRole?: string | null
@@ -25,6 +26,7 @@ export function TopNav({
   userName,
   userRole,
   userInitials,
+  userAvatarUrl,
   unreadCount = 0,
   isAdmin = false,
   viewAsRole,
@@ -146,9 +148,14 @@ export function TopNav({
               aria-expanded={profileOpen}
               aria-haspopup="true"
             >
-              <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
-                {userInitials}
-              </span>
+              {userAvatarUrl ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img src={userAvatarUrl} alt="" className="h-7 w-7 rounded-full object-cover" />
+              ) : (
+                <span className="flex h-7 w-7 items-center justify-center rounded-full bg-orange-100 text-xs font-bold text-orange-700">
+                  {userInitials}
+                </span>
+              )}
               <span className="hidden max-w-30 truncate sm:block">{userName}</span>
             </button>
 

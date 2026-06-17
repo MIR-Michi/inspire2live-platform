@@ -26,7 +26,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('name, role, onboarding_completed')
+    .select('name, role, onboarding_completed, avatar_url')
     .eq('id', user.id)
     .maybeSingle()
 
@@ -84,6 +84,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           userName={name}
           userRole={effectiveRole}
           userInitials={getInitials(name)}
+          userAvatarUrl={profile?.avatar_url ?? null}
           unreadCount={unread ?? 0}
           isAdmin={isAdmin}
           viewAsRole={viewAsRole}
