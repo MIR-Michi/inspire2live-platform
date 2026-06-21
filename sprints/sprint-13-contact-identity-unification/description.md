@@ -8,7 +8,9 @@ Close the contact-data-model gap described in `docs/CONTACT_DATA_MODEL_CONCEPT.m
 `docs/ADR/0007-unified-contact-identity.md`. After this sprint:
 
 - Every person is represented by **one canonical contact** (`comms_crm_contacts` spine), resolved on
-  normalized email and linked to its `profiles`, `campus_members`, and `member_onboarding` records.
+  normalized email and linked to its `profiles` and `member_onboarding` records. **Campus members are not a
+  separate identity** — they become plain `internal_contact` rows (internal contacts without platform
+  access), with their channel data folded onto the contact.
 - The CRM models the three categories explicitly via `contact_kind`: **internal user (A)**, **internal
   contact / non-user (B)**, **external (C)**. There is **no `internal_pending` kind** — `internal_contact`
   is the default, terminal state for internal non-users.
@@ -32,10 +34,12 @@ This sprint sequences after Sprint 12 (WhatsApp hardening) and builds directly o
 ## Acceptance criteria
 
 - [ ] `comms_crm_contacts` has `contact_kind` (`internal_user`/`internal_contact`/`external` — no
-      `internal_pending`), `profile_id`, `campus_member_id`, `member_onboarding_id`, `normalized_email`
-      (partial-unique), `platform_status` (`none`/`invited`/`active`/`inactive`), and optional nullable
-      `intended_role`/`intended_user_type`, with constraints; `segment` retained as a derived/back-compat
-      column.
+      `internal_pending`), `profile_id`, `member_onboarding_id`, `normalized_email` (partial-unique),
+      `platform_status` (`none`/`invited`/`active`/`inactive`), the folded campus fields, and optional
+      nullable `intended_role`/`intended_user_type`, with constraints; `segment` retained as a
+      derived/back-compat column. **No `campus_member_id`** — campus members are not a separate identity.
+- [ ] Campus members are reclassified from `external` to `internal_contact` (without platform access); their
+      channel data folds onto the contact spine and they carry no separate identity link.
 - [ ] `crm_resolve_contact(...)` find-or-create RPC exists and is the single creation path; all entry points
       (manual CRM add, campus import, profile creation, onboarding registration) route through it.
 - [ ] Backfill+dedup migration collapses profile/campus/manual rows that share an email into one spine and

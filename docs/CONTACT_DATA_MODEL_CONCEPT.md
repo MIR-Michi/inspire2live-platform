@@ -17,7 +17,7 @@ Three contact categories must be first-class and unambiguous:
 | # | Category | Definition | Example |
 |---|----------|------------|---------|
 | **A** | **Internal — platform user** | An Inspire2Live person who was **invited via User Management** and therefore has (or is being provisioned with) a Supabase auth account + `profiles` row. | A comms team member who logs in. |
-| **B** | **Internal — contact (non-user)** | An Inspire2Live person (typically `@inspire2live.org`) tracked in the CRM or new-members dashboard who is **not a platform user and is not currently meant to be one**. | An I2L stakeholder/staff member we track but don't (yet) give an account. |
+| **B** | **Internal — contact (non-user)** | An Inspire2Live person tracked in the CRM or new-members dashboard who is **not a platform user and is not currently meant to be one**. **World Campus / WhatsApp community members are category B** — internal contacts without platform access (not external). | An I2L stakeholder/staff member, or a World Campus community member, we track but don't give an account. |
 | **C** | **External** | A third-party contact (external email), tracked in the CRM only. | A journalist, partner contact, clinician we nurture. |
 
 **Important framing (corrected):** category **B is the normal, terminal state for most internal contacts** —
@@ -42,7 +42,7 @@ path that bypasses all of them.
 |-------|-------|-----------|-------------|--------|
 | **Profile / Users** | `profiles` (FK → `auth.users`) | Category **A** | `role` (8 canonical), `user_type` (`default`/`comms`/`board`/`partner`), `status` (`active`/`inactive`), `email` **unique** | User owns own row; admin manages |
 | **CRM** | `comms_crm_contacts` | Overlay for **A/B/C** | `segment` (`internal`/`external`), `source_type` (`manual`/`profile`/`campus_member`), `source_id`, `person_type` (`comms`/`patient_advocate`/…) | Comms-team/admin only (`is_comms_team_or_admin()`) |
-| **Community** | `campus_members` | World Campus / WhatsApp stakeholders | `platform_profile_id` (optional → `profiles`), `whatsapp_id` | Comms-team/admin |
+| **Community** | `campus_members` | World Campus / WhatsApp stakeholders — **rendered as `external` today (a misclassification: they are internal contacts)** | `platform_profile_id` (optional → `profiles`), `whatsapp_id` | Comms-team/admin |
 | **Onboarding** | `member_onboarding` (+ `_tasks`) | New-member checklist | `profile_id` (optional), `status` (`pending`/`active`/`declined`/`completed`) | Comms-team/admin |
 
 Account creation is a **fifth, separate path**: `inviteUserAccount()` in
@@ -76,11 +76,11 @@ any CRM contact.
 
 - **A (internal user):** `profiles` row → surfaces as an internal CRM record; optional `comms_crm_contacts`
   overlay with `source_type='profile'`.
-- **B (internal contact, non-user):** the only home is a `comms_crm_contacts` row with
-  `source_type='manual'`, `segment='internal'`. It is indistinguishable from category A in the data model
-  (both are just `segment='internal'`).
-- **C (external):** `comms_crm_contacts` (`source_type='manual'`) and/or a `campus_members` record,
-  `segment='external'`.
+- **B (internal contact, non-user):** a `comms_crm_contacts` row with `source_type='manual'`,
+  `segment='internal'` — indistinguishable from category A (both are just `segment='internal'`). World
+  Campus members (`campus_members`) *also* belong here, but are currently mis-rendered as `external`.
+- **C (external):** `comms_crm_contacts` (`source_type='manual'`), `segment='external'`. (Campus members
+  are wrongly lumped in here today.)
 
 ---
 
@@ -89,7 +89,7 @@ any CRM contact.
 | # | Gap | Why it hurts |
 |---|-----|--------------|
 | **G1** | **No canonical contact identity / no email-keyed matching.** The same human can simultaneously be a `profile`, a `campus_member`, a `comms_crm_contacts` row, and a `member_onboarding` row, with nothing linking them. | Duplicates and divergent data; impossible to answer "who is this person, everywhere?" |
-| **G2** | **`segment` cannot distinguish a platform user (A) from an internal non-user contact (B).** Both are just `segment='internal'`. | The CRM can't show who actually has an account vs who is "just a contact"; the corrected requirement (B is *not* a user, *not* pending) has no representation. |
+| **G2** | **`segment` cannot distinguish a platform user (A) from an internal non-user contact (B); and campus members are mis-classified as `external`.** Both A and B are just `segment='internal'`, while World Campus members — who are internal contacts — surface as `external`. | The CRM can't show who actually has an account vs who is "just a contact", and community members appear in the wrong category. |
 | **G3** | **No platform-account state on the contact.** Nothing records whether an internal person is not-a-user, invited (pending), active, or deactivated. | Can't tell, from the CRM, who is on the platform; can't safely drive or report on invitations. |
 | **G4** | **Promotion = duplication.** When a B contact is invited and a `profiles` row appears, `loadCrmDirectory` emits **two** internal records (one from the manual CRM row, one from the new profile) — there is no email match to merge them. | Dirty directory exactly at the moment that matters; manual cleanup. |
 | **G5** | **Account-invite path is disconnected and lossy.** `inviteUserByEmail` ignores CRM/onboarding/campus and only takes `role`, not `user_type`. | Inviting a known contact from the CRM isn't possible; user_type must be set by hand afterwards. |
@@ -113,14 +113,19 @@ Every other store *links to* the contact rather than duplicating it.
                          │  (one row per real person)    │
                          │                               │
    profiles ───1:0..1───►│ profile_id          (→ A)     │
-   campus_members ──────►│ campus_member_id    (→ B/C)   │
    member_onboarding ───►│ member_onboarding_id          │
                          │                               │
                          │ normalized_email  (match key) │
                          │ contact_kind                  │
                          │ platform_status               │
+                         │ whatsapp_id, campus fields …  │  ← campus data folds in (no separate ID)
                          └──────────────────────────────┘
 ```
+
+> **Campus members have no separate identity.** They are not a distinct keyed source linked from the spine —
+> they are simply `internal_contact` rows (without platform access). Their channel attributes (WhatsApp id,
+> campus affiliations, "welcomed by Peter") fold onto the contact. The `campus_members` table is retained
+> only as an optional per-contact detail keyed *by* the contact, never as a separate person identity.
 
 ### 4.2 Replace binary `segment` with `contact_kind`
 
@@ -129,8 +134,8 @@ Add a stored, constrained `contact_kind` (keep `segment` as a derived back-compa
 | `contact_kind` | Category | Rule | Notes |
 |----------------|----------|------|-------|
 | `internal_user` | **A** | `profile_id IS NOT NULL` — i.e. invited via User Management | `profiles` is source of truth for identity. Created **only** by the invite action. |
-| `internal_contact` | **B** | internal I2L person (`@inspire2live.org` email or explicit internal flag) with **no** `profile_id` | **Default, terminal state.** *Not* a user, *not* pending. The normal home for most internal contacts set up in the CRM or new-members dashboard. |
-| `external` | **C** | third-party email | CRM (± `campus_members`). |
+| `internal_contact` | **B** | internal I2L person (`@inspire2live.org` email or explicit internal flag) with **no** `profile_id` | **Default, terminal state.** *Not* a user, *not* pending. The normal home for most internal contacts set up in the CRM or new-members dashboard. **World Campus / WhatsApp community members are `internal_contact`** (without platform access) — no separate campus identity. |
+| `external` | **C** | third-party email | CRM only. |
 
 `segment` is derived: `internal_user`/`internal_contact` → `internal`; `external` → `external`. Existing RLS
 and filters that read `segment` keep working unchanged during migration.
@@ -156,13 +161,16 @@ So the only "pending" people are those someone **deliberately invited via User M
 
 ### 4.4 Identity resolution (find-or-create)
 
-A single DB function `crm_resolve_contact(email, name, source, source_id)` is the **only** way contacts are
-created from any entry point. It:
+A single DB function `crm_resolve_contact(email, name)` is the **only** way contacts are created from any
+entry point (manual CRM add, campus import, profile creation, onboarding registration). It:
 
 1. Normalizes the email (`lower(trim(email))`).
-2. Finds an existing contact by `normalized_email` (or by the relevant link id).
+2. Finds an existing contact by `normalized_email`.
 3. Creates one if none exists (default `contact_kind` = `internal_contact` for I2L emails, else `external`;
-   `platform_status='none'`); otherwise links the new source to the existing spine.
+   `platform_status='none'`); otherwise updates the existing spine in place.
+
+Campus import calls this like everything else — a campus member resolves to (or creates) an
+`internal_contact`; it does **not** mint a separate identity.
 
 A **partial unique index** on `normalized_email` (where not null) makes the match authoritative.
 
@@ -201,7 +209,7 @@ default.
 | **Identity** (name, picture, bio, email, org, location, expertise) for `internal_user` | `profiles` (user-owned) | CRM **reads live** from profile; never writes back (already implemented). |
 | **Identity** for `internal_contact` / `external` | `comms_crm_contacts` | CRM is authoritative (no profile exists). |
 | **Relationship** (owner, lifecycle, consent, follow-up, tags, notes, pipelines) | `comms_crm_contacts` | Always on the spine, for all kinds. |
-| **Community / channel** (WhatsApp id, campus affiliations) | `campus_members` | Linked via `campus_member_id`; comms edits in campus log. |
+| **Community / channel** (WhatsApp id, campus affiliations) | the contact spine (campus data folds in) | Stored on / keyed by the contact; `campus_members` is at most a per-contact detail table, **not** a separate identity. Campus members are `internal_contact`. |
 | **Provisioning** (onboarding checklist) | `member_onboarding` | Linked via `member_onboarding_id`. |
 | **Account state** (`platform_status`) | `profiles` + the invite action | `none` until invited; `invited`→`active`→`inactive` thereafter, mirroring `profiles.status`. |
 | **Role / user_type** | `profiles` (chosen at invite time) | Only exist once promoted; the profile wins thereafter. |
@@ -240,12 +248,13 @@ sprint).
 
 ## 6 · Migration & rollout strategy
 
-1. **Additive schema first** (`contact_kind`, `profile_id`, `campus_member_id`, `member_onboarding_id`,
-   `normalized_email`, `platform_status`, optional `intended_role`/`intended_user_type`) — all
-   nullable/defaulted, nothing breaks.
+1. **Additive schema first** (`contact_kind`, `profile_id`, `member_onboarding_id`, `normalized_email`,
+   `platform_status`, the folded campus fields, optional `intended_role`/`intended_user_type`) — all
+   nullable/defaulted, nothing breaks. **No `campus_member_id`** — campus members are not a separate identity.
 2. **Backfill + dedup**: normalize emails; collapse profile/campus/manual rows sharing an email into one
    spine; populate links; set `contact_kind` (`internal_user` where a profile exists, else `internal_contact`
-   for I2L emails, else `external`) and `platform_status` (from `profiles.status`, else `none`).
+   for I2L emails **and for all campus members**, else `external`) and `platform_status` (from
+   `profiles.status`, else `none`). Campus members move from `external` → `internal_contact`.
 3. **Switch reads**: refactor `loadCrmDirectory` to assemble from explicit links instead of the
    `source_type:source_id` heuristic.
 4. **Switch writes**: route all creation through `crm_resolve_contact`; update the `profiles` and

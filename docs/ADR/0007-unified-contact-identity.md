@@ -42,8 +42,11 @@ Make `comms_crm_contacts` the **canonical contact spine** (one row per real pers
 1. Replace the binary `segment` (kept as a derived column) with a stored `contact_kind`
    (`internal_user` / `internal_contact` / `external`). **There is no `internal_pending` kind** —
    `internal_contact` is the default, terminal state for internal non-users.
-2. Add explicit links — `profile_id`, `campus_member_id`, `member_onboarding_id` — and a `normalized_email`
-   with a partial unique index as the match key.
+2. Add explicit links — `profile_id`, `member_onboarding_id` — and a `normalized_email` with a partial
+   unique index as the match key. **Campus members get no link/ID:** they are not a separate identity but
+   plain `internal_contact` rows (internal contacts without platform access), with their channel attributes
+   (WhatsApp id, campus affiliations) folded onto the contact. The `campus_members` table is at most a
+   per-contact detail keyed by the contact.
 3. Add `platform_status` (`none`/`invited`/`active`/`inactive`) to express the account relationship.
    **"Pending" = `platform_status='invited'`**, which only ever arises from a User-Management invite; all
    `internal_contact`/`external` rows are `none`.
