@@ -5,46 +5,66 @@ import Link from 'next/link'
 import {
   addCrmInteraction,
   deleteCrmContact,
+  inviteContactToPlatform,
   markCrmFollowUpDone,
   saveCrmContact,
 } from '@/app/app/comms/crm/actions'
 import {
   CRM_CONSENT_OPTIONS,
+  CRM_CONTACT_KIND_OPTIONS,
   CRM_INTERACTION_OPTIONS,
   CRM_LIFECYCLE_OPTIONS,
   CRM_PERSON_TYPE_OPTIONS,
-  CRM_SEGMENT_OPTIONS,
   formatCrmDate,
   formatCrmList,
   getCrmConsentLabel,
+  getCrmContactKindLabel,
   getCrmHealthLabel,
   getCrmPersonTypeLabel,
-  getCrmSegmentLabel,
+  getCrmPlatformStatusLabel,
   getInitials,
+  type CrmContactKind,
   type CrmContactRecord,
   type CrmSelectOption,
-  type CrmSegment,
 } from '@/lib/comms-crm'
+import { ROLE_LABELS } from '@/lib/role-access'
+
+const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
+  ([value, label]) => ({ value, label })
+)
 
 type CrmFilter = 'follow_up' | 'privacy_review' | null
 
 function buildHref({
-  segment,
+  kind,
   personType,
   filter,
   query,
 }: {
-  segment?: 'all' | CrmSegment
+  kind?: 'all' | CrmContactKind
   personType?: string
   filter?: CrmFilter
   query?: string
 }) {
   const params = new URLSearchParams()
-  if (segment && segment !== 'all') params.set('segment', segment)
+  if (kind && kind !== 'all') params.set('kind', kind)
   if (personType) params.set('type', personType)
   if (filter) params.set('filter', filter)
   if (query) params.set('q', query)
   return params.size > 0 ? `/app/comms/crm/people?${params.toString()}` : '/app/comms/crm/people'
+}
+
+function toneForKind(kind: CrmContactKind) {
+  if (kind === 'internal_user') return 'border-blue-200 bg-blue-50 text-blue-700'
+  if (kind === 'internal_contact') return 'border-indigo-200 bg-indigo-50 text-indigo-700'
+  return 'border-neutral-200 bg-neutral-50 text-neutral-600'
+}
+
+function toneForPlatformStatus(status: CrmContactRecord['platformStatus']) {
+  if (status === 'active') return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  if (status === 'invited') return 'border-amber-200 bg-amber-50 text-amber-800'
+  if (status === 'inactive') return 'border-neutral-200 bg-neutral-100 text-neutral-500'
+  return 'border-neutral-200 bg-white text-neutral-500'
 }
 
 function toneForHealth(value: CrmContactRecord['health']) {
@@ -122,9 +142,9 @@ function ContactEditForm({
   events: CrmSelectOption[]
   onDone: () => void
 }) {
-  // Internal people are owned by their platform profile — their core identity is
-  // read-only here and can only be changed by the person themselves in Profile.
-  const readOnlyCore = contact.segment === 'internal' && contact.sourceType === 'profile'
+  // Platform users (internal_user) are owned by their profile — their core
+  // identity is read-only here and can only be changed by the person in Profile.
+  const readOnlyCore = contact.contactKind === 'internal_user'
 
   return (
     <form action={saveCrmContact} onSubmit={onDone} className="mt-4 grid gap-4 rounded-lg border border-neutral-200 bg-neutral-50 p-4">
@@ -142,6 +162,7 @@ function ContactEditForm({
           </p>
           <input type="hidden" name="full_name" value={contact.fullName} />
           <input type="hidden" name="segment" value="internal" />
+          <input type="hidden" name="contact_kind" value="internal_user" />
           <dl className="grid gap-2 text-sm md:grid-cols-2">
             <div>
               <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Name</dt>
@@ -168,9 +189,9 @@ function ContactEditForm({
             <input name="full_name" defaultValue={contact.fullName} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" required />
           </label>
           <label className="space-y-1">
-            <span className="text-xs font-semibold text-neutral-700">Intern / extern</span>
-            <select name="segment" defaultValue={contact.segment} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
-              {CRM_SEGMENT_OPTIONS.map((option) => (
+            <span className="text-xs font-semibold text-neutral-700">Contact type</span>
+            <select name="contact_kind" defaultValue={contact.contactKind} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+              {CRM_CONTACT_KIND_OPTIONS.filter((o) => o.value !== 'internal_user').map((option) => (
                 <option key={option.value} value={option.value}>{option.label}</option>
               ))}
             </select>
@@ -265,6 +286,17 @@ function ContactEditForm({
           <span className="text-xs font-semibold text-neutral-700">Tags</span>
           <input name="tags" defaultValue={formatCrmList(contact.tags)} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
         </label>
+        {contact.contactKind !== 'internal_user' && (
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-neutral-700">Intended role if invited (optional)</span>
+            <select name="intended_role" defaultValue={contact.intendedRole ?? ''} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+              <option value="">No invite planned</option>
+              {PLATFORM_ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+        )}
       </div>
 
       <div className="grid gap-3 md:grid-cols-2">
@@ -318,12 +350,13 @@ function NewContactForm({
           <input name="full_name" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" required />
         </label>
         <label className="space-y-1">
-          <span className="text-xs font-semibold text-neutral-700">Intern / extern</span>
-          <select name="segment" defaultValue="external" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
-            {CRM_SEGMENT_OPTIONS.map((option) => (
+          <span className="text-xs font-semibold text-neutral-700">Contact type</span>
+          <select name="contact_kind" defaultValue="internal_contact" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+            {CRM_CONTACT_KIND_OPTIONS.filter((o) => o.value !== 'internal_user').map((option) => (
               <option key={option.value} value={option.value}>{option.label}</option>
             ))}
           </select>
+          <span className="block text-[11px] text-neutral-400">New contacts are never platform users. Invite separately to grant access.</span>
         </label>
         <label className="space-y-1">
           <span className="text-xs font-semibold text-neutral-700">Person type</span>
@@ -440,13 +473,18 @@ function ContactDetail({
 }) {
   const [editing, setEditing] = useState(false)
   const [addingInteraction, setAddingInteraction] = useState(false)
+  const [inviting, setInviting] = useState(false)
 
-  // Admins can delete external contacts — either a dedicated CRM row or a campus
-  // stakeholder record. Internal people are profile-owned and never deletable.
+  // Admins can delete any contact that is not a platform user — either a
+  // dedicated CRM row or a World Campus record. Platform users are
+  // profile-owned and never deletable here.
   const canDelete =
     isAdmin &&
-    contact.segment === 'external' &&
+    contact.contactKind !== 'internal_user' &&
     (Boolean(contact.crmContactId) || (contact.sourceType === 'campus_member' && Boolean(contact.sourceId)))
+
+  // Admins can promote a non-user contact with an email to a platform user.
+  const canInvite = isAdmin && contact.contactKind !== 'internal_user' && Boolean(contact.email)
 
   return (
     <div className="rounded-lg border border-neutral-200 bg-white p-5 shadow-sm">
@@ -459,9 +497,14 @@ function ContactDetail({
               {[contact.title, contact.organisation].filter(Boolean).join(' · ') || 'Role and organisation to enrich'}
             </p>
             <div className="mt-2 flex flex-wrap gap-2">
-              <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-700">
-                {getCrmSegmentLabel(contact.segment)}
+              <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${toneForKind(contact.contactKind)}`}>
+                {getCrmContactKindLabel(contact.contactKind)}
               </span>
+              {contact.platformStatus !== 'none' && (
+                <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${toneForPlatformStatus(contact.platformStatus)}`}>
+                  {getCrmPlatformStatusLabel(contact.platformStatus)}
+                </span>
+              )}
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-700">
                 {getCrmPersonTypeLabel(contact.personType)}
               </span>
@@ -484,6 +527,15 @@ function ContactDetail({
               >
                 Edit
               </button>
+              {canInvite && (
+                <button
+                  type="button"
+                  onClick={() => setInviting((v) => !v)}
+                  className="rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100"
+                >
+                  Invite to platform
+                </button>
+              )}
               {canDelete && (
                 <form
                   action={deleteCrmContact}
@@ -513,6 +565,35 @@ function ContactDetail({
           )}
         </div>
       </div>
+
+      {inviting && canInvite && (
+        <form
+          action={inviteContactToPlatform}
+          onSubmit={() => setInviting(false)}
+          className="mt-4 grid gap-3 rounded-lg border border-blue-200 bg-blue-50 p-4 sm:grid-cols-[1fr_auto_auto] sm:items-end"
+        >
+          <input type="hidden" name="crm_contact_id" value={contact.crmContactId ?? ''} />
+          <input type="hidden" name="email" value={contact.email ?? ''} />
+          <input type="hidden" name="origin" value={typeof window !== 'undefined' ? window.location.origin : ''} />
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-blue-900">Invite {contact.fullName} as</span>
+            <select name="role" defaultValue={contact.intendedRole ?? 'PatientAdvocate'} className="w-full rounded-lg border border-blue-200 px-3 py-2 text-sm">
+              {PLATFORM_ROLE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <button className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700">
+            Send invite
+          </button>
+          <button type="button" onClick={() => setInviting(false)} className="rounded-lg border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 hover:bg-blue-100">
+            Cancel
+          </button>
+          <p className="text-[11px] text-blue-800 sm:col-span-3">
+            Sends a User-Management invite to {contact.email}. They become an internal platform user once they accept; this contact links automatically — no duplicate is created.
+          </p>
+        </form>
+      )}
 
       {editing ? (
         <ContactEditForm
@@ -653,7 +734,7 @@ function ContactDetail({
 export function CommsCrmWorkspace({
   records,
   visibleRecords,
-  activeSegment,
+  activeKind,
   activePersonType,
   activeFilter,
   query,
@@ -665,7 +746,7 @@ export function CommsCrmWorkspace({
 }: {
   records: CrmContactRecord[]
   visibleRecords: CrmContactRecord[]
-  activeSegment: 'all' | CrmSegment
+  activeKind: 'all' | CrmContactKind
   activePersonType: string
   activeFilter: CrmFilter
   query: string
@@ -680,8 +761,9 @@ export function CommsCrmWorkspace({
 
   const selected = visibleRecords.find((record) => record.id === selectedId) ?? null
 
-  const internalCount = records.filter((record) => record.segment === 'internal').length
-  const externalCount = records.filter((record) => record.segment === 'external').length
+  const userCount = records.filter((record) => record.contactKind === 'internal_user').length
+  const internalContactCount = records.filter((record) => record.contactKind === 'internal_contact').length
+  const externalCount = records.filter((record) => record.contactKind === 'external').length
 
   return (
     <section className="space-y-6">
@@ -695,7 +777,7 @@ export function CommsCrmWorkspace({
             <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
               {visibleRecords.length} visible
             </span>
-            <span className="text-sm text-neutral-500">{internalCount} internal · {externalCount} external</span>
+            <span className="text-sm text-neutral-500">{userCount} users · {internalContactCount} internal contacts · {externalCount} external</span>
           </div>
           <button
             type="button"
@@ -714,7 +796,7 @@ export function CommsCrmWorkspace({
       )}
 
       <form className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
-        <input type="hidden" name="segment" value={activeSegment === 'all' ? '' : activeSegment} />
+        <input type="hidden" name="kind" value={activeKind === 'all' ? '' : activeKind} />
         <input type="hidden" name="type" value={activePersonType} />
         <input type="hidden" name="filter" value={activeFilter ?? ''} />
         <label className="block space-y-2">
@@ -729,18 +811,18 @@ export function CommsCrmWorkspace({
       </form>
 
       <div className="space-y-3">
-        <nav className="flex flex-wrap gap-2" aria-label="Intern / extern filters">
+        <nav className="flex flex-wrap gap-2" aria-label="Contact type filters">
           <Link
-            href={buildHref({ segment: 'all', personType: activePersonType, filter: activeFilter, query })}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeSegment === 'all' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+            href={buildHref({ kind: 'all', personType: activePersonType, filter: activeFilter, query })}
+            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeKind === 'all' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
           >
             All
           </Link>
-          {CRM_SEGMENT_OPTIONS.map((option) => (
+          {CRM_CONTACT_KIND_OPTIONS.map((option) => (
             <Link
               key={option.value}
-              href={buildHref({ segment: option.value, personType: activePersonType, filter: activeFilter, query })}
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeSegment === option.value ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
+              href={buildHref({ kind: option.value, personType: activePersonType, filter: activeFilter, query })}
+              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeKind === option.value ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
             >
               {option.label}
             </Link>
@@ -749,7 +831,7 @@ export function CommsCrmWorkspace({
 
         <nav className="flex flex-wrap gap-2" aria-label="Person type filters">
           <Link
-            href={buildHref({ segment: activeSegment, filter: activeFilter, query })}
+            href={buildHref({ kind: activeKind, filter: activeFilter, query })}
             className={`rounded-full px-3 py-1.5 text-xs font-semibold ${!activePersonType ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
           >
             Any type
@@ -757,7 +839,7 @@ export function CommsCrmWorkspace({
           {CRM_PERSON_TYPE_OPTIONS.map((option) => (
             <Link
               key={option.value}
-              href={buildHref({ segment: activeSegment, personType: option.value, filter: activeFilter, query })}
+              href={buildHref({ kind: activeKind, personType: option.value, filter: activeFilter, query })}
               className={`rounded-full px-3 py-1.5 text-xs font-semibold ${activePersonType === option.value ? 'bg-violet-100 text-violet-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
             >
               {option.label}
@@ -795,13 +877,9 @@ export function CommsCrmWorkspace({
                       </span>
                     </span>
                     <span
-                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${
-                        contact.segment === 'internal'
-                          ? 'border-blue-200 bg-blue-50 text-blue-700'
-                          : 'border-neutral-200 bg-neutral-50 text-neutral-600'
-                      }`}
+                      className={`shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.1em] ${toneForKind(contact.contactKind)}`}
                     >
-                      {getCrmSegmentLabel(contact.segment)}
+                      {getCrmContactKindLabel(contact.contactKind)}
                     </span>
                   </button>
                 </li>

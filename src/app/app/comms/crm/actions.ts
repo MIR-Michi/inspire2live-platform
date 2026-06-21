@@ -4,7 +4,9 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { normalizeRole } from '@/lib/role-access'
+import { inviteUserAccount } from '@/app/app/admin/users/actions'
 import {
+  normalizeContactKind,
   normalizeCrmConsent,
   normalizeCrmInteractionType,
   normalizeCrmLifecycle,
@@ -13,6 +15,7 @@ import {
   type CrmSegment,
   type CrmSourceType,
 } from '@/lib/comms-crm'
+import { ROLE_LABELS } from '@/lib/role-access'
 
 type CrmTableClient = {
   from: (table: string) => {
@@ -146,6 +149,13 @@ export async function saveCrmContact(formData: FormData) {
     segment,
     source_type: sourceType,
     source_id: sourceId,
+    // Link the platform profile when this row is sourced from one — the trigger
+    // then keeps contact_kind = internal_user and the segment derived.
+    profile_id: sourceType === 'profile' ? sourceId : null,
+    contact_kind: normalizeContactKind(asText(formData.get('contact_kind'))),
+    // Optional, nullable planning hint: the platform role ("user type") to apply
+    // if/when this contact is invited. Does not change kind or platform_status.
+    intended_role: asNullableText(formData.get('intended_role')),
     full_name: fullName,
     person_type: normalizeCrmPersonType(asText(formData.get('person_type'))),
     field_of_expertise: parseCrmList(asText(formData.get('field_of_expertise'))),
@@ -335,25 +345,25 @@ export async function deleteCrmContact(formData: FormData) {
   const sourceType = normalizeSourceType(asText(formData.get('source_type')))
   const sourceId = asNullableText(formData.get('source_id'))
 
-  // Internal people are managed via their profile.
+  // Platform users are managed via their profile.
   if (sourceType === 'profile') {
-    throw new Error('Internal contacts are managed via their profile and cannot be deleted here.')
+    throw new Error('Platform users are managed via their profile and cannot be deleted here.')
   }
 
   const crmSupabase = supabase as unknown as CrmTableClient
   let deleted = false
 
-  // 1. Delete the dedicated CRM row, if there is one (external only).
+  // 1. Delete the dedicated CRM row, if there is one (anything but a platform user).
   if (contactId) {
     const { data: existing, error: readError } = await crmSupabase
       .from('comms_crm_contacts')
-      .select('id, segment')
+      .select('id, contact_kind, profile_id')
       .eq('id', contactId)
       .maybeSingle()
     if (readError) throw new Error(readError.message)
     if (existing) {
-      if (existing.segment !== 'external') {
-        throw new Error('Only external contacts can be deleted.')
+      if (existing.contact_kind === 'internal_user' || existing.profile_id) {
+        throw new Error('Platform users cannot be deleted from the CRM.')
       }
       const { error } = await crmSupabase.from('comms_crm_contacts').delete().eq('id', contactId)
       if (error) throw new Error(error.message)
@@ -372,4 +382,59 @@ export async function deleteCrmContact(formData: FormData) {
 
   revalidatePath('/app/comms/crm')
   revalidatePath('/app/comms/crm/people')
+}
+
+/**
+ * Promotes a contact (internal_contact or external) to a platform user — the
+ * ONLY path that creates an internal_user. Sends a User-Management invite with
+ * the chosen role ("user type") and records the pending state on the spine. The
+ * profile-creation trigger links the new profile back onto the same contact, so
+ * no duplicate is created. Restricted to platform admins.
+ */
+export async function inviteContactToPlatform(formData: FormData) {
+  const supabase = await createClient()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) throw new Error('Not authenticated')
+
+  const { data: profile, error: profileError } = await supabase
+    .from('profiles')
+    .select('role')
+    .eq('id', user.id)
+    .maybeSingle()
+  if (profileError) throw new Error(profileError.message)
+  if (normalizeRole(profile?.role) !== 'PlatformAdmin') {
+    throw new Error('Only platform admins can invite contacts to the platform.')
+  }
+
+  const email = asText(formData.get('email')).toLowerCase()
+  const role = asText(formData.get('role'))
+  const origin = asText(formData.get('origin'))
+  const contactId = asText(formData.get('crm_contact_id'))
+
+  if (!email) throw new Error('This contact has no email address to invite.')
+  const inviteRole = role in ROLE_LABELS ? role : 'PatientAdvocate'
+
+  const { error } = await inviteUserAccount(email, inviteRole, origin)
+  if (error) throw new Error(error)
+
+  // Record intent + pending state on the spine. Idempotent with the trigger.
+  if (contactId) {
+    const crmSupabase = supabase as unknown as CrmTableClient
+    const { error: updateError } = await crmSupabase
+      .from('comms_crm_contacts')
+      .update({
+        intended_role: inviteRole,
+        platform_status: 'invited',
+        updated_by: user.id,
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', contactId)
+    if (updateError) throw new Error(updateError.message)
+  }
+
+  revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
+  revalidatePath('/app/admin/users')
 }

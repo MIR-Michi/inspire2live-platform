@@ -31,15 +31,15 @@ export default async function CommsCrmHubPage({
   const newMembersCount: number = newMembersResult.count ?? 0
 
   const followUpCount = records.filter((record) => record.health === 'follow_up' || Boolean(record.nextFollowUpAt)).length
-  const internalCount = records.filter((record) => record.segment === 'internal').length
-  const externalCount = records.filter((record) => record.segment === 'external').length
+  const userCount = records.filter((record) => record.contactKind === 'internal_user').length
+  const externalCount = records.filter((record) => record.contactKind === 'external').length
 
   const tiles = [
     {
       href: '/app/comms/crm/people',
       label: 'People',
       value: records.length,
-      meta: `${internalCount} internal · ${externalCount} external`,
+      meta: `${userCount} platform users · ${externalCount} external`,
       tone: 'border-orange-200 bg-orange-50 text-orange-700',
     },
     {
