@@ -1,18 +1,25 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
-import { getRoleLabel } from '@/lib/role-access'
+import { getRoleLabel, normalizeRole } from '@/lib/role-access'
 import {
+  deriveContactKind,
   deriveRelationshipHealth,
+  normalizeContactKind,
   normalizeCrmConsent,
   normalizeCrmLifecycle,
   normalizeCrmPersonType,
+  normalizeEmail,
+  normalizePlatformStatus,
   normalizeProjectLabels,
+  segmentFromKind,
   type CrmConnectorBacklogItem,
+  type CrmContactKind,
   type CrmContactRecord,
   type CrmPipelineDetail,
   type CrmPipelineMember,
   type CrmPipelineStage,
   type CrmPipelineSummary,
+  type CrmPlatformStatus,
   type CrmSegment,
   type CrmSelectOption,
   type CrmSourceType,
@@ -34,6 +41,95 @@ export type CrmDirectory = {
   crmReady: boolean
 }
 
+// ─── Raw row shapes (subset of columns the assembler needs) ──────────────────
+
+export type RawProfileRow = {
+  id: string
+  name: string
+  email: string | null
+  avatar_url: string | null
+  bio: string | null
+  city: string | null
+  country: string | null
+  organization: string | null
+  role: string
+  expertise_tags: string[] | null
+  last_active_at: string | null
+  status?: string | null
+  onboarding_completed?: boolean | null
+}
+
+export type RawCampusMemberRow = {
+  id: string
+  name: string
+  organisation: string | null
+  role_description: string | null
+  country: string | null
+  platform_profile_id: string | null
+  initiative_affiliations: string[] | null
+  last_channel_activity: string | null
+  date_welcomed: string | null
+  welcomed_by_peter: boolean | null
+  notes: string | null
+  whatsapp_id?: string | null
+}
+
+export type RawCrmContactRow = {
+  id: string
+  source_type: string
+  source_id: string | null
+  full_name: string
+  segment: string
+  contact_kind?: string | null
+  platform_status?: string | null
+  intended_role?: string | null
+  profile_id?: string | null
+  normalized_email?: string | null
+  person_type: string | null
+  field_of_expertise: string[] | null
+  skills: string[] | null
+  picture_url: string | null
+  bio: string | null
+  title: string | null
+  organisation: string | null
+  email: string | null
+  phone: string | null
+  city: string | null
+  country: string | null
+  preferred_channel: string | null
+  relationship_owner_id: string | null
+  relationship_owner_label: string | null
+  lifecycle_stage: string
+  last_interaction_at: string | null
+  next_follow_up_at: string | null
+  consent_status: string
+  privacy_notes: string | null
+  retention_review_at: string | null
+  source_label: string | null
+  tags: string[]
+  notes: string | null
+}
+
+export type AssembleInput = {
+  profiles: RawProfileRow[]
+  initiativeMembers: Array<{ user_id: string; initiative_id: string }>
+  initiatives: Array<{ id: string; title: string }>
+  campusMembers: RawCampusMemberRow[]
+  events: Array<{ id: string; name: string; event_type: string; start_date: string | null }>
+  crmContacts: RawCrmContactRow[]
+  crmInitiatives: Array<{ contact_id: string; initiative_id: string }>
+  crmEventLinks: Array<{ contact_id: string; event_id: string; relationship_type: string }>
+  crmInteractions: Array<{
+    id: string
+    contact_id: string
+    interaction_type: string
+    summary: string
+    occurred_at: string
+    next_follow_up_at: string | null
+  }>
+  ownerLabels?: Map<string, string>
+}
+
 function mergeText(primary: string | null | undefined, fallback: string | null | undefined) {
   return primary ?? fallback ?? null
 }
@@ -42,20 +138,277 @@ function mergeArray(primary: string[] | null | undefined, fallback: string[] | n
   return primary && primary.length > 0 ? primary : fallback ?? []
 }
 
+/** Platform-account state derived from a platform profile. */
+function platformStatusForProfile(profile: RawProfileRow): CrmPlatformStatus {
+  if (profile.status === 'inactive') return 'inactive'
+  // A profile exists but onboarding isn't finished → "invited" (pending).
+  if (profile.onboarding_completed === false) return 'invited'
+  return 'active'
+}
+
 /**
- * Loads and merges the full CRM directory: platform profiles, campus
- * stakeholder records, and dedicated CRM enrichment rows, into one list of
- * `CrmContactRecord`s. Shared by the CRM hub (for counts) and the People view
- * (for the full searchable list) so both stay consistent.
+ * Pure assembler: merges platform profiles (internal_user), World Campus members
+ * (internal_contact — NOT external), and dedicated CRM rows into one
+ * deduplicated list of `CrmContactRecord`s.
+ *
+ * Identity is resolved spine-first: profiles and campus members seed base
+ * records keyed by a stable person key and indexed by normalized email; CRM rows
+ * then overlay onto the matching base (by profile_id, then email, then legacy
+ * source link) instead of creating a duplicate. Profile identity always wins for
+ * internal users; the CRM row contributes only relationship data for them.
+ */
+export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
+  const initiativeMap = new Map(input.initiatives.map((i) => [i.id, i.title]))
+  const eventMap = new Map(
+    input.events.map((e) => [e.id, `${e.name}${e.event_type === 'podcast' ? ' (Podcast)' : ''}`])
+  )
+  const profileMap = new Map(input.profiles.map((p) => [p.id, p]))
+  const ownerMap = input.ownerLabels ?? new Map(input.profiles.map((p) => [p.id, p.name ?? p.email ?? '']))
+
+  const membershipTitles = new Map<string, string[]>()
+  const membershipIds = new Map<string, string[]>()
+  for (const m of input.initiativeMembers) {
+    const title = initiativeMap.get(m.initiative_id)
+    membershipIds.set(m.user_id, [...(membershipIds.get(m.user_id) ?? []), m.initiative_id])
+    if (!title) continue
+    membershipTitles.set(m.user_id, Array.from(new Set([...(membershipTitles.get(m.user_id) ?? []), title])))
+  }
+
+  const records = new Map<string, CrmContactRecord>()
+  const keyByEmail = new Map<string, string>()
+
+  const indexEmail = (email: string | null | undefined, key: string) => {
+    const normalized = normalizeEmail(email)
+    if (normalized && !keyByEmail.has(normalized)) keyByEmail.set(normalized, key)
+  }
+
+  // 1) Platform users (category A). IndustryPartners are handled elsewhere.
+  for (const profile of input.profiles) {
+    if (normalizeRole(profile.role) === 'IndustryPartner') continue
+    const key = `profile:${profile.id}`
+    records.set(key, {
+      id: key,
+      crmContactId: null,
+      sourceType: 'profile' as CrmSourceType,
+      sourceId: profile.id,
+      fullName: profile.name,
+      segment: 'internal' as CrmSegment,
+      contactKind: 'internal_user',
+      platformStatus: platformStatusForProfile(profile),
+      intendedRole: null,
+      profileId: profile.id,
+      personType: normalizeRole(profile.role) === 'Comms' ? 'comms' : null,
+      fieldOfExpertise: [],
+      skills: profile.expertise_tags ?? [],
+      pictureUrl: profile.avatar_url,
+      bio: profile.bio,
+      title: getRoleLabel(profile.role),
+      organisation: profile.organization,
+      associatedProjects: membershipTitles.get(profile.id) ?? [],
+      associatedProjectIds: membershipIds.get(profile.id) ?? [],
+      associatedEvents: [],
+      associatedEventIds: [],
+      email: profile.email,
+      phone: null,
+      city: profile.city,
+      country: profile.country,
+      preferredChannel: 'Email',
+      relationshipOwner: normalizeRole(profile.role) === 'Comms' ? 'Communications team' : null,
+      relationshipOwnerId: null,
+      health: deriveRelationshipHealth(profile.last_active_at),
+      lastInteractionAt: profile.last_active_at,
+      nextFollowUpAt: null,
+      consentStatus: 'not_required' as const,
+      privacyNotes: null,
+      retentionReviewAt: null,
+      sourceLabel: normalizeRole(profile.role) === 'Comms' ? 'Comms workspace profile' : 'Platform profile',
+      tags: [...(profile.expertise_tags ?? []), 'internal'].filter(Boolean),
+      notes: null,
+      recentInteractions: [],
+    })
+    indexEmail(profile.email, key)
+  }
+
+  // 2) World Campus members — internal contacts WITHOUT platform access. When
+  //    linked to a platform user, fold the channel data into that user record
+  //    instead of creating a separate identity.
+  for (const member of input.campusMembers) {
+    const linkedKey = member.platform_profile_id ? `profile:${member.platform_profile_id}` : null
+    const linkedProfile = member.platform_profile_id ? profileMap.get(member.platform_profile_id) ?? null : null
+    const projectIds = (member.initiative_affiliations ?? []).filter((v) => initiativeMap.has(v))
+
+    if (linkedKey && records.has(linkedKey)) {
+      // Fold campus affiliations onto the existing user record.
+      const rec = records.get(linkedKey)!
+      const mergedIds = Array.from(new Set([...rec.associatedProjectIds, ...projectIds]))
+      rec.associatedProjectIds = mergedIds
+      rec.associatedProjects = mergedIds.map((id) => initiativeMap.get(id)).filter(Boolean) as string[]
+      if (member.welcomed_by_peter) rec.tags = Array.from(new Set([...rec.tags, 'world-campus']))
+      continue
+    }
+
+    const key = `campus_member:${member.id}`
+    const lastInteractionAt = member.last_channel_activity ?? member.date_welcomed ?? null
+    records.set(key, {
+      id: key,
+      crmContactId: null,
+      sourceType: 'campus_member' as CrmSourceType,
+      sourceId: member.id,
+      fullName: member.name,
+      segment: 'internal' as CrmSegment,
+      contactKind: 'internal_contact',
+      platformStatus: 'none',
+      intendedRole: null,
+      profileId: null,
+      personType: null,
+      fieldOfExpertise: [],
+      skills: [],
+      pictureUrl: linkedProfile?.avatar_url ?? null,
+      bio: linkedProfile?.bio ?? member.role_description ?? member.notes,
+      title: member.role_description,
+      organisation: member.organisation ?? linkedProfile?.organization ?? null,
+      associatedProjects: normalizeProjectLabels(member.initiative_affiliations, initiativeMap),
+      associatedProjectIds: projectIds,
+      associatedEvents: [],
+      associatedEventIds: [],
+      email: linkedProfile?.email ?? null,
+      phone: null,
+      city: linkedProfile?.city ?? null,
+      country: member.country ?? linkedProfile?.country ?? null,
+      preferredChannel: member.whatsapp_id ? 'WhatsApp / community' : 'WhatsApp / community',
+      relationshipOwner: member.welcomed_by_peter ? 'Peter' : 'Communications team',
+      relationshipOwnerId: null,
+      health: deriveRelationshipHealth(lastInteractionAt),
+      lastInteractionAt,
+      nextFollowUpAt: null,
+      consentStatus: 'unknown' as const,
+      privacyNotes: null,
+      retentionReviewAt: null,
+      sourceLabel: linkedProfile ? 'Campus + platform profile' : 'World Campus member',
+      tags: Array.from(new Set([...normalizeProjectLabels(member.initiative_affiliations, initiativeMap), 'world-campus'])),
+      notes: member.notes,
+      recentInteractions: [],
+    })
+  }
+
+  // 3) Dedicated CRM rows overlay onto the matching base, or stand alone.
+  const projectIdsByContact = new Map<string, string[]>()
+  for (const link of input.crmInitiatives) {
+    projectIdsByContact.set(link.contact_id, [...(projectIdsByContact.get(link.contact_id) ?? []), link.initiative_id])
+  }
+  const eventIdsByContact = new Map<string, string[]>()
+  for (const link of input.crmEventLinks) {
+    eventIdsByContact.set(link.contact_id, [...(eventIdsByContact.get(link.contact_id) ?? []), link.event_id])
+  }
+  const interactionsByContact = new Map<string, CrmContactRecord['recentInteractions']>()
+  for (const interaction of input.crmInteractions) {
+    interactionsByContact.set(interaction.contact_id, [
+      ...(interactionsByContact.get(interaction.contact_id) ?? []),
+      {
+        id: interaction.id,
+        type: interaction.interaction_type,
+        summary: interaction.summary,
+        occurredAt: interaction.occurred_at,
+        nextFollowUpAt: interaction.next_follow_up_at,
+      },
+    ])
+  }
+
+  for (const contact of input.crmContacts) {
+    const normalized = normalizeEmail(contact.email) ?? contact.normalized_email ?? null
+
+    let key: string | null = null
+    if (contact.profile_id && records.has(`profile:${contact.profile_id}`)) key = `profile:${contact.profile_id}`
+    else if (normalized && keyByEmail.has(normalized)) key = keyByEmail.get(normalized)!
+    else if (contact.source_type === 'profile' && contact.source_id && records.has(`profile:${contact.source_id}`))
+      key = `profile:${contact.source_id}`
+    else if (contact.source_type === 'campus_member' && contact.source_id && records.has(`campus_member:${contact.source_id}`))
+      key = `campus_member:${contact.source_id}`
+
+    const base = key ? records.get(key) ?? null : null
+    const isInternalUser = base?.contactKind === 'internal_user'
+
+    const contactKind: CrmContactKind = isInternalUser
+      ? 'internal_user'
+      : normalizeContactKind(contact.contact_kind) ??
+        base?.contactKind ??
+        deriveContactKind({
+          profileId: contact.profile_id,
+          email: contact.email,
+          isCampusMember: contact.source_type === 'campus_member',
+        })
+
+    const platformStatus: CrmPlatformStatus = isInternalUser
+      ? base!.platformStatus
+      : normalizePlatformStatus(contact.platform_status)
+
+    const projectIds = projectIdsByContact.get(contact.id) ?? base?.associatedProjectIds ?? []
+    const eventIds = eventIdsByContact.get(contact.id) ?? []
+    const ownerLabel = contact.relationship_owner_id
+      ? ownerMap.get(contact.relationship_owner_id) ?? contact.relationship_owner_label
+      : contact.relationship_owner_label
+
+    const record: CrmContactRecord = {
+      id: contact.id,
+      crmContactId: contact.id,
+      sourceType: contact.source_type as CrmSourceType,
+      sourceId: contact.source_id,
+      fullName: isInternalUser ? base!.fullName : contact.full_name,
+      segment: segmentFromKind(contactKind),
+      contactKind,
+      platformStatus,
+      intendedRole: contact.intended_role ?? null,
+      profileId: contact.profile_id ?? base?.profileId ?? null,
+      personType: normalizeCrmPersonType(contact.person_type) ?? base?.personType ?? null,
+      fieldOfExpertise: isInternalUser ? base!.fieldOfExpertise : mergeArray(contact.field_of_expertise, base?.fieldOfExpertise),
+      skills: isInternalUser ? base!.skills : mergeArray(contact.skills, base?.skills),
+      pictureUrl: isInternalUser ? base!.pictureUrl : mergeText(contact.picture_url, base?.pictureUrl),
+      bio: isInternalUser ? base!.bio : mergeText(contact.bio, base?.bio),
+      title: isInternalUser ? base!.title : mergeText(contact.title, base?.title),
+      organisation: isInternalUser ? base!.organisation : mergeText(contact.organisation, base?.organisation),
+      associatedProjects: projectIds.map((id) => initiativeMap.get(id)).filter(Boolean) as string[],
+      associatedProjectIds: projectIds,
+      associatedEvents: eventIds.map((id) => eventMap.get(id)).filter(Boolean) as string[],
+      associatedEventIds: eventIds,
+      email: isInternalUser ? base!.email : mergeText(contact.email, base?.email),
+      phone: contact.phone,
+      city: isInternalUser ? base!.city : mergeText(contact.city, base?.city),
+      country: isInternalUser ? base!.country : mergeText(contact.country, base?.country),
+      preferredChannel: mergeText(contact.preferred_channel, base?.preferredChannel),
+      relationshipOwner: ownerLabel ?? base?.relationshipOwner ?? null,
+      relationshipOwnerId: contact.relationship_owner_id,
+      health: normalizeCrmLifecycle(contact.lifecycle_stage),
+      lastInteractionAt: contact.last_interaction_at ?? base?.lastInteractionAt ?? null,
+      nextFollowUpAt: contact.next_follow_up_at,
+      consentStatus: normalizeCrmConsent(contact.consent_status),
+      privacyNotes: contact.privacy_notes,
+      retentionReviewAt: contact.retention_review_at,
+      sourceLabel: contact.source_label ?? base?.sourceLabel ?? 'CRM contact',
+      tags: contact.tags.length > 0 ? contact.tags : base?.tags ?? [],
+      notes: contact.notes ?? base?.notes ?? null,
+      recentInteractions: (interactionsByContact.get(contact.id) ?? []).slice(0, 3),
+    }
+
+    if (key) records.delete(key)
+    records.set(record.id, record)
+  }
+
+  return Array.from(records.values()).sort((a, b) => a.fullName.localeCompare(b.fullName))
+}
+
+/**
+ * Loads and merges the full CRM directory. Fetches the raw rows then delegates
+ * to the pure `assembleCrmRecords` for the spine-first dedup. Shared by the CRM
+ * hub (counts) and the People view (full searchable list).
  */
 export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Promise<CrmDirectory> {
   const crmSupabase = supabase as unknown as CrmQueryClient
 
   const [
-    { data: profiles },
+    profilesResult,
     { data: initiativeMembers },
     { data: initiatives },
-    { data: campusMembers },
+    campusResult,
     { data: events },
     crmContactsResult,
     crmInitiativesResult,
@@ -63,15 +416,16 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     crmInteractionsResult,
     connectorBacklogResult,
   ] = await Promise.all([
+    // Select status + onboarding_completed when present; fall back if 00053 isn't applied.
     supabase
       .from('profiles')
-      .select('id, name, email, avatar_url, bio, city, country, organization, role, expertise_tags, last_active_at')
+      .select('id, name, email, avatar_url, bio, city, country, organization, role, expertise_tags, last_active_at, status, onboarding_completed')
       .order('name'),
     supabase.from('initiative_members').select('user_id, initiative_id, role'),
     supabase.from('initiatives').select('id, title').order('title'),
     supabase
       .from('campus_members')
-      .select('id, name, organisation, role_description, country, platform_profile_id, initiative_affiliations, last_channel_activity, date_welcomed, welcomed_by_peter, notes')
+      .select('id, name, organisation, role_description, country, platform_profile_id, initiative_affiliations, last_channel_activity, date_welcomed, welcomed_by_peter, notes, whatsapp_id')
       .order('name'),
     supabase.from('events').select('id, name, event_type, start_date').order('start_date', { ascending: false }).limit(160),
     crmSupabase.from('comms_crm_contacts').select('*').order('updated_at', { ascending: false }),
@@ -85,113 +439,40 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     crmSupabase.from('comms_crm_connector_backlog').select('*').order('integration_target'),
   ])
 
-  const initiativeMap = new Map((initiatives ?? []).map((initiative) => [initiative.id, initiative.title]))
-  const eventMap = new Map(
-    (events ?? []).map((event) => [
-      event.id,
-      `${event.name}${event.event_type === 'podcast' ? ' (Podcast)' : ''}`,
-    ])
-  )
-  const membershipMap = new Map<string, string[]>()
-
-  for (const membership of initiativeMembers ?? []) {
-    const title = initiativeMap.get(membership.initiative_id)
-    if (!title) continue
-    const current = membershipMap.get(membership.user_id) ?? []
-    membershipMap.set(membership.user_id, Array.from(new Set([...current, title])))
+  // Graceful fallback for environments without the status/onboarding columns.
+  let profiles = profilesResult.data as RawProfileRow[] | null
+  if (profilesResult.error) {
+    const fallback = await supabase
+      .from('profiles')
+      .select('id, name, email, avatar_url, bio, city, country, organization, role, expertise_tags, last_active_at')
+      .order('name')
+    profiles = (fallback.data as RawProfileRow[] | null) ?? []
   }
 
-  const profileMap = new Map((profiles ?? []).map((profile) => [profile.id, profile]))
-  const ownerMap = new Map((profiles ?? []).map((profile) => [profile.id, profile.name ?? profile.email]))
+  let campusMembers = campusResult.data as RawCampusMemberRow[] | null
+  if (campusResult.error) {
+    const fallback = await supabase
+      .from('campus_members')
+      .select('id, name, organisation, role_description, country, platform_profile_id, initiative_affiliations, last_channel_activity, date_welcomed, welcomed_by_peter, notes')
+      .order('name')
+    campusMembers = (fallback.data as RawCampusMemberRow[] | null) ?? []
+  }
 
-  const internalRecords: CrmContactRecord[] = (profiles ?? [])
-    .filter((profile) => profile.role !== 'IndustryPartner')
-    .map((profile) => ({
-      id: `profile:${profile.id}`,
-      crmContactId: null,
-      sourceType: 'profile' as CrmSourceType,
-      sourceId: profile.id,
-      fullName: profile.name,
-      segment: 'internal' as CrmSegment,
-      personType: profile.role === 'Comms' ? 'comms' : null,
-      fieldOfExpertise: [],
-      skills: profile.expertise_tags ?? [],
-      pictureUrl: profile.avatar_url,
-      bio: profile.bio,
-      title: getRoleLabel(profile.role),
-      organisation: profile.organization,
-      associatedProjects: membershipMap.get(profile.id) ?? [],
-      associatedProjectIds: (initiativeMembers ?? [])
-        .filter((membership) => membership.user_id === profile.id)
-        .map((membership) => membership.initiative_id),
-      associatedEvents: [],
-      associatedEventIds: [],
-      email: profile.email,
-      phone: null,
-      city: profile.city,
-      country: profile.country,
-      preferredChannel: 'Email',
-      relationshipOwner: profile.role === 'Comms' ? 'Communications team' : null,
-      relationshipOwnerId: null,
-      health: deriveRelationshipHealth(profile.last_active_at),
-      lastInteractionAt: profile.last_active_at,
-      nextFollowUpAt: null,
-      consentStatus: 'not_required' as const,
-      privacyNotes: null,
-      retentionReviewAt: null,
-      sourceLabel: profile.role === 'Comms' ? 'Comms workspace profile' : 'Platform profile',
-      tags: [...(profile.expertise_tags ?? []), profile.role === 'Comms' ? 'comms' : 'internal'].filter(Boolean),
-      notes: null,
-      recentInteractions: [],
-    }))
+  const ownerLabels = new Map((profiles ?? []).map((p) => [p.id, p.name ?? p.email ?? '']))
 
-  const externalRecords: CrmContactRecord[] = (campusMembers ?? []).map((member) => {
-    const linkedProfile = member.platform_profile_id ? profileMap.get(member.platform_profile_id) ?? null : null
-    const lastInteractionAt = member.last_channel_activity ?? member.date_welcomed ?? null
-    const associatedProjectIds = (member.initiative_affiliations ?? []).filter((value) => initiativeMap.has(value))
-
-    return {
-      id: `campus_member:${member.id}`,
-      crmContactId: null,
-      sourceType: 'campus_member' as CrmSourceType,
-      sourceId: member.id,
-      fullName: member.name,
-      segment: 'external' as CrmSegment,
-      personType: null,
-      fieldOfExpertise: [],
-      skills: [],
-      pictureUrl: linkedProfile?.avatar_url ?? null,
-      bio: linkedProfile?.bio ?? member.role_description ?? member.notes,
-      title: member.role_description,
-      organisation: member.organisation ?? linkedProfile?.organization ?? null,
-      associatedProjects: normalizeProjectLabels(member.initiative_affiliations, initiativeMap),
-      associatedProjectIds,
-      associatedEvents: [],
-      associatedEventIds: [],
-      email: linkedProfile?.email ?? null,
-      phone: null,
-      city: linkedProfile?.city ?? null,
-      country: member.country ?? linkedProfile?.country ?? null,
-      preferredChannel: linkedProfile?.email ? 'Email' : 'WhatsApp / community',
-      relationshipOwner: member.welcomed_by_peter ? 'Peter' : 'Communications team',
-      relationshipOwnerId: null,
-      health: deriveRelationshipHealth(lastInteractionAt),
-      lastInteractionAt,
-      nextFollowUpAt: null,
-      consentStatus: 'unknown' as const,
-      privacyNotes: null,
-      retentionReviewAt: null,
-      sourceLabel: linkedProfile ? 'Campus + platform profile' : 'Campus stakeholder record',
-      tags: normalizeProjectLabels(member.initiative_affiliations, initiativeMap),
-      notes: member.notes,
-      recentInteractions: [],
-    }
+  const records = assembleCrmRecords({
+    profiles: profiles ?? [],
+    initiativeMembers: (initiativeMembers ?? []) as Array<{ user_id: string; initiative_id: string }>,
+    initiatives: (initiatives ?? []) as Array<{ id: string; title: string }>,
+    campusMembers: campusMembers ?? [],
+    events: (events ?? []) as Array<{ id: string; name: string; event_type: string; start_date: string | null }>,
+    crmContacts: crmContactsResult.error ? [] : (crmContactsResult.data as RawCrmContactRow[]) ?? [],
+    crmInitiatives: crmInitiativesResult.error ? [] : crmInitiativesResult.data ?? [],
+    crmEventLinks: crmEventsResult.error ? [] : crmEventsResult.data ?? [],
+    crmInteractions: crmInteractionsResult.error ? [] : crmInteractionsResult.data ?? [],
+    ownerLabels,
   })
 
-  const crmContacts = crmContactsResult.error ? [] : crmContactsResult.data ?? []
-  const crmInitiatives = crmInitiativesResult.error ? [] : crmInitiativesResult.data ?? []
-  const crmEventLinks = crmEventsResult.error ? [] : crmEventsResult.data ?? []
-  const crmInteractions = crmInteractionsResult.error ? [] : crmInteractionsResult.data ?? []
   const connectorBacklog: CrmConnectorBacklogItem[] = connectorBacklogResult.error
     ? []
     : (connectorBacklogResult.data ?? []).map((item: {
@@ -208,101 +489,11 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
         guardrail: item.guardrail,
       }))
 
-  const projectIdsByContact = new Map<string, string[]>()
-  for (const link of crmInitiatives) {
-    projectIdsByContact.set(link.contact_id, [...(projectIdsByContact.get(link.contact_id) ?? []), link.initiative_id])
-  }
-
-  const eventIdsByContact = new Map<string, string[]>()
-  for (const link of crmEventLinks) {
-    eventIdsByContact.set(link.contact_id, [...(eventIdsByContact.get(link.contact_id) ?? []), link.event_id])
-  }
-
-  const interactionsByContact = new Map<string, CrmContactRecord['recentInteractions']>()
-  for (const interaction of crmInteractions) {
-    interactionsByContact.set(interaction.contact_id, [
-      ...(interactionsByContact.get(interaction.contact_id) ?? []),
-      {
-        id: interaction.id,
-        type: interaction.interaction_type,
-        summary: interaction.summary,
-        occurredAt: interaction.occurred_at,
-        nextFollowUpAt: interaction.next_follow_up_at,
-      },
-    ])
-  }
-
-  const baseBySource = new Map(
-    [...internalRecords, ...externalRecords].map((record) => [`${record.sourceType}:${record.sourceId}`, record])
-  )
-  const recordsByKey = new Map<string, CrmContactRecord>()
-
-  for (const record of [...internalRecords, ...externalRecords]) {
-    recordsByKey.set(record.id, record)
-  }
-
-  for (const contact of crmContacts) {
-    const base = contact.source_id ? baseBySource.get(`${contact.source_type}:${contact.source_id}`) ?? null : null
-    // Internal people are owned by their platform profile: their core identity
-    // (name, picture, bio, role, organisation, expertise, location, email) is the
-    // single source of truth and always wins over anything stored on the CRM row,
-    // so the profile and the CRM stay synchronised. The CRM row only contributes
-    // relationship data (owner, lifecycle, consent, follow-up, tags, notes).
-    const isInternalProfile = Boolean(base) && base!.sourceType === 'profile'
-    const projectIds = projectIdsByContact.get(contact.id) ?? base?.associatedProjectIds ?? []
-    const eventIds = eventIdsByContact.get(contact.id) ?? []
-    const ownerLabel = contact.relationship_owner_id
-      ? ownerMap.get(contact.relationship_owner_id) ?? contact.relationship_owner_label
-      : contact.relationship_owner_label
-
-    const record: CrmContactRecord = {
-      id: contact.id,
-      crmContactId: contact.id,
-      sourceType: contact.source_type as CrmSourceType,
-      sourceId: contact.source_id,
-      fullName: isInternalProfile ? base!.fullName : contact.full_name,
-      segment: isInternalProfile ? 'internal' : (contact.segment as CrmSegment),
-      personType: normalizeCrmPersonType(contact.person_type) ?? base?.personType ?? null,
-      fieldOfExpertise: isInternalProfile ? base!.fieldOfExpertise : mergeArray(contact.field_of_expertise, base?.fieldOfExpertise),
-      skills: isInternalProfile ? base!.skills : mergeArray(contact.skills, base?.skills),
-      pictureUrl: isInternalProfile ? base!.pictureUrl : mergeText(contact.picture_url, base?.pictureUrl),
-      bio: isInternalProfile ? base!.bio : mergeText(contact.bio, base?.bio),
-      title: isInternalProfile ? base!.title : mergeText(contact.title, base?.title),
-      organisation: isInternalProfile ? base!.organisation : mergeText(contact.organisation, base?.organisation),
-      associatedProjects: projectIds.map((id) => initiativeMap.get(id)).filter(Boolean) as string[],
-      associatedProjectIds: projectIds,
-      associatedEvents: eventIds.map((id) => eventMap.get(id)).filter(Boolean) as string[],
-      associatedEventIds: eventIds,
-      email: isInternalProfile ? base!.email : mergeText(contact.email, base?.email),
-      phone: contact.phone,
-      city: isInternalProfile ? base!.city : mergeText(contact.city, base?.city),
-      country: isInternalProfile ? base!.country : mergeText(contact.country, base?.country),
-      preferredChannel: mergeText(contact.preferred_channel, base?.preferredChannel),
-      relationshipOwner: ownerLabel ?? base?.relationshipOwner ?? null,
-      relationshipOwnerId: contact.relationship_owner_id,
-      health: normalizeCrmLifecycle(contact.lifecycle_stage),
-      lastInteractionAt: contact.last_interaction_at ?? base?.lastInteractionAt ?? null,
-      nextFollowUpAt: contact.next_follow_up_at,
-      consentStatus: normalizeCrmConsent(contact.consent_status),
-      privacyNotes: contact.privacy_notes,
-      retentionReviewAt: contact.retention_review_at,
-      sourceLabel: contact.source_label ?? base?.sourceLabel ?? 'CRM contact',
-      tags: contact.tags.length > 0 ? contact.tags : base?.tags ?? [],
-      notes: contact.notes ?? base?.notes ?? null,
-      recentInteractions: (interactionsByContact.get(contact.id) ?? []).slice(0, 3),
-    }
-
-    recordsByKey.delete(`${contact.source_type}:${contact.source_id}`)
-    recordsByKey.set(record.id, record)
-  }
-
-  const records = Array.from(recordsByKey.values()).sort((a, b) => a.fullName.localeCompare(b.fullName))
-
   return {
     records,
-    people: (profiles ?? []).map((profile) => ({ id: profile.id, label: profile.name ?? profile.email })),
-    initiatives: (initiatives ?? []).map((initiative) => ({ id: initiative.id, label: initiative.title })),
-    events: (events ?? []).map((event) => ({
+    people: (profiles ?? []).map((profile) => ({ id: profile.id, label: profile.name ?? profile.email ?? '' })),
+    initiatives: (initiatives ?? []).map((initiative: { id: string; title: string }) => ({ id: initiative.id, label: initiative.title })),
+    events: ((events ?? []) as Array<{ id: string; name: string; event_type: string; start_date: string | null }>).map((event) => ({
       id: event.id,
       label: event.name,
       meta: `${event.event_type}${event.start_date ? ` · ${event.start_date}` : ''}`,

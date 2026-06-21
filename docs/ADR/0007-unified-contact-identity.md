@@ -1,6 +1,6 @@
 # ADR-0007: Unified Contact Identity (CRM spine + email resolution)
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-06-21
 - **Owners:** Michael Wittinger
 
@@ -50,10 +50,10 @@ Make `comms_crm_contacts` the **canonical contact spine** (one row per real pers
 3. Add `platform_status` (`none`/`invited`/`active`/`inactive`) to express the account relationship.
    **"Pending" = `platform_status='invited'`**, which only ever arises from a User-Management invite; all
    `internal_contact`/`external` rows are `none`.
-4. Anticipation is handled by the promotion flow plus **optional, nullable** planning hints
-   (`intended_role`, `intended_user_type`) that pre-fill the invite dialog and default to empty — they do
+4. Anticipation is handled by the promotion flow plus an **optional, nullable** planning hint
+   (`intended_role` — the platform role / "user type") that pre-fills the invite dialog and defaults to empty — it does
    **not** change `contact_kind` or `platform_status`.
-5. Introduce `crm_resolve_contact(email, name, source, source_id)` as the single find-or-create entry point;
+5. Introduce `crm_resolve_contact(email, name, profile_id)` as the single find-or-create entry point;
    route all contact creation (manual CRM add, campus import, profile creation, onboarding registration)
    through it.
 6. Promotion to a platform user happens **only** via an explicit "Invite to platform" action. On the

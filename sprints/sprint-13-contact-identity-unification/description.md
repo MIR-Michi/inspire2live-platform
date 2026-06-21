@@ -17,7 +17,8 @@ Close the contact-data-model gap described in `docs/CONTACT_DATA_MODEL_CONCEPT.m
 - "Pending" is expressed **only** by `platform_status='invited'` and arises **only** from an explicit
   "Invite to platform" action in User Management — never from CRM or new-members data entry.
 - When the org decides to onboard a category-B person, promotion **links**, it never duplicates; optional
-  `intended_role`/`intended_user_type` hints (empty by default) pre-fill the invite.
+  the optional `intended_role` hint (empty by default) pre-fills the invite. (NB: `profiles.user_type` was
+  removed in migration 00050 — the platform "user type" is now the `role`.)
 - CRM, User Management, the new-member dashboard, and Profile read/write a single, synchronized model with
   documented source-of-truth rules.
 
@@ -36,7 +37,7 @@ This sprint sequences after Sprint 12 (WhatsApp hardening) and builds directly o
 - [ ] `comms_crm_contacts` has `contact_kind` (`internal_user`/`internal_contact`/`external` — no
       `internal_pending`), `profile_id`, `member_onboarding_id`, `normalized_email` (partial-unique),
       `platform_status` (`none`/`invited`/`active`/`inactive`), the folded campus fields, and optional
-      nullable `intended_role`/`intended_user_type`, with constraints; `segment` retained as a
+      nullable `intended_role`, with constraints; `segment` retained as a
       derived/back-compat column. **No `campus_member_id`** — campus members are not a separate identity.
 - [ ] Campus members are reclassified from `external` to `internal_contact` (without platform access); their
       channel data folds onto the contact spine and they carry no separate identity link.
@@ -52,7 +53,7 @@ This sprint sequences after Sprint 12 (WhatsApp hardening) and builds directly o
       `internal_contact`/`none` (or `external`) — **never pending**. Optional invite hints are exposed but
       empty by default.
 - [ ] A single "Invite to platform" action (from User Management, a CRM contact, and the new-member
-      dashboard) lets the inviter pick `role` + `user_type` (pre-filled from hints if present), calls the
+      dashboard) lets the inviter pick `role` (the platform "user type", pre-filled from `intended_role` if present), calls the
       account-invite path, links/creates the onboarding record, and sets `platform_status='invited'`. This is
       the **only** way a contact becomes an `internal_user`.
 - [ ] `member_onboarding` records are linked to their CRM contact; no double data entry between the

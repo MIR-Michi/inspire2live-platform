@@ -1,20 +1,20 @@
 import { CommsCrmWorkspace } from '@/components/comms/comms-crm-workspace'
-import { matchesCrmQuery, normalizeCrmPersonType, type CrmSegment } from '@/lib/comms-crm'
+import { matchesCrmQuery, normalizeCrmPersonType, type CrmContactKind } from '@/lib/comms-crm'
 import { loadCrmDirectory } from '@/lib/comms-crm-data'
 import { normalizeRole } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 
-const VALID_SEGMENTS = new Set(['all', 'internal', 'external'])
+const VALID_KINDS = new Set(['all', 'internal_user', 'internal_contact', 'external'])
 const VALID_FILTERS = new Set(['follow_up', 'privacy_review'])
 
 export default async function CommsCrmPeoplePage({
   searchParams,
 }: {
-  searchParams?: Promise<{ segment?: string; type?: string; filter?: string; q?: string }>
+  searchParams?: Promise<{ kind?: string; type?: string; filter?: string; q?: string }>
 }) {
   const params = (await searchParams) ?? {}
-  const activeSegment =
-    params.segment && VALID_SEGMENTS.has(params.segment) ? (params.segment as 'all' | CrmSegment) : 'all'
+  const activeKind =
+    params.kind && VALID_KINDS.has(params.kind) ? (params.kind as 'all' | CrmContactKind) : 'all'
   const activePersonType = normalizeCrmPersonType(params.type) ?? (params.type === 'unclassified' ? 'unclassified' : null)
   const activeFilter = params.filter && VALID_FILTERS.has(params.filter) ? (params.filter as 'follow_up' | 'privacy_review') : null
   const query = params.q?.trim().toLowerCase() ?? ''
@@ -33,7 +33,7 @@ export default async function CommsCrmPeoplePage({
   }
 
   const visibleRecords = records.filter((record) => {
-    if (activeSegment !== 'all' && record.segment !== activeSegment) return false
+    if (activeKind !== 'all' && record.contactKind !== activeKind) return false
     if (activePersonType === 'unclassified' && record.personType) return false
     if (activePersonType && activePersonType !== 'unclassified' && record.personType !== activePersonType) return false
     if (activeFilter === 'follow_up' && record.health !== 'follow_up' && !record.nextFollowUpAt) return false
@@ -63,7 +63,7 @@ export default async function CommsCrmPeoplePage({
     <CommsCrmWorkspace
       records={records}
       visibleRecords={visibleRecords}
-      activeSegment={activeSegment}
+      activeKind={activeKind}
       activePersonType={params.type ?? ''}
       activeFilter={activeFilter}
       query={params.q?.trim() ?? ''}

@@ -285,7 +285,46 @@ Admin-configurable defaults per role (replaces hardcoded defaults).
 | `initiative_members_unique` | initiative_members | Unique on `(initiative_id, user_id)` |
 | `congress_members_unique` | congress_members | Unique on `(congress_id, user_id)` |
 | `invitations_unique_pending` | invitations | Prevents duplicate pending invitations |
+| `uq_comms_crm_contacts_normalized_email` | comms_crm_contacts | Partial unique on `normalized_email` (the contact identity match key) |
 
 ---
 
-*Last updated: 2026-02-24 · Maintainer: Michael Wittinger*
+## 9 · Contact Identity Model (Sprint 13)
+
+`comms_crm_contacts` is the **canonical contact spine** — one row per real person —
+unifying the CRM, User Management, the new-member dashboard, and Profile. See
+`docs/CONTACT_DATA_MODEL_CONCEPT.md` and `docs/ADR/0007-unified-contact-identity.md`.
+
+### `comms_crm_contacts` (identity columns)
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `contact_kind` | text | `internal_user` (platform user) · `internal_contact` (internal non-user, incl. World Campus members) · `external` (third party). **No `internal_pending`.** |
+| `platform_status` | text | `none` · `invited` (= "pending") · `active` · `inactive`. "Pending" only ever arises from a User-Management invite. |
+| `profile_id` | uuid (FK → profiles) | Set when the contact is a platform user (category A). |
+| `member_onboarding_id` | uuid (FK → member_onboarding) | Links the onboarding checklist. |
+| `normalized_email` | text | `lower(trim(email))`; the identity match key (partial-unique). |
+| `intended_role` | text | Optional, nullable hint: the platform role ("user type") to apply if/when invited. Does not change kind/status. |
+| `segment` | text | **Derived** from `contact_kind` (internal kinds → `internal`, else `external`). Kept for back-compat. |
+| `whatsapp_id`, `welcomed_by_peter` | text / boolean | World Campus channel attributes folded onto the spine (campus members are not a separate identity). |
+
+### Functions & triggers
+
+| Object | Purpose |
+|--------|---------|
+| `crm_resolve_contact(email, name, profile_id)` | Single find-or-create entry point; resolves on normalized email; never duplicates or sets pending. `SECURITY DEFINER`. |
+| `crm_contacts_sync_derived()` | BEFORE trigger: keeps `normalized_email` + derived `segment` in sync and defaults `contact_kind`. |
+| `handle_profile_contact_sync()` | profiles INSERT/UPDATE: links the spine, flips to `internal_user`, mirrors account state into `platform_status`. |
+| `handle_member_onboarding_contact_link()` | member_onboarding INSERT: resolves/links an `internal_contact` and records `member_onboarding_id`. |
+
+### Source-of-truth rules
+
+- **Identity** of an `internal_user` → `profiles` (CRM reads live, never writes back).
+- **Identity** of `internal_contact` / `external` → `comms_crm_contacts`.
+- **Relationship** data (owner, lifecycle, consent, tags, notes, pipelines) → always the spine.
+- **Promotion** (B → A) happens **only** via the "Invite to platform" action; the profile-creation trigger
+  links back onto the existing spine, so no duplicate is created.
+
+---
+
+*Last updated: 2026-06-21 · Maintainer: Michael Wittinger*

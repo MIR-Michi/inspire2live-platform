@@ -29,6 +29,12 @@ A core requirement is **anticipation**: when the organisation *does* decide to o
 (later, by user type), the model must make that promotion a *link*, never a *duplicate* — without forcing
 every internal contact to be pre-classified as a future user.
 
+> **Terminology note (implementation):** the standalone `profiles.user_type` column was removed in migration
+> `00050` — the platform's "user type" is now expressed by the canonical **`role`** (Comms, BoardMember,
+> IndustryPartner, …). Accordingly the implementation uses a single **`intended_role`** field (the role to
+> assign on invite) rather than a separate `intended_user_type`. References to "user type" below map to
+> `role`.
+
 ---
 
 ## 2 · Current State (as built)
@@ -40,7 +46,7 @@ path that bypasses all of them.
 
 | Store | Table | Represents | Key columns | Access |
 |-------|-------|-----------|-------------|--------|
-| **Profile / Users** | `profiles` (FK → `auth.users`) | Category **A** | `role` (8 canonical), `user_type` (`default`/`comms`/`board`/`partner`), `status` (`active`/`inactive`), `email` **unique** | User owns own row; admin manages |
+| **Profile / Users** | `profiles` (FK → `auth.users`) | Category **A** | `role` (8 canonical — the platform's "user type"), `status` (`active`/`inactive`), `onboarding_completed`, `email` **unique** | User owns own row; admin manages |
 | **CRM** | `comms_crm_contacts` | Overlay for **A/B/C** | `segment` (`internal`/`external`), `source_type` (`manual`/`profile`/`campus_member`), `source_id`, `person_type` (`comms`/`patient_advocate`/…) | Comms-team/admin only (`is_comms_team_or_admin()`) |
 | **Community** | `campus_members` | World Campus / WhatsApp stakeholders — **rendered as `external` today (a misclassification: they are internal contacts)** | `platform_profile_id` (optional → `profiles`), `whatsapp_id` | Comms-team/admin |
 | **Onboarding** | `member_onboarding` (+ `_tasks`) | New-member checklist | `profile_id` (optional), `status` (`pending`/`active`/`declined`/`completed`) | Comms-team/admin |
@@ -92,7 +98,7 @@ any CRM contact.
 | **G2** | **`segment` cannot distinguish a platform user (A) from an internal non-user contact (B); and campus members are mis-classified as `external`.** Both A and B are just `segment='internal'`, while World Campus members — who are internal contacts — surface as `external`. | The CRM can't show who actually has an account vs who is "just a contact", and community members appear in the wrong category. |
 | **G3** | **No platform-account state on the contact.** Nothing records whether an internal person is not-a-user, invited (pending), active, or deactivated. | Can't tell, from the CRM, who is on the platform; can't safely drive or report on invitations. |
 | **G4** | **Promotion = duplication.** When a B contact is invited and a `profiles` row appears, `loadCrmDirectory` emits **two** internal records (one from the manual CRM row, one from the new profile) — there is no email match to merge them. | Dirty directory exactly at the moment that matters; manual cleanup. |
-| **G5** | **Account-invite path is disconnected and lossy.** `inviteUserByEmail` ignores CRM/onboarding/campus and only takes `role`, not `user_type`. | Inviting a known contact from the CRM isn't possible; user_type must be set by hand afterwards. |
+| **G5** | **Account-invite path is disconnected.** `inviteUserByEmail` ignores CRM/onboarding/campus entirely; there is no way to invite a known contact from the CRM. | The CRM can't drive onboarding; the contact and the new profile aren't reconciled. |
 | **G6** | **Onboarding ↔ CRM not linked.** A manually-registered new member lives in `member_onboarding` but may not exist in the CRM, and vice-versa. | Two parallel lists; double entry. |
 | **G7** | **No email normalization / cross-source uniqueness.** CRM/campus emails are free text; matching by email is unreliable (case, whitespace). | Identity resolution can't be trusted. |
 | **G8** | **Sync direction only partially formalized.** Profile-wins is implemented for internal records, but no documented rule set for the other directions, and no audit/event when account state changes. | Behaviour is implicit in one function; fragile. |
@@ -178,17 +184,17 @@ A **partial unique index** on `normalized_email` (where not null) makes the matc
 
 Promotion happens **only** when someone clicks **"Invite to platform"** in User Management (or launches the
 same action from a CRM contact / the new-members dashboard). It is never automatic and never implied by
-CRM/dashboard data entry. The inviter chooses the `role` and `user_type` **at invite time** (optionally
-pre-filled from planning hints — see §4.7).
+CRM/dashboard data entry. The inviter chooses the `role` (the platform "user type") **at invite time**
+(optionally pre-filled from the `intended_role` hint — see §4.7).
 
 ```
 internal_contact (platform_status='none')
-        │  Comms/Admin clicks "Invite to platform"; picks role + user_type
+        │  Comms/Admin clicks "Invite to platform"; picks role
         ▼
-inviteUserAccount(email, role, user_type)            → platform_status='invited' ("pending")
+inviteUserAccount(email, role)                        → platform_status='invited' ("pending")
         │   (Supabase auth.admin.inviteUserByEmail)
         ▼
-auth.users insert → handle_new_user() creates profiles row (role + user_type)
+auth.users insert → handle_new_user() creates profiles row (role)
         │
         ▼
 profiles AFTER INSERT → crm_resolve_contact(email…) matches existing spine by normalized_email
@@ -212,16 +218,17 @@ default.
 | **Community / channel** (WhatsApp id, campus affiliations) | the contact spine (campus data folds in) | Stored on / keyed by the contact; `campus_members` is at most a per-contact detail table, **not** a separate identity. Campus members are `internal_contact`. |
 | **Provisioning** (onboarding checklist) | `member_onboarding` | Linked via `member_onboarding_id`. |
 | **Account state** (`platform_status`) | `profiles` + the invite action | `none` until invited; `invited`→`active`→`inactive` thereafter, mirroring `profiles.status`. |
-| **Role / user_type** | `profiles` (chosen at invite time) | Only exist once promoted; the profile wins thereafter. |
+| **Role** (the platform "user type") | `profiles` (chosen at invite time) | Only exists once promoted; the profile wins thereafter. |
 
 ### 4.7 Anticipating onboarding *without* mislabelling contacts
 
 The original requirement to "anticipate" stakeholder onboarding is satisfied by the promotion flow itself
 (§4.5) plus **two optional, non-defaulting planning hints** on the contact:
 
-- `intended_role` and `intended_user_type` — **nullable, empty by default.** Filled only when there is an
-  actual plan to invite a specific person, purely to pre-fill the invite dialog. They **do not** change
-  `contact_kind` or `platform_status`, and an empty value is the norm.
+- `intended_role` — **nullable, empty by default.** The platform role ("user type") to apply if/when this
+  person is invited. Filled only when there is an actual plan to invite a specific person, purely to pre-fill
+  the invite dialog. It **does not** change `contact_kind` or `platform_status`, and an empty value is the
+  norm.
 
 This keeps category B clean (most contacts have no intent recorded) while still letting the team queue a
 named person for a future invite "by user type" when a decision is actually made.
@@ -240,7 +247,7 @@ sprint).
 | Surface | Today | Target |
 |---------|-------|--------|
 | **Profile** | Source of truth for an internal user's identity. | Unchanged. On creation it resolves onto the contact spine (no orphan). |
-| **User Management** (`/app/admin/users`) | Invites by `role` only; separate from CRM. **The single place that creates internal users.** | `inviteUserAccount` also accepts `user_type`; can be launched from a CRM contact; sets `platform_status='invited'`. |
+| **User Management** (`/app/admin/users`) | Invites by `role` only; separate from CRM. **The single place that creates internal users.** | Same `inviteUserAccount(email, role)`, now also launchable from a CRM contact (carrying `intended_role`); sets `platform_status='invited'`. |
 | **CRM** (`/app/comms/crm`) | Internal/External only; can't tell users from contacts; duplicates on promotion. | Three kinds (A/B/C) with badges + `platform_status`; dedup-safe; optional invite hints. Adding a contact defaults to `internal_contact`/`none` — never pending. |
 | **New-member dashboard** | Standalone onboarding list; auto-row only for `@inspire2live.org` profiles. | Each onboarding record links a CRM contact (created as `internal_contact`); becoming a user still requires an explicit User-Management invite. |
 
@@ -249,7 +256,7 @@ sprint).
 ## 6 · Migration & rollout strategy
 
 1. **Additive schema first** (`contact_kind`, `profile_id`, `member_onboarding_id`, `normalized_email`,
-   `platform_status`, the folded campus fields, optional `intended_role`/`intended_user_type`) — all
+   `platform_status`, the folded campus fields, optional `intended_role`) — all
    nullable/defaulted, nothing breaks. **No `campus_member_id`** — campus members are not a separate identity.
 2. **Backfill + dedup**: normalize emails; collapse profile/campus/manual rows sharing an email into one
    spine; populate links; set `contact_kind` (`internal_user` where a profile exists, else `internal_contact`

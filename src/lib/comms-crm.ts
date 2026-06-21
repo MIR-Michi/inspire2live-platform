@@ -8,6 +8,104 @@ export type CrmRelationshipHealth = 'active' | 'nurture' | 'follow_up' | 'archiv
 export type CrmSourceType = 'manual' | 'profile' | 'campus_member'
 export type CrmConsentStatus = 'unknown' | 'granted' | 'declined' | 'not_required'
 
+// ─── Contact kind & platform-account state (Sprint 13) ───────────────────────
+//
+// `contact_kind` replaces the binary internal/external split with the three
+// first-class categories. `segment` is kept as a derived value (internal_user
+// and internal_contact → 'internal'; external → 'external') so existing filters
+// keep working.
+//
+//   internal_user    — invited via User Management; has a platform profile.
+//   internal_contact — internal I2L person (incl. World Campus members) who is
+//                      NOT a platform user and not currently meant to be one.
+//                      The default, terminal state — never "pending".
+//   external         — third-party contact.
+//
+// "Pending" is NOT a kind. It is the transient platform_status='invited' state,
+// which only ever arises from a User-Management invite.
+
+export const CRM_CONTACT_KIND_OPTIONS = [
+  { value: 'internal_user', label: 'Internal · user' },
+  { value: 'internal_contact', label: 'Internal · contact' },
+  { value: 'external', label: 'External' },
+] as const
+
+export type CrmContactKind = (typeof CRM_CONTACT_KIND_OPTIONS)[number]['value']
+
+export const CRM_PLATFORM_STATUS_OPTIONS = [
+  { value: 'none', label: 'Not on platform' },
+  { value: 'invited', label: 'Invited (pending)' },
+  { value: 'active', label: 'Active user' },
+  { value: 'inactive', label: 'Deactivated' },
+] as const
+
+export type CrmPlatformStatus = (typeof CRM_PLATFORM_STATUS_OPTIONS)[number]['value']
+
+/** Inspire2Live email domain — internal people use addresses on this domain. */
+export const INTERNAL_EMAIL_DOMAIN = 'inspire2live.org'
+
+const CRM_CONTACT_KIND_SET = new Set(CRM_CONTACT_KIND_OPTIONS.map((o) => o.value))
+const CRM_PLATFORM_STATUS_SET = new Set(CRM_PLATFORM_STATUS_OPTIONS.map((o) => o.value))
+
+/** Lower-cases and trims an email; returns null for blank/invalid input. */
+export function normalizeEmail(value: string | null | undefined): string | null {
+  if (typeof value !== 'string') return null
+  const trimmed = value.trim().toLowerCase()
+  return trimmed.length > 0 && trimmed.includes('@') ? trimmed : null
+}
+
+/** True when the email belongs to the Inspire2Live internal domain. */
+export function isInternalEmail(
+  value: string | null | undefined,
+  domain: string = INTERNAL_EMAIL_DOMAIN
+): boolean {
+  const normalized = normalizeEmail(value)
+  return normalized ? normalized.endsWith(`@${domain.toLowerCase()}`) : false
+}
+
+/**
+ * Derives the contact kind from the available signals. A linked platform
+ * profile always means `internal_user`; otherwise an Inspire2Live email means
+ * `internal_contact`; everything else is `external`. Never returns a "pending"
+ * value — pending is a platform_status, not a kind.
+ */
+export function deriveContactKind({
+  profileId,
+  email,
+  isCampusMember = false,
+}: {
+  profileId?: string | null
+  email?: string | null
+  isCampusMember?: boolean
+}): CrmContactKind {
+  if (profileId) return 'internal_user'
+  // World Campus members are internal contacts without platform access.
+  if (isCampusMember) return 'internal_contact'
+  if (isInternalEmail(email)) return 'internal_contact'
+  return 'external'
+}
+
+/** Derives the back-compat `segment` from a contact kind. */
+export function segmentFromKind(kind: CrmContactKind): CrmSegment {
+  return kind === 'external' ? 'external' : 'internal'
+}
+
+export function normalizeContactKind(value: string | null | undefined): CrmContactKind | null {
+  return CRM_CONTACT_KIND_SET.has(value as CrmContactKind) ? (value as CrmContactKind) : null
+}
+
+export function normalizePlatformStatus(value: string | null | undefined): CrmPlatformStatus {
+  return CRM_PLATFORM_STATUS_SET.has(value as CrmPlatformStatus) ? (value as CrmPlatformStatus) : 'none'
+}
+
+export function getCrmContactKindLabel(value: string | null | undefined) {
+  return CRM_CONTACT_KIND_OPTIONS.find((o) => o.value === value)?.label ?? 'Internal · contact'
+}
+
+export function getCrmPlatformStatusLabel(value: string | null | undefined) {
+  return CRM_PLATFORM_STATUS_OPTIONS.find((o) => o.value === value)?.label ?? 'Not on platform'
+}
+
 export const CRM_PERSON_TYPE_OPTIONS = [
   { value: 'comms', label: 'Comms' },
   { value: 'patient_advocate', label: 'Patient Advocate' },
@@ -78,6 +176,10 @@ export type CrmContactRecord = {
   sourceId: string | null
   fullName: string
   segment: CrmSegment
+  contactKind: CrmContactKind
+  platformStatus: CrmPlatformStatus
+  intendedRole: string | null
+  profileId: string | null
   personType: CrmPersonType | null
   fieldOfExpertise: string[]
   skills: string[]
