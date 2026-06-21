@@ -9,10 +9,13 @@ Close the contact-data-model gap described in `docs/CONTACT_DATA_MODEL_CONCEPT.m
 
 - Every person is represented by **one canonical contact** (`comms_crm_contacts` spine), resolved on
   normalized email and linked to its `profiles`, `campus_members`, and `member_onboarding` records.
-- The CRM models the three categories explicitly: **internal user (A)**, **internal pending (B)**,
-  **external (C)** via `contact_kind`.
-- Category-B Inspire2Live stakeholders can be **pre-staged with an intended role + user type** and
-  **invited to the platform** from one place — promotion **links**, it never duplicates.
+- The CRM models the three categories explicitly via `contact_kind`: **internal user (A)**, **internal
+  contact / non-user (B)**, **external (C)**. There is **no `internal_pending` kind** — `internal_contact`
+  is the default, terminal state for internal non-users.
+- "Pending" is expressed **only** by `platform_status='invited'` and arises **only** from an explicit
+  "Invite to platform" action in User Management — never from CRM or new-members data entry.
+- When the org decides to onboard a category-B person, promotion **links**, it never duplicates; optional
+  `intended_role`/`intended_user_type` hints (empty by default) pre-fill the invite.
 - CRM, User Management, the new-member dashboard, and Profile read/write a single, synchronized model with
   documented source-of-truth rules.
 
@@ -28,9 +31,11 @@ This sprint sequences after Sprint 12 (WhatsApp hardening) and builds directly o
 
 ## Acceptance criteria
 
-- [ ] `comms_crm_contacts` has `contact_kind`, `profile_id`, `campus_member_id`, `member_onboarding_id`,
-      `normalized_email` (partial-unique), `intended_role`, `intended_user_type`, `platform_status`, with
-      constraints; `segment` retained as a derived/back-compat column.
+- [ ] `comms_crm_contacts` has `contact_kind` (`internal_user`/`internal_contact`/`external` — no
+      `internal_pending`), `profile_id`, `campus_member_id`, `member_onboarding_id`, `normalized_email`
+      (partial-unique), `platform_status` (`none`/`invited`/`active`/`inactive`), and optional nullable
+      `intended_role`/`intended_user_type`, with constraints; `segment` retained as a derived/back-compat
+      column.
 - [ ] `crm_resolve_contact(...)` find-or-create RPC exists and is the single creation path; all entry points
       (manual CRM add, campus import, profile creation, onboarding registration) route through it.
 - [ ] Backfill+dedup migration collapses profile/campus/manual rows that share an email into one spine and
@@ -39,11 +44,13 @@ This sprint sequences after Sprint 12 (WhatsApp hardening) and builds directly o
       category-B contact and accepting produces **exactly one** `internal_user` directory record (no dupe).
 - [ ] `loadCrmDirectory()` assembles from explicit links (not the `source_type:source_id` heuristic) and
       emits no duplicates; existing tests pass and new dedup tests are added.
-- [ ] CRM UI shows the three kinds (badge + filter) and exposes `intended_role`/`intended_user_type` on
-      internal-pending contacts.
-- [ ] A single "Invite to platform" action (from CRM contact and from the new-member dashboard) calls the
-      account-invite path with `intended_role` + `intended_user_type`, links/creates the onboarding record,
-      and sets `platform_status='invited'`.
+- [ ] CRM UI shows the three kinds (badge + filter) and `platform_status`; adding a contact defaults to
+      `internal_contact`/`none` (or `external`) — **never pending**. Optional invite hints are exposed but
+      empty by default.
+- [ ] A single "Invite to platform" action (from User Management, a CRM contact, and the new-member
+      dashboard) lets the inviter pick `role` + `user_type` (pre-filled from hints if present), calls the
+      account-invite path, links/creates the onboarding record, and sets `platform_status='invited'`. This is
+      the **only** way a contact becomes an `internal_user`.
 - [ ] `member_onboarding` records are linked to their CRM contact; no double data entry between the
       dashboard and the CRM.
 - [ ] Source-of-truth/sync rules, the new columns, and the promotion flow are documented in
