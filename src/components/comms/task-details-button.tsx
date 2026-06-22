@@ -4,7 +4,6 @@ import { useState } from 'react'
 import { RoleBadge } from '@/components/comms/role-badge'
 import { TaskStatusControl } from '@/components/comms/task-status-control'
 import { isCommsTaskCompleted, type CommsTaskRecord } from '@/lib/comms-tasks'
-import { UNIFIED_STATUS_META } from '@/lib/comms-status'
 
 function formatDate(value: string | null) {
   if (!value) return 'No deadline'
@@ -14,7 +13,6 @@ function formatDate(value: string | null) {
 export function TaskDetailsButton({ task }: { task: CommsTaskRecord }) {
   const [open, setOpen] = useState(false)
   const completed = isCommsTaskCompleted(task.status)
-  const statusMeta = UNIFIED_STATUS_META[task.status]
 
   return (
     <>
@@ -80,13 +78,7 @@ export function TaskDetailsButton({ task }: { task: CommsTaskRecord }) {
                 </div>
                 <div>
                   <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Status</dt>
-                  <dd className="mt-1 flex items-center gap-2">
-                    <span
-                      className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold ${statusMeta.badgeClass}`}
-                    >
-                      <span aria-hidden>{statusMeta.marker}</span>
-                      {statusMeta.label}
-                    </span>
+                  <dd className="mt-1">
                     <TaskStatusControl taskId={task.id} status={task.status} />
                   </dd>
                 </div>
