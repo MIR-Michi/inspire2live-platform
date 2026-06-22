@@ -51,8 +51,26 @@ jobs:
       # `supabase start` provisions a local Postgres at the major version pinned
       # in config.toml, runs EVERY migration in supabase/migrations in order, then
       # applies seed.sql (config: [db.seed]). Any failure fails this step.
+      #
+      # We only need the database to validate migrations + seed, so the heavy
+      # auxiliary services are excluded with `-x`. Pulling and extracting their
+      # images (studio, edge-runtime, realtime, etc.) is the slowest part of
+      # `supabase start` on a cold runner — it dominated the step and left a wide
+      # window in which a follow-up push (concurrency: cancel-in-progress) could
+      # cancel the run mid-extraction ("Error: The operation was canceled").
+      # Trimming them makes the step start in a fraction of the time.
+      #
+      # Two categories of service are deliberately KEPT:
+      #   • gotrue (provides the `auth` schema + `auth.users`) and storage-api
+      #     (provides the `storage` schema + `storage.buckets`/`storage.objects`)
+      #     — existing migrations reference those schemas (e.g.
+      #     00003_storage_buckets.sql, 00022_permission_system.sql) and would fail
+      #     to apply without them.
+      #   • vector + logflare — `[analytics]` is enabled in config.toml, so the
+      #     other containers ship their logs there; excluding them would break the
+      #     kept services' health checks. They stay so the start is reliable.
       - name: Start Supabase (apply migrations + seed)
-        run: supabase start
+        run: supabase start -x studio,imgproxy,realtime,edge-runtime,postgres-meta
 
       # Static lint of the resulting schema. Informational — never blocks merge.
       - name: Lint database schema
