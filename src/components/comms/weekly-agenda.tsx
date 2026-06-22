@@ -4,7 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { formatMeetingLabel, type AgendaMeetingGroup } from '@/lib/comms-agenda'
 import { AgendaAddForm } from '@/components/comms/agenda-add-form'
-import { AgendaItemCard } from '@/components/comms/agenda-item-card'
+import { AgendaItemList } from '@/components/comms/agenda-item-list'
 
 /**
  * Weekly meeting agenda.
@@ -42,16 +42,13 @@ export function WeeklyAgenda({
             </h3>
             <AgendaAddForm meetingDate={current.meetingDate} />
           </div>
-          <div className="space-y-2">
-            {current.items.map((item) => (
-              <AgendaItemCard key={item.id} item={item} />
-            ))}
-            {current.items.length === 0 && (
-              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
-                No agenda items yet. Add the first one for this meeting.
-              </p>
-            )}
-          </div>
+          {current.items.length > 0 ? (
+            <AgendaItemList items={current.items} />
+          ) : (
+            <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
+              No agenda items yet. Add the first one for this meeting.
+            </p>
+          )}
         </div>
       )}
 
@@ -94,10 +91,11 @@ function PreviousMeetingRow({ group }: { group: AgendaMeetingGroup }) {
       </button>
       {open && (
         <div className="space-y-2 bg-neutral-50/50 px-4 pb-4 pt-1">
-          {group.items.map((item) => (
-            <AgendaItemCard key={item.id} item={item} />
-          ))}
-          {count === 0 && <p className="py-3 text-center text-xs text-neutral-400">No items recorded for this meeting.</p>}
+          {count > 0 ? (
+            <AgendaItemList items={group.items} />
+          ) : (
+            <p className="py-3 text-center text-xs text-neutral-400">No items recorded for this meeting.</p>
+          )}
         </div>
       )}
     </div>

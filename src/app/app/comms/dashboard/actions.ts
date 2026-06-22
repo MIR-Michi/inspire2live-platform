@@ -13,7 +13,11 @@ type CommsDbClient = {
     insert: (...args: unknown[]) => any
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     update: (...args: unknown[]) => any
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    delete: (...args: unknown[]) => any
   }
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  rpc: (fn: string, args?: Record<string, unknown>) => any
 }
 
 const VALID_STATUSES = new Set(['not_started', 'in_progress', 'completed', 'skipped'])
@@ -98,6 +102,54 @@ export async function updateAgendaItem(formData: FormData) {
   if (error) throw new Error(error.message)
 
   revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/comms/meetings')
+}
+
+export async function deleteAgendaItem(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const agendaSupabase = supabase as unknown as CommsDbClient
+
+  const id = asNullableUuid(formData.get('agenda_item_id'))
+  if (!id) throw new Error('Agenda item is required.')
+
+  // RLS restricts deletion to the item's owner or an admin ("you proposed it,
+  // you own it"). `select()` lets us tell a no-op (not permitted) from a success.
+  const { data, error } = await agendaSupabase
+    .from('comms_weekly_agenda_items')
+    .delete()
+    .eq('id', id)
+    .select('id')
+  if (error) throw new Error(error.message)
+  if (!data || data.length === 0) {
+    throw new Error('You can only delete agenda topics you proposed.')
+  }
+
+  revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/comms/meetings')
+}
+
+export async function reorderAgendaItems(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const agendaSupabase = supabase as unknown as CommsDbClient
+
+  const raw = asText(formData.get('item_ids'))
+  let ids: unknown
+  try {
+    ids = JSON.parse(raw)
+  } catch {
+    throw new Error('Invalid ordering payload.')
+  }
+  if (!Array.isArray(ids) || ids.some((id) => typeof id !== 'string' || !UUID_RE.test(id))) {
+    throw new Error('Invalid ordering payload.')
+  }
+
+  // Reordering the shared agenda is collaborative, so it runs through a
+  // SECURITY DEFINER RPC (the row update policy is owner-scoped).
+  const { error } = await agendaSupabase.rpc('reorder_agenda_items', { p_item_ids: ids })
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/comms/meetings')
 }
 
 // ─── Person-owned tasks ──────────────────────────────────────────────────────

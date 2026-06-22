@@ -109,7 +109,7 @@ export async function loadCommsTeamDashboardData(
     { data: commsTaskData },
     eventPipeline,
   ] = await Promise.all([
-    supabase.from('profiles').select('id, name, email, role').order('name'),
+    supabase.from('profiles').select('id, name, email, role, avatar_url').order('name'),
     supabase
       .from('intake_items')
       .select('id, sender_name, raw_content, channel, status, captured_at')
@@ -140,7 +140,7 @@ export async function loadCommsTeamDashboardData(
       .limit(100),
     db
       .from('comms_weekly_agenda_items')
-      .select('id, meeting_date, title, summary, owner_id, created_at')
+      .select('id, meeting_date, title, summary, owner_id, position, created_at')
       .order('meeting_date', { ascending: false })
       .limit(200),
     db
@@ -151,7 +151,7 @@ export async function loadCommsTeamDashboardData(
     loadCommsEventPipelineData({ scopeFilter }),
   ])
 
-  type ProfileRow = { id: string; name: string | null; email: string | null; role: string | null }
+  type ProfileRow = { id: string; name: string | null; email: string | null; role: string | null; avatar_url?: string | null }
   const profiles = (profilesData ?? []) as ProfileRow[]
   const profileMap = new Map(profiles.map((p) => [p.id, p]))
   const labelFor = (id: string | null | undefined) => {
@@ -160,6 +160,7 @@ export async function loadCommsTeamDashboardData(
     return p ? p.name ?? p.email ?? 'Unknown' : null
   }
   const roleFor = (id: string | null | undefined) => (id ? profileMap.get(id)?.role ?? null : null)
+  const avatarFor = (id: string | null | undefined) => (id ? profileMap.get(id)?.avatar_url ?? null : null)
 
   // ── WhatsApp channels ──────────────────────────────────────────────
   const channels: ChannelCard[] = (['campus', 'communications'] as ChannelKey[]).map((key) => {
@@ -190,6 +191,7 @@ export async function loadCommsTeamDashboardData(
     title: string
     summary: string | null
     owner_id: string | null
+    position: number | null
     created_at: string
   }>
   const agendaTitleById = new Map(agendaRows.map((row) => [row.id, row.title]))
@@ -233,6 +235,8 @@ export async function loadCommsTeamDashboardData(
     ownerId: row.owner_id,
     ownerLabel: labelFor(row.owner_id),
     ownerRole: roleFor(row.owner_id),
+    ownerAvatarUrl: avatarFor(row.owner_id),
+    position: row.position ?? 0,
     createdAt: row.created_at,
     linkedTasks: linkedTasksByAgenda.get(row.id) ?? [],
   }))
@@ -396,20 +400,21 @@ export async function loadCommsAgendaGroups(supabase: SupabaseClient): Promise<A
   const db = supabase as any
 
   const [{ data: profilesData }, { data: agendaData }, { data: commsTaskData }] = await Promise.all([
-    supabase.from('profiles').select('id, name, email, role'),
+    supabase.from('profiles').select('id, name, email, role, avatar_url'),
     db
       .from('comms_weekly_agenda_items')
-      .select('id, meeting_date, title, summary, owner_id, created_at')
+      .select('id, meeting_date, title, summary, owner_id, position, created_at')
       .order('meeting_date', { ascending: false })
       .limit(500),
     db.from('comms_tasks').select('id, title, description, owner_id, due_date, status, agenda_item_id').limit(500),
   ])
 
-  const profiles = (profilesData ?? []) as Array<{ id: string; name: string | null; email: string | null; role: string | null }>
+  const profiles = (profilesData ?? []) as Array<{ id: string; name: string | null; email: string | null; role: string | null; avatar_url?: string | null }>
   const profileMap = new Map(profiles.map((p) => [p.id, p]))
   const labelFor = (id: string | null) =>
     id ? profileMap.get(id)?.name ?? profileMap.get(id)?.email ?? 'Unknown' : null
   const roleFor = (id: string | null) => (id ? profileMap.get(id)?.role ?? null : null)
+  const avatarFor = (id: string | null) => (id ? profileMap.get(id)?.avatar_url ?? null : null)
 
   const agendaRows = (agendaData ?? []) as Array<{
     id: string
@@ -417,6 +422,7 @@ export async function loadCommsAgendaGroups(supabase: SupabaseClient): Promise<A
     title: string
     summary: string | null
     owner_id: string | null
+    position: number | null
     created_at: string
   }>
   const agendaTitleById = new Map(agendaRows.map((r) => [r.id, r.title]))
@@ -458,6 +464,8 @@ export async function loadCommsAgendaGroups(supabase: SupabaseClient): Promise<A
     ownerId: row.owner_id,
     ownerLabel: labelFor(row.owner_id),
     ownerRole: roleFor(row.owner_id),
+    ownerAvatarUrl: avatarFor(row.owner_id),
+    position: row.position ?? 0,
     createdAt: row.created_at,
     linkedTasks: linkedTasksByAgenda.get(row.id) ?? [],
   }))

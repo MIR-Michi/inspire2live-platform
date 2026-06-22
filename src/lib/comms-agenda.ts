@@ -14,6 +14,8 @@ export type AgendaItemRecord = {
   ownerId: string | null
   ownerLabel: string | null
   ownerRole: string | null
+  ownerAvatarUrl: string | null
+  position: number
   createdAt: string
   linkedTasks: CommsTaskRecord[]
 }
@@ -74,6 +76,9 @@ export function groupAgendaByMeeting(
     .map(([meetingDate, groupItems]) => ({
       meetingDate,
       isUpcoming: meetingDate === upcoming,
-      items: groupItems.sort((a, b) => a.createdAt.localeCompare(b.createdAt)),
+      // Manual order (position) first; fall back to creation time for ties.
+      items: groupItems.sort(
+        (a, b) => a.position - b.position || a.createdAt.localeCompare(b.createdAt)
+      ),
     }))
 }
