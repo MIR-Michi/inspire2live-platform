@@ -25,7 +25,11 @@ Vercel (auto-deploy on push to main)
 
 Supabase (database)
     │
-    └── Migrations pushed manually via `supabase db push`
+    ├── Validated in CI (db-migrations.yml — applies migrations + seed to a
+    │   throwaway local stack on every PR/push touching supabase/)
+    └── Auto-applied to production on merge to main (deploy-vercel.yml runs
+        `supabase db push` before the Vercel deploy). Manual `supabase db push`
+        remains the hotfix path.
 ```
 
 ### Key characteristic
@@ -124,22 +128,36 @@ For urgent fixes to production:
 
 Database schema changes require special handling because **migrations are irreversible**.
 
-### Migration deployment order
+### Automated flow (default)
+
+Migrations are part of CD — you normally do **not** push them by hand:
 
 ```
-⚠️ ALWAYS deploy migrations BEFORE code that depends on them.
-
 1. Write migration in supabase/migrations/NNNNN_description.sql
-2. Test locally: supabase db reset
-3. Push to remote DB: supabase db push  (or pnpm db:push:win on Windows)
-4. Verify migration applied: supabase migration list
-5. THEN push code that uses the new schema
+2. Open a PR
+   └─ CI `db-migrations.yml` applies it (+ seed) to a throwaway local stack.
+      A broken migration fails the check here, before merge.
+3. Merge to main
+   └─ `deploy-vercel.yml` runs `supabase db push` (migrations applied to
+      production) and THEN builds + deploys the code. Ordering is guaranteed:
+      the deploy step only runs after the migration step succeeds.
 ```
+
+This guarantees the safe order automatically: **migration applied → then code deployed.**
 
 ### Why order matters
 
 If code deploys before migration → server actions will fail because tables/columns don't exist yet.
-If migration deploys before code → old code ignores new columns (safe).
+If migration deploys before code → old code ignores new columns (safe). The deploy workflow enforces
+migration-first by running `supabase db push` before the Vercel build.
+
+### Manual fallback (hotfix only)
+
+```
+1. Test locally:        supabase db reset
+2. Push to remote DB:    pnpm db:push      (or pnpm db:push:win on Windows)
+3. Verify applied:       supabase migration list
+```
 
 ---
 

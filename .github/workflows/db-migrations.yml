@@ -1,0 +1,65 @@
+name: DB Migrations
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Validates that the Supabase migrations apply cleanly BEFORE they reach
+# production. Production application itself is already automated: deploy-vercel.yml
+# runs `supabase db push` on every push to main that passes CI. The gap this
+# workflow closes is catching a broken migration (SQL error, wrong ordering,
+# bad function/trigger, failing seed) at PR time — instead of at deploy time on
+# main, where it would block the production push.
+#
+# No secrets required: it spins up a throwaway local Supabase stack (Docker is
+# available on GitHub-hosted runners) that mirrors production — same Postgres
+# major version (config.toml), the `auth` schema/roles, and extensions — so the
+# migrations run in a realistic environment.
+# ──────────────────────────────────────────────────────────────────────────────
+
+on:
+  push:
+    branches: [main, develop, "release/**"]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/seed.sql"
+      - "supabase/config.toml"
+      - ".github/workflows/db-migrations.yml"
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/seed.sql"
+      - "supabase/config.toml"
+      - ".github/workflows/db-migrations.yml"
+
+concurrency:
+  group: db-migrations-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  validate:
+    name: Validate migrations apply cleanly
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v1
+        with:
+          version: latest
+
+      # `supabase start` provisions a local Postgres at the major version pinned
+      # in config.toml, runs EVERY migration in supabase/migrations in order, then
+      # applies seed.sql (config: [db.seed]). Any failure fails this step.
+      - name: Start Supabase (apply migrations + seed)
+        run: supabase start
+
+      # Static lint of the resulting schema. Informational — never blocks merge.
+      - name: Lint database schema
+        if: always()
+        continue-on-error: true
+        run: supabase db lint --level warning
+
+      - name: Stop Supabase
+        if: always()
+        run: supabase stop --no-backup
