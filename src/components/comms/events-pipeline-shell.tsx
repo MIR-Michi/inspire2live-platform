@@ -35,7 +35,14 @@ type EventCard = {
 
 type Option = { id: string; label: string }
 
-const EVENT_FILTERS: Array<{ key: 'all' | EventStage; label: string }> = [
+const SCOPE_FILTERS: Array<{ key: 'all' | 'i2l' | 'networking' | 'past'; label: string }> = [
+  { key: 'all', label: 'All' },
+  { key: 'i2l', label: 'I2L own' },
+  { key: 'networking', label: 'Networking' },
+  { key: 'past', label: 'Past' },
+]
+
+const STAGE_FILTERS: Array<{ key: 'all' | EventStage; label: string }> = [
   { key: 'all', label: 'All stages' },
   { key: 'announced', label: 'Announced' },
   { key: 'attending', label: 'Attending' },
@@ -44,21 +51,32 @@ const EVENT_FILTERS: Array<{ key: 'all' | EventStage; label: string }> = [
   { key: 'archived', label: 'Archived' },
 ]
 
-const EVENT_SCOPE_FILTERS: Array<{ key: 'all' | 'i2l' | 'networking' | 'past'; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'i2l', label: 'I2L own' },
-  { key: 'networking', label: 'Networking' },
-  { key: 'past', label: 'Past' },
-]
-
-function formatDateRange(startDate: string, endDate: string | null) {
-  const formatter = new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' })
-  if (!endDate || endDate === startDate) return formatter.format(new Date(startDate))
-  return `${formatter.format(new Date(startDate))} - ${formatter.format(new Date(endDate))}`
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(
+    new Date(value)
+  )
 }
 
-function formatLocation(city: string | null, country: string | null) {
-  return [city, country].filter(Boolean).join(', ') || 'Location TBD'
+function formatDateRange(startDate: string, endDate: string | null) {
+  if (!endDate || endDate === startDate) return formatDate(startDate)
+  const startFmt = new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(
+    new Date(startDate)
+  )
+  return `${startFmt} – ${formatDate(endDate)}`
+}
+
+function OutputDots({ outputs }: { outputs: Array<{ label: string; done: boolean }> }) {
+  return (
+    <div className="flex items-center gap-1.5" aria-label="Output status">
+      {outputs.map((output) => (
+        <span
+          key={output.label}
+          title={`${output.label}: ${output.done ? 'done' : 'pending'}`}
+          className={`h-2 w-2 rounded-full ${output.done ? 'bg-emerald-500' : 'bg-neutral-200'}`}
+        />
+      ))}
+    </div>
+  )
 }
 
 export function EventsPipelineShell({
@@ -69,10 +87,9 @@ export function EventsPipelineShell({
   eventTypes,
   initiatives,
   people,
-  title = 'Event pipeline',
-  eyebrow = 'Full routing',
-  description = 'Track I2L-owned productions separately from external attendance while keeping congress links visible.',
-  recordLabel = 'records',
+  title = 'Events',
+  eyebrow,
+  recordLabel = 'events',
   basePath = '/app/comms/events',
   showScopeFilters = true,
   showEventTypeFilters = true,
@@ -92,95 +109,115 @@ export function EventsPipelineShell({
   showScopeFilters?: boolean
   showEventTypeFilters?: boolean
 }) {
+  function buildHref(overrides: {
+    scope?: string
+    stage?: string
+    event_type?: string
+  }) {
+    const params = new URLSearchParams()
+    const resolvedScope = overrides.scope !== undefined ? overrides.scope : scopeFilter
+    const resolvedStage = overrides.stage !== undefined ? overrides.stage : stageFilter
+    const resolvedType = overrides.event_type !== undefined ? overrides.event_type : eventTypeFilter
+    if (resolvedScope !== 'all') params.set('scope', resolvedScope)
+    if (resolvedStage !== 'all') params.set('stage', resolvedStage)
+    if (resolvedType !== 'all') params.set('event_type', resolvedType)
+    return params.size > 0 ? `${basePath}?${params}` : basePath
+  }
+
   return (
-    <section className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
-        <div className="space-y-2">
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{eyebrow}</p>
-          <div className="flex flex-wrap items-center gap-3">
+    <section className="space-y-5">
+      <header className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          {eyebrow && (
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">{eyebrow}</p>
+          )}
+          <div className="flex items-center gap-3">
             <h2 className="text-2xl font-semibold text-neutral-900">{title}</h2>
-            <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
+            <span className="rounded-full border border-orange-200 bg-orange-50 px-2.5 py-0.5 text-sm font-semibold text-orange-700">
               {events.length} {recordLabel}
             </span>
           </div>
-          <p className="text-sm text-neutral-600">{description}</p>
         </div>
+
+        <details className="relative">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
+            <span className="text-base leading-none">+</span> Add event
+          </summary>
+          <div className="absolute right-0 top-full z-40 mt-2 w-[min(680px,95vw)] rounded-xl border border-neutral-200 bg-white p-6 shadow-xl">
+            <h3 className="mb-4 text-base font-semibold text-neutral-900">New event</h3>
+            <EventCreateForm initiatives={initiatives} people={people} />
+          </div>
+        </details>
       </header>
 
-      <details className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-        <summary className="cursor-pointer list-none text-base font-semibold text-neutral-900">
-          Create event
-        </summary>
-        <EventCreateForm initiatives={initiatives} people={people} />
-      </details>
+      <div className="space-y-2">
+        {showScopeFilters && (
+          <nav className="flex flex-wrap gap-1.5" aria-label="Event scope">
+            {SCOPE_FILTERS.map((item) => {
+              const active = item.key === scopeFilter
+              return (
+                <Link
+                  key={item.key}
+                  href={buildHref({ scope: item.key, stage: 'all' })}
+                  className={`rounded-full px-3 py-1 text-sm font-semibold transition ${
+                    active
+                      ? 'bg-neutral-900 text-white'
+                      : 'border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              )
+            })}
+            {showEventTypeFilters && eventTypes.length > 1 && (
+              <>
+                <span className="self-center text-neutral-300">·</span>
+                {eventTypes.map((et) => (
+                  <Link
+                    key={et}
+                    href={buildHref({ event_type: eventTypeFilter === et ? 'all' : et })}
+                    className={`rounded-full px-3 py-1 text-sm font-semibold transition ${
+                      eventTypeFilter === et
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
+                    }`}
+                  >
+                    {getEventTypeLabel(et)}
+                  </Link>
+                ))}
+              </>
+            )}
+          </nav>
+        )}
 
-      {showScopeFilters && (
-        <nav className="flex flex-wrap gap-2" aria-label="Event ownership filters">
-          {EVENT_SCOPE_FILTERS.map((item) => {
-            const isActive = item.key === scopeFilter
+        <nav className="flex flex-wrap gap-1.5" aria-label="Event stage">
+          {STAGE_FILTERS.map((item) => {
+            const active = item.key === stageFilter
             return (
               <Link
                 key={item.key}
-                href={item.key === 'all' ? basePath : `${basePath}?scope=${item.key}`}
-                className={[
-                  'rounded-full px-3 py-1.5 text-sm font-semibold transition',
-                  isActive ? 'bg-orange-100 text-orange-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
-                ].join(' ')}
+                href={buildHref({ stage: item.key })}
+                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
+                  active
+                    ? 'bg-neutral-800 text-white'
+                    : 'border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50'
+                }`}
               >
                 {item.label}
               </Link>
             )
           })}
         </nav>
+      </div>
+
+      {events.length === 0 && (
+        <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
+          <p className="text-sm font-semibold text-neutral-700">No events match this filter.</p>
+          <p className="mt-1 text-sm text-neutral-400">Try a different stage or scope.</p>
+        </div>
       )}
 
-      <nav className="flex flex-wrap gap-2" aria-label="Event stage filters">
-        {EVENT_FILTERS.map((item) => {
-          const isActive = item.key === stageFilter
-          const params = new URLSearchParams()
-          if (showScopeFilters && scopeFilter !== 'all') params.set('scope', scopeFilter)
-          if (item.key !== 'all') params.set('stage', item.key)
-          if (showEventTypeFilters && eventTypeFilter !== 'all') params.set('event_type', eventTypeFilter)
-          const href = params.size > 0 ? `${basePath}?${params.toString()}` : basePath
-          return (
-            <Link
-              key={item.key}
-              href={href}
-              className={[
-                'rounded-full px-3 py-1.5 text-sm font-semibold transition',
-                isActive ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50',
-              ].join(' ')}
-            >
-              {item.label}
-            </Link>
-          )
-        })}
-      </nav>
-
-      {showEventTypeFilters && eventTypes.length > 0 && (
-        <nav className="flex flex-wrap gap-2" aria-label="Event type filters">
-          <Link
-            href={scopeFilter === 'all' ? basePath : `${basePath}?scope=${scopeFilter}`}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${eventTypeFilter === 'all' ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
-          >
-            All types
-          </Link>
-          {eventTypes.map((eventType) => (
-            <Link
-              key={eventType}
-              href={`${basePath}?${new URLSearchParams([
-                ...(scopeFilter === 'all' ? [] : [['scope', scopeFilter]]),
-                ['event_type', eventType],
-              ]).toString()}`}
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${eventTypeFilter === eventType ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700'}`}
-            >
-              {getEventTypeLabel(eventType)}
-            </Link>
-          ))}
-        </nav>
-      )}
-
-      <div className="space-y-4">
+      <ul className="space-y-2">
         {events.map((event) => {
           const effectiveOwned = isI2LOwnedEvent({
             eventType: event.event_type,
@@ -192,122 +229,71 @@ export function EventsPipelineShell({
             isI2lOrganised: effectiveOwned,
             isAnnualCongress: event.is_annual_congress,
           })
+          const stageMeta = EVENT_STAGE_META[event.stage as EventStage]
+          const location = [event.location_city, event.location_country].filter(Boolean).join(', ')
+
+          // Secondary context line: who owns or attends
+          let involvementLine: string | null = null
+          if (effectiveOwned && event.ownerLabel) {
+            involvementLine = `Owner: ${event.ownerLabel}`
+          } else if (!effectiveOwned && event.representativeLabels.length > 0) {
+            const names = event.representativeLabels.join(', ')
+            const role = formatTokenLabel(event.attendance_kind)
+            involvementLine = `${role}: ${names}`
+          } else if (!effectiveOwned && setup.attendeeEmptyLabel) {
+            involvementLine = 'No I2L attendees assigned yet'
+          }
 
           return (
-            <article key={event.id} className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
-              <div className="flex flex-wrap items-start justify-between gap-4">
-                <div className="space-y-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <StatusBadge label={EVENT_STAGE_META[event.stage as EventStage]?.label ?? event.stage} tone={EVENT_STAGE_META[event.stage as EventStage]?.tone ?? 'neutral'} />
+            <li key={event.id}>
+              <article className="group flex items-start justify-between gap-4 rounded-xl border border-neutral-200 bg-white px-4 py-3.5 shadow-sm transition hover:border-neutral-300 hover:shadow">
+                <div className="min-w-0 flex-1 space-y-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {stageMeta && (
+                      <StatusBadge label={stageMeta.label} tone={stageMeta.tone} />
+                    )}
                     <StatusBadge label={getEventTypeLabel(event.event_type)} tone="blue" />
-                    <StatusBadge label={effectiveOwned ? 'I2L own' : 'Networking'} tone={effectiveOwned ? 'green' : 'neutral'} />
-                    {event.is_annual_congress && <StatusBadge label="Annual Congress" tone="violet" />}
-                  </div>
-                  <div>
-                    <Link href={`/app/comms/events/${event.id}`} className="text-lg font-semibold text-neutral-900 hover:text-orange-700">
-                      {event.name}
-                    </Link>
-                    <p className="text-sm text-neutral-500">{formatDateRange(event.start_date, event.end_date)}</p>
-                  </div>
-                  <div className="flex flex-wrap gap-2 text-xs">
-                    <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 font-semibold text-neutral-700">
-                      {formatLocation(event.location_city, event.location_country)}
-                    </span>
-                    {event.organiser && (
-                      <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 font-semibold text-neutral-700">
-                        {setup.organiserLabel}: {event.organiser}
-                      </span>
+                    {effectiveOwned && (
+                      <StatusBadge label="I2L own" tone="green" />
                     )}
-                    {event.ownerLabel && (
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                        Owner: {event.ownerLabel}
-                      </span>
-                    )}
-                    {setup.attendeeChipPrefix && event.representativeLabels.map((rep) => (
-                      <span key={rep} className="rounded-full border border-blue-200 bg-blue-50 px-3 py-1 font-semibold text-blue-700">
-                        {setup.attendeeChipPrefix}: {rep}
-                      </span>
-                    ))}
-                    {setup.attendeeEmptyLabel && event.representativeLabels.length === 0 && (
-                      <span className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1 font-semibold text-amber-700">
-                        {setup.attendeeEmptyLabel}
-                      </span>
-                    )}
-                    {setup.attendanceKindLabel && (
-                      <span className="rounded-full border border-sky-200 bg-sky-50 px-3 py-1 font-semibold text-sky-700">
-                        Kind: {formatTokenLabel(event.attendance_kind)}
-                      </span>
-                    )}
-                    {event.initiativeLabels.map((initiative) => (
-                      <span key={initiative} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 font-semibold text-violet-700">
-                        {initiative}
-                      </span>
-                    ))}
-                    {event.push_to_group_calendar && (
-                      <span className="rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 font-semibold text-emerald-700">
-                        Group calendar
-                      </span>
+                    {event.is_annual_congress && (
+                      <StatusBadge label="Congress" tone="violet" />
                     )}
                   </div>
-                </div>
 
-                <div className="flex flex-wrap gap-2">
-                  {event.event_website_url && (
-                    <a
-                      href={event.event_website_url}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="rounded-xl border border-blue-200 px-4 py-2 text-sm font-semibold text-blue-800 transition hover:bg-blue-50"
-                    >
-                      {setup.websiteLabel}
-                    </a>
-                  )}
                   <Link
-                    href={`/app/comms/events/${event.id}`}
-                    className="rounded-xl border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50"
+                    href={`${basePath}/${event.id}`}
+                    className="block text-[15px] font-semibold leading-snug text-neutral-900 hover:text-orange-700"
                   >
-                    Open detail
+                    {event.name}
                   </Link>
-                </div>
-              </div>
 
-              {(event.event_image_url || event.presentation_summary || event.presentation_asset_url) && (
-                <div className="mt-4 grid gap-3 md:grid-cols-[160px_1fr]">
-                  {event.event_image_url && (
-                    <div
-                      aria-label="Event image"
-                      className="h-28 w-full rounded-xl border border-neutral-200 bg-cover bg-center"
-                      style={{ backgroundImage: `url(${event.event_image_url})` }}
-                    />
+                  <p className="text-xs text-neutral-500">
+                    {formatDateRange(event.start_date, event.end_date)}
+                    {location && <> · {location}</>}
+                    {event.organiser && !effectiveOwned && <> · {event.organiser}</>}
+                  </p>
+
+                  {involvementLine && (
+                    <p className="text-xs font-medium text-neutral-600">{involvementLine}</p>
                   )}
-                  <div className="rounded-xl border border-neutral-200 bg-neutral-50 px-4 py-3">
-                    <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">{setup.summaryLabel}</p>
-                    <p className="mt-1 line-clamp-3 text-sm text-neutral-700">
-                      {event.presentation_summary || (setup.attendanceKindLabel && event.attendance_kind === 'presenter' ? 'Presenter summary still needed.' : 'No summary captured yet.')}
-                    </p>
-                    {event.presentation_asset_url && (
-                      <a href={event.presentation_asset_url} target="_blank" rel="noreferrer" className="mt-2 inline-flex text-xs font-semibold text-blue-700 hover:text-blue-900">
-                        Open {setup.assetLabel.toLowerCase()}
-                      </a>
-                    )}
-                  </div>
                 </div>
-              )}
 
-              <div className="mt-4 grid gap-2 md:grid-cols-4">
-                {event.outputs.map((output) => (
-                  <div key={output.label} className="rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-2">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.12em] text-neutral-500">{output.label}</p>
-                    <p className={`mt-1 text-sm font-semibold ${output.done ? 'text-emerald-700' : 'text-neutral-500'}`}>
-                      {output.done ? 'Done' : 'Pending'}
-                    </p>
-                  </div>
-                ))}
-              </div>
-            </article>
+                <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
+                  <Link
+                    href={`${basePath}/${event.id}`}
+                    className="text-xs font-semibold text-neutral-400 hover:text-orange-700"
+                    aria-label={`Open ${event.name}`}
+                  >
+                    Open →
+                  </Link>
+                  <OutputDots outputs={event.outputs} />
+                </div>
+              </article>
+            </li>
           )
         })}
-      </div>
+      </ul>
     </section>
   )
 }
