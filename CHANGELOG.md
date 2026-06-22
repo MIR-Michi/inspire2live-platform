@@ -34,6 +34,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Documentation overhaul: 8 new docs + 4 populated ADRs + docs index
 
 ### Fixed
+- CRM contacts on the `@inspire2live.org` domain are now always classified as internal (`internal_contact` — an internal person who is not yet a platform user and needs a separate invitation), never external. Enforced both server-side in `saveCrmContact` and at the database layer via the `crm_contacts_sync_derived` trigger (migration 00067), with a backfill that re-classifies any existing misfiled rows.
+- Deleting a contact in the CRM now also removes that person from the rest of the platform (the New Members onboarding list), using the `member_onboarding_id` link with email/name fallbacks, so a deleted contact no longer lingers elsewhere.
 - Auth magic links redirecting to `localhost` in production (Supabase Site URL + code fix)
 - `notifications_type_check` constraint violation when sending initiative invitations
 

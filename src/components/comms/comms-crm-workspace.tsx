@@ -540,7 +540,7 @@ function ContactDetail({
                 <form
                   action={deleteCrmContact}
                   onSubmit={(event) => {
-                    if (!confirm(`Delete ${contact.fullName}? This permanently removes this external contact and its CRM history.`)) {
+                    if (!confirm(`Delete ${contact.fullName}? This permanently removes this contact and its CRM history, and also removes them from the rest of the platform (e.g. the New Members list).`)) {
                       event.preventDefault()
                     }
                   }}
