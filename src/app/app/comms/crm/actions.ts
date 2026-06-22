@@ -18,6 +18,13 @@ import {
   type CrmContactKind,
   type CrmSourceType,
 } from '@/lib/comms-crm'
+import {
+  fallbackNameFromEmail,
+  mapCsvToContactRows,
+  resolveImportKind,
+  type CrmImportResult,
+  type CrmImportRow,
+} from '@/lib/comms-crm-import'
 import { ROLE_LABELS } from '@/lib/role-access'
 
 type CrmTableClient = {
@@ -505,4 +512,132 @@ export async function inviteContactToPlatform(formData: FormData) {
   revalidatePath('/app/comms/crm')
   revalidatePath('/app/comms/crm/people')
   revalidatePath('/app/admin/users')
+}
+
+/**
+ * Builds the upsert payload for one imported row. Only fields the CSV actually
+ * carried (non-empty) are written, so importing never blanks out existing data
+ * on update. `contact_kind` + `segment` are always set from the resolved kind.
+ */
+function buildImportPayload(
+  row: CrmImportRow,
+  fullName: string | null,
+  kind: CrmContactKind,
+  userId: string,
+  now: string
+): Record<string, unknown> {
+  const payload: Record<string, unknown> = {
+    contact_kind: kind,
+    segment: segmentFromKind(kind),
+    source_type: 'manual',
+    email: row.email,
+    updated_by: userId,
+    updated_at: now,
+  }
+
+  const setIf = (key: string, value: string | null) => {
+    if (value !== null && value !== '') payload[key] = value
+  }
+
+  setIf('full_name', fullName)
+  setIf('title', row.title)
+  setIf('organisation', row.organisation)
+  setIf('phone', row.phone)
+  setIf('city', row.city)
+  setIf('country', row.country)
+  setIf('preferred_channel', row.preferredChannel)
+  setIf('bio', row.bio)
+  setIf('notes', row.notes)
+  setIf('person_type', row.personType)
+  setIf('intended_role', row.intendedRole)
+  if (row.tags.length > 0) payload.tags = row.tags
+
+  return payload
+}
+
+/**
+ * Bulk-imports CRM contacts from CSV text. Email is the identifier: a row whose
+ * email already exists updates that contact (a merge — only supplied fields are
+ * written), otherwise a new contact is created. Inspire2Live emails are always
+ * internal_contact. Existing platform users are never overwritten. Returns a
+ * per-run summary (created / updated / skipped + row-level errors) for display.
+ */
+export async function importCrmContacts(csv: string): Promise<CrmImportResult> {
+  const { supabase, user } = await requireCommsOperator()
+  const crmSupabase = supabase as unknown as CrmTableClient
+
+  const { rows, errors: parseErrors, totalDataRows } = mapCsvToContactRows(csv ?? '')
+  const errors = [...parseErrors]
+  let created = 0
+  let updated = 0
+  let skipped = 0
+
+  if (rows.length === 0) {
+    return { created, updated, skipped, errors, totalRows: totalDataRows }
+  }
+
+  // Email is the identity: resolve every existing contact for the file's emails
+  // in a single lookup so each row becomes a deterministic update-or-insert.
+  const emails = rows.map((row) => row.email)
+  const { data: existingRows, error: lookupError } = await crmSupabase
+    .from('comms_crm_contacts')
+    .select('id, normalized_email, contact_kind, profile_id')
+    .in('normalized_email', emails)
+  if (lookupError) throw new Error(lookupError.message)
+
+  const existingByEmail = new Map<
+    string,
+    { id: string; contact_kind: string | null; profile_id: string | null }
+  >()
+  for (const existing of existingRows ?? []) {
+    if (existing.normalized_email) existingByEmail.set(existing.normalized_email, existing)
+  }
+
+  const now = new Date().toISOString()
+
+  for (const row of rows) {
+    const existing = existingByEmail.get(row.email)
+
+    try {
+      if (existing) {
+        // Platform users are owned by their profile and must never be rewritten
+        // from a CSV — skip them with a clear note.
+        if (existing.profile_id || existing.contact_kind === 'internal_user') {
+          skipped++
+          errors.push({
+            line: row.line,
+            email: row.email,
+            message: 'Existing platform user — managed via their profile, not updated.',
+          })
+          continue
+        }
+
+        const kind = resolveImportKind(row.email, row.contactKind, normalizeContactKind(existing.contact_kind))
+        const payload = buildImportPayload(row, row.fullName, kind, user.id, now)
+        const { error } = await crmSupabase.from('comms_crm_contacts').update(payload).eq('id', existing.id)
+        if (error) throw new Error(error.message)
+        updated++
+      } else {
+        const kind = resolveImportKind(row.email, row.contactKind, null)
+        const fullName = row.fullName ?? fallbackNameFromEmail(row.email)
+        const payload = buildImportPayload(row, fullName, kind, user.id, now)
+        const { error } = await crmSupabase
+          .from('comms_crm_contacts')
+          .insert({ ...payload, source_label: 'CSV import', created_by: user.id })
+        if (error) throw new Error(error.message)
+        created++
+      }
+    } catch (rowError) {
+      skipped++
+      errors.push({
+        line: row.line,
+        email: row.email,
+        message: rowError instanceof Error ? rowError.message : 'Failed to save this row.',
+      })
+    }
+  }
+
+  revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
+  return { created, updated, skipped, errors, totalRows: totalDataRows }
 }

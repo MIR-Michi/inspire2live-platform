@@ -28,6 +28,7 @@ import {
   type CrmSelectOption,
 } from '@/lib/comms-crm'
 import { ROLE_LABELS } from '@/lib/role-access'
+import { CrmImportDialog } from '@/components/comms/crm-import-dialog'
 
 const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
   ([value, label]) => ({ value, label })
@@ -779,13 +780,16 @@ export function CommsCrmWorkspace({
             </span>
             <span className="text-sm text-neutral-500">{userCount} users · {internalContactCount} internal contacts · {externalCount} external</span>
           </div>
-          <button
-            type="button"
-            onClick={() => setShowNew(true)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700"
-          >
-            <span className="text-base leading-none">+</span> Create contact
-          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <CrmImportDialog />
+            <button
+              type="button"
+              onClick={() => setShowNew(true)}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-orange-700"
+            >
+              <span className="text-base leading-none">+</span> Create contact
+            </button>
+          </div>
         </div>
       </header>
 
