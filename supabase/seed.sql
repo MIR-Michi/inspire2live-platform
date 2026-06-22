@@ -53,6 +53,13 @@ insert into auth.users (
     now(), now(), now(),
     '{"name": "Peter De Vries", "role": "BoardMember", "country": "BE"}'::jsonb,
     false
+  ),
+  (
+    '00000000-0000-0000-0000-000000000007',
+    'lina@example.com',
+    now(), now(), now(),
+    '{"name": "Lina Costa", "role": "Comms", "country": "PT"}'::jsonb,
+    false
   )
 on conflict (id) do nothing;
 
