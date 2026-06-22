@@ -1,15 +1,57 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { updateAgendaItem } from '@/app/app/comms/dashboard/actions'
-import { RoleBadge } from '@/components/comms/role-badge'
+import { deleteAgendaItem, updateAgendaItem } from '@/app/app/comms/dashboard/actions'
+import { getRoleLabel } from '@/lib/role-access'
 import { TaskDetailsButton } from '@/components/comms/task-details-button'
 import type { AgendaItemRecord } from '@/lib/comms-agenda'
 
-export function AgendaItemCard({ item }: { item: AgendaItemRecord }) {
+function ownerInitials(label: string) {
+  return label
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((chunk) => chunk[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+/** Owner avatar; the name (and role) appear on hover only. */
+function OwnerAvatar({ item }: { item: AgendaItemRecord }) {
+  if (!item.ownerLabel) return null
+  const roleLabel = item.ownerRole ? getRoleLabel(item.ownerRole) : null
+  const tooltip = roleLabel ? `${item.ownerLabel} · ${roleLabel}` : item.ownerLabel
+
+  return (
+    <span className="group relative inline-flex shrink-0">
+      {item.ownerAvatarUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={item.ownerAvatarUrl}
+          alt=""
+          title={tooltip}
+          className="h-6 w-6 rounded-full border border-neutral-200 object-cover"
+        />
+      ) : (
+        <span
+          title={tooltip}
+          className="flex h-6 w-6 items-center justify-center rounded-full bg-neutral-800 text-[10px] font-semibold text-white"
+        >
+          {ownerInitials(item.ownerLabel)}
+        </span>
+      )}
+      {/* Styled tooltip on hover (in addition to the native title). */}
+      <span className="pointer-events-none absolute bottom-full left-1/2 z-10 mb-1 -translate-x-1/2 whitespace-nowrap rounded-md bg-neutral-900 px-2 py-1 text-[11px] font-medium text-white opacity-0 shadow transition-opacity group-hover:opacity-100">
+        {tooltip}
+      </span>
+    </span>
+  )
+}
+
+export function AgendaItemCard({ item, dragHandle }: { item: AgendaItemRecord; dragHandle?: React.ReactNode }) {
   const formRef = useRef<HTMLFormElement>(null)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   if (editing) {
@@ -79,24 +121,49 @@ export function AgendaItemCard({ item }: { item: AgendaItemRecord }) {
   return (
     <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2.5">
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-neutral-900">{item.title}</p>
-          {item.summary && <p className="mt-0.5 text-xs text-neutral-600">{item.summary}</p>}
-          {item.ownerLabel && (
-            <p className="mt-1 flex items-center gap-1 text-xs text-neutral-500">
-              {item.ownerLabel}
-              <RoleBadge role={item.ownerRole} />
-            </p>
-          )}
+        <div className="flex min-w-0 flex-1 items-start gap-2">
+          {dragHandle}
+          <OwnerAvatar item={item} />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-medium text-neutral-900">{item.title}</p>
+            {item.summary && <p className="mt-0.5 text-xs text-neutral-600">{item.summary}</p>}
+          </div>
         </div>
-        <button
-          type="button"
-          onClick={() => setEditing(true)}
-          className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
-        >
-          Edit
-        </button>
+        <div className="flex shrink-0 items-center gap-1">
+          <button
+            type="button"
+            onClick={() => setEditing(true)}
+            className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-500 hover:bg-neutral-100 hover:text-neutral-800"
+          >
+            Edit
+          </button>
+          <form
+            action={async (formData) => {
+              if (!confirm(`Delete agenda topic "${item.title}"?`)) return
+              setDeleting(true)
+              setError(null)
+              try {
+                await deleteAgendaItem(formData)
+              } catch (err) {
+                setError(err instanceof Error ? err.message : 'Could not delete the agenda item.')
+              } finally {
+                setDeleting(false)
+              }
+            }}
+          >
+            <input type="hidden" name="agenda_item_id" value={item.id} />
+            <button
+              type="submit"
+              disabled={deleting}
+              className="rounded-lg px-2 py-1 text-xs font-semibold text-neutral-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </form>
+        </div>
       </div>
+
+      {error && <p className="mt-1 text-xs font-medium text-red-600">{error}</p>}
 
       {item.linkedTasks.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">

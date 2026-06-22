@@ -59,6 +59,8 @@ describe('weekly agenda helpers', () => {
         ownerId: 'a',
         ownerLabel: 'Ana',
         ownerRole: 'Comms',
+        ownerAvatarUrl: null,
+        position: 0,
         createdAt: '2026-06-01T10:00:00Z',
         linkedTasks: [],
       },
@@ -71,5 +73,25 @@ describe('weekly agenda helpers', () => {
     // Newest meeting first.
     expect(groups[0].meetingDate).toBe('2026-06-08')
     expect(groups.some((g) => g.meetingDate === '2026-06-01')).toBe(true)
+  })
+
+  it('orders items within a meeting by position, then creation time', () => {
+    const base = {
+      meetingDate: '2026-06-08',
+      summary: null,
+      ownerId: null,
+      ownerLabel: null,
+      ownerRole: null,
+      ownerAvatarUrl: null,
+      linkedTasks: [],
+    }
+    const items: AgendaItemRecord[] = [
+      { ...base, id: 'c', title: 'C', position: 2, createdAt: '2026-06-02T10:00:00Z' },
+      { ...base, id: 'a', title: 'A', position: 0, createdAt: '2026-06-05T10:00:00Z' },
+      { ...base, id: 'b', title: 'B', position: 1, createdAt: '2026-06-01T10:00:00Z' },
+    ]
+    const groups = groupAgendaByMeeting(items, new Date('2026-06-08T09:00:00Z'))
+    const upcoming = groups.find((g) => g.meetingDate === '2026-06-08')
+    expect(upcoming?.items.map((i) => i.id)).toEqual(['a', 'b', 'c'])
   })
 })
