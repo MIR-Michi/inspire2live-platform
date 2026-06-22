@@ -2,6 +2,7 @@ import { redirect } from 'next/navigation'
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ProfileEditor } from '@/components/profile/profile-editor'
+import { NotificationPrefsPanel } from '@/components/profile/notification-prefs-panel'
 import {
   formatMemberSince,
   getProfileInitials,
@@ -127,6 +128,8 @@ export default async function ProfilePage() {
           expertise_tags: profile.expertise_tags,
         }}
       />
+
+      <NotificationPrefsPanel notificationPrefs={profile.notification_prefs} />
 
       {/* Expertise tags */}
       {expertiseTags.length > 0 && (

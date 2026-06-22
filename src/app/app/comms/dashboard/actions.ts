@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { getNextMeetingDate } from '@/lib/comms-agenda'
+import { notifyUser } from '@/lib/notify'
 
 // Loosely-typed client for the comms_* tables that are not yet present in the
 // generated Database types.
@@ -167,16 +168,27 @@ export async function createCommsTask(formData: FormData) {
   const dueInput = asText(formData.get('due_date'))
   const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(dueInput) ? dueInput : null
 
+  const resolvedOwnerId = ownerId ?? user.id
   const { error } = await tasksSupabase.from('comms_tasks').insert({
     title,
     description,
-    owner_id: ownerId ?? user.id,
+    owner_id: resolvedOwnerId,
     due_date: dueDate,
     status: 'not_started',
     agenda_item_id: agendaItemId,
     created_by: user.id,
   })
   if (error) throw new Error(error.message)
+
+  if (resolvedOwnerId !== user.id) {
+    await notifyUser({
+      recipientId: resolvedOwnerId,
+      event: 'task_assigned',
+      title: 'New task assigned to you',
+      body: `You have been assigned a task: "${title}"`,
+      linkUrl: '/app/comms/dashboard',
+    })
+  }
 
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/dashboard')
