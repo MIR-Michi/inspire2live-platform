@@ -134,33 +134,53 @@ export async function inviteUserAccount(
     return { error: 'Server is not configured for invitations (missing service role key).' }
   }
 
-  // Clear a lingering pending/orphan record for this email before inviting.
-  const { data: existing } = await admin
+  // ── Clear any prior record for this email BEFORE inviting ───────────────────
+  // Re-inviting against a lingering auth.users row makes inviteUserByEmail resend
+  // against that stale user, so the emailed token is already spent and the link
+  // verifies as "expired or already used". We therefore purge any existing record
+  // first, check the purge actually succeeded, and then confirm no auth user
+  // remains — so the invite always mints a brand-new, single-use token.
+
+  // A fully-onboarded account must be explicitly deleted by the admin first.
+  const { data: existingProfile } = await admin
     .from('profiles')
     .select('id, onboarding_completed')
     .ilike('email', normalizedEmail)
     .maybeSingle()
 
-  if (existing?.id) {
-    if (existing.onboarding_completed) {
-      return { error: 'This email already has an active account. Deactivate or delete it first.' }
-    }
-    await cleanupUserContent(admin, [existing.id])
-    await removeAccount(admin, existing.id)
-  } else {
-    // No profile row — but a stale auth.users record may still exist for this
-    // email (e.g. a previous delete removed the profile but not the auth user).
-    // inviteUserByEmail would then *resend* against that stale user, so the
-    // emailed token is already spent and verification fails as "expired or
-    // already used". Purge the orphan so the invite mints a fresh token.
+  if (existingProfile?.onboarding_completed) {
+    return { error: 'This email already has an active account. Deactivate or delete it first.' }
+  }
+
+  // Resolve the auth user id for this email. The profile id equals the auth id,
+  // but we also look up auth.users by email so we catch an orphaned auth row that
+  // a prior delete left behind (profile removed, auth user not) or an id mismatch.
+  const resolveAuthUserId = async (): Promise<string | null> => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: orphanId } = await (admin as any).rpc('admin_get_auth_user_id', {
+    const { data } = await (admin as any).rpc('admin_get_auth_user_id', {
       p_email: normalizedEmail,
     })
-    if (orphanId) {
-      await cleanupUserContent(admin, [orphanId as string])
-      await removeAccount(admin, orphanId as string)
-    }
+    return (data as string | null) ?? null
+  }
+
+  const purgeFailed = 'Could not clear the previous record for this email before inviting. Please try again in a moment.'
+
+  // 1. Purge the record we can see (un-onboarded profile, else orphan auth row).
+  const staleId = existingProfile?.id ?? (await resolveAuthUserId())
+  if (staleId) {
+    await cleanupUserContent(admin, [staleId])
+    const { ok } = await removeAccount(admin, staleId)
+    if (!ok) return { error: purgeFailed }
+  }
+
+  // 2. Safety net: if an auth user STILL exists for this email (e.g. the profile
+  //    delete fell back to removing only the profile row, leaving the auth user),
+  //    purge it too — otherwise the invite resends a stale, already-spent token.
+  const remainingId = await resolveAuthUserId()
+  if (remainingId) {
+    await cleanupUserContent(admin, [remainingId])
+    const { ok } = await removeAccount(admin, remainingId)
+    if (!ok) return { error: purgeFailed }
   }
 
   const { error } = await admin.auth.admin.inviteUserByEmail(normalizedEmail, {
