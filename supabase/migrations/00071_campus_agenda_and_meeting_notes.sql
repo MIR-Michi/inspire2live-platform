@@ -1,5 +1,5 @@
 -- ============================================================
--- MIGRATION 00069: Campus meeting agenda + per-item meeting notes
+-- MIGRATION 00071: Campus meeting agenda + per-item meeting notes
 --
 -- Brings the structured agenda framework (shared agenda items with an
 -- owner + drag ordering, and assignable comms_tasks linked to an agenda
