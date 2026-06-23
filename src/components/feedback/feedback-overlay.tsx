@@ -327,7 +327,7 @@ export function FeedbackOverlay() {
         type="button"
         data-feedback-ui="toggle"
         onClick={toggle}
-        className="fixed bottom-4 right-4 z-[9995] flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-medium text-neutral-500 shadow hover:bg-neutral-50 hover:text-neutral-700"
+        className="fixed bottom-4 right-4 z-[9995] flex items-center gap-1.5 rounded-full border border-orange-500 bg-orange-600 px-3.5 py-2 text-xs font-semibold text-white shadow-lg hover:bg-orange-700 active:scale-95"
         title="Activate test mode to leave contextual feedback"
       >
         <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
