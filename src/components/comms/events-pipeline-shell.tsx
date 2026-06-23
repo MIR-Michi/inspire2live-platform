@@ -1,5 +1,6 @@
 import Link from 'next/link'
 import { EventCreateForm } from '@/components/comms/event-create-form'
+import { NavSelect, type NavSelectOption } from '@/components/comms/nav-select'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
   formatTokenLabel,
@@ -150,64 +151,43 @@ export function EventsPipelineShell({
         </details>
       </header>
 
-      <div className="space-y-2">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
         {showScopeFilters && (
-          <nav className="flex flex-wrap gap-1.5" aria-label="Event scope">
-            {SCOPE_FILTERS.map((item) => {
-              const active = item.key === scopeFilter
-              return (
-                <Link
-                  key={item.key}
-                  href={buildHref({ scope: item.key, stage: 'all' })}
-                  className={`rounded-full px-3 py-1 text-sm font-semibold transition ${
-                    active
-                      ? 'bg-neutral-900 text-white'
-                      : 'border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              )
-            })}
-            {showEventTypeFilters && eventTypes.length > 1 && (
-              <>
-                <span className="self-center text-neutral-300">·</span>
-                {eventTypes.map((et) => (
-                  <Link
-                    key={et}
-                    href={buildHref({ event_type: eventTypeFilter === et ? 'all' : et })}
-                    className={`rounded-full px-3 py-1 text-sm font-semibold transition ${
-                      eventTypeFilter === et
-                        ? 'bg-blue-100 text-blue-800'
-                        : 'border border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50'
-                    }`}
-                  >
-                    {getEventTypeLabel(et)}
-                  </Link>
-                ))}
-              </>
-            )}
-          </nav>
+          <NavSelect
+            label="Scope"
+            value={scopeFilter}
+            options={SCOPE_FILTERS.map<NavSelectOption>((item) => ({
+              value: item.key,
+              label: item.label,
+              href: buildHref({ scope: item.key, stage: 'all' }),
+            }))}
+          />
         )}
 
-        <nav className="flex flex-wrap gap-1.5" aria-label="Event stage">
-          {STAGE_FILTERS.map((item) => {
-            const active = item.key === stageFilter
-            return (
-              <Link
-                key={item.key}
-                href={buildHref({ stage: item.key })}
-                className={`rounded-full px-3 py-1 text-xs font-semibold transition ${
-                  active
-                    ? 'bg-neutral-800 text-white'
-                    : 'border border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50'
-                }`}
-              >
-                {item.label}
-              </Link>
-            )
-          })}
-        </nav>
+        {showScopeFilters && showEventTypeFilters && eventTypes.length > 1 && (
+          <NavSelect
+            label="Type"
+            value={eventTypeFilter}
+            options={[
+              { value: 'all', label: 'All types', href: buildHref({ event_type: 'all' }) },
+              ...eventTypes.map<NavSelectOption>((et) => ({
+                value: et,
+                label: getEventTypeLabel(et),
+                href: buildHref({ event_type: et }),
+              })),
+            ]}
+          />
+        )}
+
+        <NavSelect
+          label="Stage"
+          value={stageFilter}
+          options={STAGE_FILTERS.map<NavSelectOption>((item) => ({
+            value: item.key,
+            label: item.label,
+            href: buildHref({ stage: item.key }),
+          }))}
+        />
       </div>
 
       {events.length === 0 && (

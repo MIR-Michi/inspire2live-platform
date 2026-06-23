@@ -3,7 +3,7 @@
 import { useRef, useState } from 'react'
 import { deleteAgendaItem, updateAgendaItem } from '@/app/app/comms/dashboard/actions'
 import { getRoleLabel } from '@/lib/role-access'
-import { TaskDetailsButton } from '@/components/comms/task-details-button'
+import { TaskDetailsButton, type TaskOwnerOption } from '@/components/comms/task-details-button'
 import type { AgendaItemRecord } from '@/lib/comms-agenda'
 
 function ownerInitials(label: string) {
@@ -47,7 +47,15 @@ function OwnerAvatar({ item }: { item: AgendaItemRecord }) {
   )
 }
 
-export function AgendaItemCard({ item, dragHandle }: { item: AgendaItemRecord; dragHandle?: React.ReactNode }) {
+export function AgendaItemCard({
+  item,
+  dragHandle,
+  ownerOptions = [],
+}: {
+  item: AgendaItemRecord
+  dragHandle?: React.ReactNode
+  ownerOptions?: TaskOwnerOption[]
+}) {
   const formRef = useRef<HTMLFormElement>(null)
   const [editing, setEditing] = useState(false)
   const [pending, setPending] = useState(false)
@@ -168,7 +176,7 @@ export function AgendaItemCard({ item, dragHandle }: { item: AgendaItemRecord; d
       {item.linkedTasks.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
           {item.linkedTasks.map((task) => (
-            <TaskDetailsButton key={task.id} task={task} />
+            <TaskDetailsButton key={task.id} task={task} ownerOptions={ownerOptions} />
           ))}
         </div>
       )}

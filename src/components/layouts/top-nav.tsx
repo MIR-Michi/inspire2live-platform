@@ -8,6 +8,7 @@ import { createClient } from '@/lib/supabase/client'
 import { canAccessAppPath, getSideNavSections, getRoleLabel } from '@/lib/role-access'
 import type { AccessLevel, PlatformSpace } from '@/lib/permissions'
 import { PreviewPanel } from '@/components/layouts/preview-panel'
+import { NavGlyph } from '@/components/layouts/side-nav'
 import { useRoleLayers } from '@/components/roles/role-layers-context'
 
 interface TopNavProps {
@@ -231,10 +232,13 @@ export function TopNav({
               </button>
             </div>
             {/* Nav sections */}
-            <div className="flex flex-1 flex-col gap-5 overflow-y-auto p-3">
-              {navSections.map((section) => (
-                <div key={section.label} className="space-y-1.5">
-                  <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+            <div className="flex flex-1 flex-col gap-1 overflow-y-auto p-3">
+              {navSections.map((section, index) => (
+                <div
+                  key={section.label}
+                  className={['space-y-1 pb-1', index > 0 ? 'mt-3 border-t border-white/10 pt-4' : ''].join(' ')}
+                >
+                  <p className="px-2.5 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-400">
                     {section.label}
                   </p>
                   {section.items.map((item) => {
@@ -245,18 +249,19 @@ export function TopNav({
                         href={item.href}
                         onClick={closeMobileMenu}
                         className={[
-                          'flex items-center rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                          'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm font-medium transition-colors',
                           active
                             ? item.priority
-                              ? 'bg-[#343449] text-orange-300'
+                              ? 'bg-amber-400/15 text-amber-300'
                               : 'bg-[#343449] text-white'
                             : item.priority
-                              ? 'text-orange-300 hover:bg-white/5'
+                              ? 'text-amber-300/90 hover:bg-amber-400/10 hover:text-amber-200'
                               : 'text-slate-300 hover:bg-white/5 hover:text-white',
                         ].join(' ')}
                         aria-current={active ? 'page' : undefined}
                       >
-                        {item.label}
+                        <NavGlyph icon={item.icon} />
+                        <span className="truncate">{item.label}</span>
                       </Link>
                     )
                   })}

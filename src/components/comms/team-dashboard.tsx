@@ -121,7 +121,7 @@ export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboar
 
         {/* ── Weekly meeting agenda ── */}
         <CollapsibleCard key="comms-team-agenda" title="Weekly meeting agenda" storageKey="comms-team-agenda">
-          <WeeklyAgenda groups={agendaGroups} previousLimit={5} showAllHref="/app/comms/meetings" />
+          <WeeklyAgenda groups={agendaGroups} previousLimit={5} showAllHref="/app/comms/meetings" ownerOptions={teamMembers} />
         </CollapsibleCard>
 
         {/* ── New members ── */}

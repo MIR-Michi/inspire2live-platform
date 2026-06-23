@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { loadCommsAgendaGroups } from '@/lib/comms-dashboard-data'
+import { loadCommsAgendaGroups, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { WeeklyAgenda } from '@/components/comms/weekly-agenda'
 
 export default async function CommsMeetingsPage() {
@@ -15,7 +15,10 @@ export default async function CommsMeetingsPage() {
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
   if (!canAccessCommsWorkspace(profile?.role)) redirect('/app/dashboard')
 
-  const groups = await loadCommsAgendaGroups(supabase)
+  const [groups, ownerOptions] = await Promise.all([
+    loadCommsAgendaGroups(supabase),
+    loadCommsTeamMembers(supabase),
+  ])
 
   return (
     <div className="mx-auto max-w-3xl space-y-6">
@@ -25,7 +28,7 @@ export default async function CommsMeetingsPage() {
           ← Back to dashboard
         </Link>
       </div>
-      <WeeklyAgenda groups={groups} />
+      <WeeklyAgenda groups={groups} ownerOptions={ownerOptions} />
     </div>
   )
 }

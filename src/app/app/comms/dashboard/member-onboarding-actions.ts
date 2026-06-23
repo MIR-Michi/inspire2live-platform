@@ -144,7 +144,7 @@ export async function addMemberOnboardingTask(formData: FormData) {
 }
 
 export async function updateMemberOnboardingTaskStatus(formData: FormData) {
-  const { supabase } = await requireCommsOperator()
+  const { supabase, user } = await requireCommsOperator()
   const db = supabase as AnyDb
 
   const taskId = asNullableUuid(formData.get('task_id'))
@@ -152,20 +152,107 @@ export async function updateMemberOnboardingTaskStatus(formData: FormData) {
   if (!taskId) throw new Error('Task is required.')
   if (!VALID_TASK_STATUSES.has(status)) throw new Error('Invalid status.')
 
+  // Read the current state first so we can detect the not-completed → completed
+  // transition and log it to the person's CRM activity feed exactly once.
+  const { data: before } = await db
+    .from('member_onboarding_tasks')
+    .select('status, title, onboarding_id')
+    .eq('id', taskId)
+    .single()
+
+  const now = new Date().toISOString()
   const { data: updated, error } = await db
     .from('member_onboarding_tasks')
     .update({
       status,
-      completed_at: status === 'completed' ? new Date().toISOString() : null,
-      updated_at: new Date().toISOString(),
+      completed_at: status === 'completed' ? now : null,
+      updated_at: now,
     })
     .eq('id', taskId)
     .select('onboarding_id')
     .single()
   if (error) throw new Error(error.message)
 
-  if (updated?.onboarding_id) await reconcileMemberCompletion(db, updated.onboarding_id)
+  const onboardingId = updated?.onboarding_id ?? before?.onboarding_id ?? null
+
+  // Document completed onboarding tasks on the CRM contact's activity feed.
+  if (status === 'completed' && before && before.status !== 'completed' && onboardingId) {
+    await logOnboardingTaskCompletion(db, onboardingId, before.title as string, user.id, now)
+  }
+
+  if (onboardingId) await reconcileMemberCompletion(db, onboardingId)
   revalidate()
+}
+
+/**
+ * Records a completed onboarding task as an interaction on the member's CRM
+ * contact, so the person's activity feed shows the onboarding history with a
+ * timestamp. The contact link is the member_onboarding_id set by the spine
+ * trigger (migration 00065 / 00069); if no contact is linked yet, this is a
+ * no-op rather than an error — task completion must never fail on logging.
+ */
+async function logOnboardingTaskCompletion(
+  db: AnyDb,
+  onboardingId: string,
+  taskTitle: string,
+  userId: string,
+  occurredAt: string
+) {
+  try {
+    const { data: contact } = await db
+      .from('comms_crm_contacts')
+      .select('id')
+      .eq('member_onboarding_id', onboardingId)
+      .maybeSingle()
+    if (!contact?.id) return
+
+    await db.from('comms_crm_interactions').insert({
+      contact_id: contact.id,
+      interaction_type: 'note',
+      summary: `Onboarding task completed: ${taskTitle}`,
+      occurred_at: occurredAt,
+      created_by: userId,
+    })
+
+    await db
+      .from('comms_crm_contacts')
+      .update({ last_interaction_at: occurredAt, updated_at: occurredAt })
+      .eq('id', contact.id)
+  } catch {
+    // Activity logging is best-effort — never block the task update.
+  }
+}
+
+/**
+ * Deletes a new-member onboarding record (and its checklist via FK cascade).
+ * Symmetric with deleting the person in the CRM: the partner DB trigger
+ * (migration 00069) removes the linked name-only CRM contact, so the member
+ * disappears from BOTH the dashboard and the CRM directory at once. Platform
+ * users (profile-linked) are never deletable here — manage them via their
+ * profile.
+ */
+export async function deleteMemberOnboarding(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const db = supabase as AnyDb
+
+  const id = asNullableUuid(formData.get('onboarding_id'))
+  if (!id) throw new Error('Member is required.')
+
+  const { data: member, error: readError } = await db
+    .from('member_onboarding')
+    .select('profile_id')
+    .eq('id', id)
+    .maybeSingle()
+  if (readError) throw new Error(readError.message)
+  if (member?.profile_id) {
+    throw new Error('This member is a platform user — manage them via their profile.')
+  }
+
+  const { error } = await db.from('member_onboarding').delete().eq('id', id)
+  if (error) throw new Error(error.message)
+
+  revalidate()
+  revalidatePath('/app/comms/crm/people')
 }
 
 export async function removeMemberOnboardingTask(formData: FormData) {

@@ -130,4 +130,19 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
       if (congress) expect(congress.href).toBe('/app/congress')
     }
   })
+
+  it('gives every nav item an icon so the sidebar always renders a glyph', () => {
+    for (const role of Object.keys(ROLE_SPACE_DEFAULTS) as PlatformRole[]) {
+      const items = getSideNavSections(role, spacesFor(role)).flatMap((s) => s.items)
+      for (const item of items) {
+        expect(item.icon, `${item.id} is missing an icon`).toBeTruthy()
+      }
+    }
+  })
+
+  it('marks Annual Congress as the single accented (priority) nav item', () => {
+    const items = getSideNavSections('Comms', spacesFor('Comms')).flatMap((s) => s.items)
+    const priorityItems = items.filter((i) => i.priority)
+    expect(priorityItems.map((i) => i.id)).toEqual(['congress'])
+  })
 })
