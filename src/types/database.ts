@@ -1006,6 +1006,7 @@ export type Database = {
           output_media_stored: boolean
           output_newsletter_mentioned: boolean
           output_report_drafted: boolean
+          pipeline_ids: string[]
           podcast_backup_completed: boolean
           podcast_brief_ready: boolean
           podcast_distribution_channels: string[]
@@ -1056,6 +1057,7 @@ export type Database = {
           output_media_stored?: boolean
           output_newsletter_mentioned?: boolean
           output_report_drafted?: boolean
+          pipeline_ids?: string[]
           podcast_backup_completed?: boolean
           podcast_brief_ready?: boolean
           podcast_distribution_channels?: string[]
@@ -1106,6 +1108,7 @@ export type Database = {
           output_media_stored?: boolean
           output_newsletter_mentioned?: boolean
           output_report_drafted?: boolean
+          pipeline_ids?: string[]
           podcast_backup_completed?: boolean
           podcast_brief_ready?: boolean
           podcast_distribution_channels?: string[]

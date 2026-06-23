@@ -32,6 +32,7 @@ export default async function CommsPodcastPage({
       description="Run podcast episodes as owned communications productions with one accountable owner, clear setup, and structured follow-up."
       recordLabel="episodes"
       basePath="/app/comms/podcast"
+      detailBasePath="/app/comms/events"
       showScopeFilters={false}
       showEventTypeFilters={false}
     />

@@ -2,11 +2,14 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import {
   linkEventInitiative,
+  linkEventPipeline,
   saveEventSection,
   togglePodcastWorkflowItem,
-  transitionEventStage,
+  unlinkEventInitiative,
+  unlinkEventPipeline,
 } from '@/app/app/comms/events/actions'
 import { triggerEventTeamsStub } from '@/app/app/comms/integration-actions'
+import { EventStageSelect } from '@/components/comms/event-stage-select'
 import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
 import { OptionalField } from '@/components/comms/optional-field'
 import { StatusBadge } from '@/components/ui/status-badge'
@@ -31,7 +34,7 @@ import { createClient } from '@/lib/supabase/server'
 // ─── DB select strings ───────────────────────────────────────────────────────
 
 const EVENT_SELECT =
-  'id, name, event_type, start_date, end_date, location_city, location_country, organiser, owner_id, stage, is_annual_congress, is_i2l_organised, attendance_kind, presentation_summary, presentation_asset_url, event_image_url, event_website_url, push_to_group_calendar, initiative_ids, i2l_representatives, output_report_drafted, output_linkedin_published, output_newsletter_mentioned, output_media_stored, notes, podcast_series_name, podcast_episode_title, podcast_hosts, podcast_guests, podcast_recording_mode, podcast_distribution_channels, podcast_recording_link, podcast_preparation_notes, podcast_run_of_show, podcast_followup_notes, podcast_guest_confirmed, podcast_brief_ready, podcast_release_form_ready, podcast_equipment_ready, podcast_recording_completed, podcast_backup_completed, podcast_edit_completed, podcast_transcript_completed, podcast_show_notes_completed, podcast_published, podcast_followup_completed'
+  'id, name, event_type, start_date, end_date, location_city, location_country, organiser, owner_id, stage, is_annual_congress, is_i2l_organised, attendance_kind, presentation_summary, presentation_asset_url, event_image_url, event_website_url, push_to_group_calendar, initiative_ids, pipeline_ids, i2l_representatives, output_report_drafted, output_linkedin_published, output_newsletter_mentioned, output_media_stored, notes, podcast_series_name, podcast_episode_title, podcast_hosts, podcast_guests, podcast_recording_mode, podcast_distribution_channels, podcast_recording_link, podcast_preparation_notes, podcast_run_of_show, podcast_followup_notes, podcast_guest_confirmed, podcast_brief_ready, podcast_release_form_ready, podcast_equipment_ready, podcast_recording_completed, podcast_backup_completed, podcast_edit_completed, podcast_transcript_completed, podcast_show_notes_completed, podcast_published, podcast_followup_completed'
 
 const EVENT_FALLBACK_SELECT =
   'id, name, event_type, start_date, end_date, location_city, location_country, organiser, stage, is_annual_congress, initiative_ids, i2l_representatives, output_report_drafted, output_linkedin_published, output_newsletter_mentioned, output_media_stored, notes'
@@ -58,6 +61,7 @@ type EventRecord = {
   event_website_url: string | null
   push_to_group_calendar: boolean
   initiative_ids: string[] | null
+  pipeline_ids: string[] | null
   i2l_representatives: string[] | null
   output_report_drafted: boolean
   output_linkedin_published: boolean
@@ -108,6 +112,7 @@ function withDefaults(event: Record<string, unknown>): EventRecord {
     event_website_url: (event.event_website_url as string | null) ?? null,
     push_to_group_calendar: Boolean(event.push_to_group_calendar),
     initiative_ids: (event.initiative_ids as string[] | null) ?? null,
+    pipeline_ids: (event.pipeline_ids as string[] | null) ?? null,
     i2l_representatives: (event.i2l_representatives as string[] | null) ?? null,
     output_report_drafted: Boolean(event.output_report_drafted),
     output_linkedin_published: Boolean(event.output_linkedin_published),
@@ -1029,15 +1034,17 @@ export default async function CommsEventDetailPage({
 
   if (!event) notFound()
 
-  const [{ data: profiles }, { data: initiatives }, { data: linkedCalendar }] = await Promise.all([
-    supabase.from('profiles').select('id, name, email').order('name'),
-    supabase.from('initiatives').select('id, title').order('title'),
-    supabase
-      .from('content_calendar')
-      .select('id, title, status, scheduled_at')
-      .eq('source_event_id', id)
-      .order('scheduled_at', { ascending: false }),
-  ])
+  const [{ data: profiles }, { data: initiatives }, { data: pipelines }, { data: linkedCalendar }] =
+    await Promise.all([
+      supabase.from('profiles').select('id, name, email').order('name'),
+      supabase.from('initiatives').select('id, title').order('title'),
+      supabase.from('comms_crm_pipelines').select('id, name').order('name'),
+      supabase
+        .from('content_calendar')
+        .select('id, title, status, scheduled_at')
+        .eq('source_event_id', id)
+        .order('scheduled_at', { ascending: false }),
+    ])
 
   const isPodcast = isPodcastEventType(event.event_type)
   const setupMode = getEventSetupMode({
@@ -1059,6 +1066,9 @@ export default async function CommsEventDetailPage({
   )
   const linkedInitiativeSet = new Set(event.initiative_ids ?? [])
   const linkedInitiatives = (initiatives ?? []).filter((i) => linkedInitiativeSet.has(i.id))
+  const pipelineList = (pipelines ?? []) as Array<{ id: string; name: string }>
+  const linkedPipelineSet = new Set(event.pipeline_ids ?? [])
+  const linkedPipelines = pipelineList.filter((p) => linkedPipelineSet.has(p.id))
   const ownerName = event.owner_id ? profileMap.get(event.owner_id) ?? null : null
   const attendeeNames = (event.i2l_representatives ?? [])
     .map((rid) => profileMap.get(rid))
@@ -1148,30 +1158,12 @@ export default async function CommsEventDetailPage({
           )}
         </div>
 
-        {/* Stage transition */}
+        {/* Stage transition — inline, saves on change */}
         {!event.is_annual_congress && (
-          <form action={transitionEventStage} className="flex items-center gap-2">
-            <input type="hidden" name="event_id" value={event.id} />
-            <label className="sr-only" htmlFor="next_stage">Move to stage</label>
-            <select
-              id="next_stage"
-              name="next_stage"
-              defaultValue={event.stage}
-              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700"
-            >
-              {(Object.keys(EVENT_STAGE_META) as EventStage[]).map((stage) => (
-                <option key={stage} value={stage}>
-                  {EVENT_STAGE_META[stage].label}
-                </option>
-              ))}
-            </select>
-            <button
-              type="submit"
-              className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-            >
-              Move
-            </button>
-          </form>
+          <div className="flex flex-col items-end gap-1">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Stage</span>
+            <EventStageSelect eventId={event.id} stage={event.stage} />
+          </div>
         )}
       </div>
 
@@ -1274,36 +1266,113 @@ export default async function CommsEventDetailPage({
                 {linkedInitiatives.map((initiative) => (
                   <span
                     key={initiative.id}
-                    className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-0.5 text-xs font-semibold text-violet-700"
+                    className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-violet-700"
                   >
                     {initiative.title}
+                    <form action={unlinkEventInitiative} className="flex">
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="initiative_id" value={initiative.id} />
+                      <button
+                        type="submit"
+                        aria-label={`Disconnect ${initiative.title}`}
+                        className="flex h-4 w-4 items-center justify-center rounded-full text-violet-400 transition hover:bg-violet-200 hover:text-violet-800"
+                      >
+                        ×
+                      </button>
+                    </form>
                   </span>
                 ))}
               </div>
             ) : (
               <p className="mb-3 text-xs text-neutral-400">None linked yet.</p>
             )}
-            <form action={linkEventInitiative} className="flex gap-2">
-              <input type="hidden" name="event_id" value={event.id} />
-              <select
-                name="initiative_id"
-                className="min-w-0 flex-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
-              >
-                {(initiatives ?? [])
-                  .filter((i) => !linkedInitiativeSet.has(i.id))
-                  .map((i) => (
-                    <option key={i.id} value={i.id}>
-                      {i.title}
-                    </option>
-                  ))}
-              </select>
-              <button
-                type="submit"
-                className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-              >
-                Link
-              </button>
-            </form>
+            {(initiatives ?? []).some((i) => !linkedInitiativeSet.has(i.id)) && (
+              <form action={linkEventInitiative} className="flex gap-2">
+                <input type="hidden" name="event_id" value={event.id} />
+                <select
+                  name="initiative_id"
+                  className="min-w-0 flex-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
+                >
+                  {(initiatives ?? [])
+                    .filter((i) => !linkedInitiativeSet.has(i.id))
+                    .map((i) => (
+                      <option key={i.id} value={i.id}>
+                        {i.title}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="submit"
+                  className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                >
+                  Link
+                </button>
+              </form>
+            )}
+          </div>
+
+          {/* Pipelines */}
+          <div className="rounded-xl border border-neutral-200 bg-white p-4">
+            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Pipelines</h3>
+            {linkedPipelines.length > 0 ? (
+              <div className="mb-3 flex flex-wrap gap-1.5">
+                {linkedPipelines.map((pipeline) => (
+                  <span
+                    key={pipeline.id}
+                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-blue-700"
+                  >
+                    <Link href={`/app/comms/crm/pipelines/${pipeline.id}`} className="hover:underline">
+                      {pipeline.name}
+                    </Link>
+                    <form action={unlinkEventPipeline} className="flex">
+                      <input type="hidden" name="event_id" value={event.id} />
+                      <input type="hidden" name="pipeline_id" value={pipeline.id} />
+                      <button
+                        type="submit"
+                        aria-label={`Disconnect ${pipeline.name}`}
+                        className="flex h-4 w-4 items-center justify-center rounded-full text-blue-400 transition hover:bg-blue-200 hover:text-blue-800"
+                      >
+                        ×
+                      </button>
+                    </form>
+                  </span>
+                ))}
+              </div>
+            ) : (
+              <p className="mb-3 text-xs text-neutral-400">None connected yet.</p>
+            )}
+            {pipelineList.some((p) => !linkedPipelineSet.has(p.id)) ? (
+              <form action={linkEventPipeline} className="flex gap-2">
+                <input type="hidden" name="event_id" value={event.id} />
+                <select
+                  name="pipeline_id"
+                  className="min-w-0 flex-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
+                >
+                  {pipelineList
+                    .filter((p) => !linkedPipelineSet.has(p.id))
+                    .map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="submit"
+                  className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+                >
+                  Connect
+                </button>
+              </form>
+            ) : (
+              pipelineList.length === 0 && (
+                <p className="text-xs text-neutral-400">
+                  No pipelines exist yet.{' '}
+                  <Link href="/app/comms/crm/pipelines" className="font-semibold text-orange-700 hover:underline">
+                    Create one
+                  </Link>
+                </p>
+              )
+            )}
           </div>
 
           {/* Teams stub */}
