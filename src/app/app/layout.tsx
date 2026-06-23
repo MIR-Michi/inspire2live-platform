@@ -6,6 +6,8 @@ import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access
 import { canAccess, resolveAllSpaces } from '@/lib/permissions'
 import { getViewAsRole } from '@/lib/view-as'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
+import { TestModeProvider } from '@/components/feedback/test-mode-context'
+import { FeedbackOverlay } from '@/components/feedback/feedback-overlay'
 
 function getInitials(name: string): string {
   return name
@@ -79,34 +81,37 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <RoleLayersProvider platformRole={effectiveRole}>
-      <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
-        <TopNav
-          userName={name}
-          userRole={effectiveRole}
-          userInitials={getInitials(name)}
-          userAvatarUrl={profile?.avatar_url ?? null}
-          unreadCount={unread ?? 0}
-          isAdmin={isAdmin}
-          viewAsRole={viewAsRole}
-          effectiveSpaces={effectiveSpaces}
-        />
-        <div className="flex min-h-0 flex-1">
-          <SideNav
-            role={effectiveRole}
-            effectiveSpaces={effectiveSpaces}
+      <TestModeProvider>
+        <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
+          <TopNav
+            userName={name}
+            userRole={effectiveRole}
+            userInitials={getInitials(name)}
+            userAvatarUrl={profile?.avatar_url ?? null}
+            unreadCount={unread ?? 0}
             isAdmin={isAdmin}
-            commsUnreadCount={commsUnreadCount ?? 0}
-            workspaceLabel={workspaceLabel}
+            viewAsRole={viewAsRole}
+            effectiveSpaces={effectiveSpaces}
           />
-          <main
-            className="flex-1 overflow-y-auto px-3 py-4 md:p-6"
-            role="main"
-            aria-label="Page content"
-          >
-            {children}
-          </main>
+          <div className="flex min-h-0 flex-1">
+            <SideNav
+              role={effectiveRole}
+              effectiveSpaces={effectiveSpaces}
+              isAdmin={isAdmin}
+              commsUnreadCount={commsUnreadCount ?? 0}
+              workspaceLabel={workspaceLabel}
+            />
+            <main
+              className="flex-1 overflow-y-auto px-3 py-4 md:p-6"
+              role="main"
+              aria-label="Page content"
+            >
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
+        <FeedbackOverlay userName={name} userRole={actualRole} />
+      </TestModeProvider>
     </RoleLayersProvider>
   )
 }
