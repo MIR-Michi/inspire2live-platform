@@ -92,6 +92,7 @@ export function EventsPipelineShell({
   eyebrow,
   recordLabel = 'events',
   basePath = '/app/comms/events',
+  detailBasePath,
   showScopeFilters = true,
   showEventTypeFilters = true,
 }: {
@@ -106,10 +107,14 @@ export function EventsPipelineShell({
   eyebrow?: string
   description?: string
   recordLabel?: string
+  /** Base path for the list/filter links (scope, stage, type). */
   basePath?: string
+  /** Base path for opening an individual event. Defaults to `basePath`. */
+  detailBasePath?: string
   showScopeFilters?: boolean
   showEventTypeFilters?: boolean
 }) {
+  const resolvedDetailBasePath = detailBasePath ?? basePath
   function buildHref(overrides: {
     scope?: string
     stage?: string
@@ -242,7 +247,7 @@ export function EventsPipelineShell({
                   </div>
 
                   <Link
-                    href={`${basePath}/${event.id}`}
+                    href={`${resolvedDetailBasePath}/${event.id}`}
                     className="block text-[15px] font-semibold leading-snug text-neutral-900 hover:text-orange-700"
                   >
                     {event.name}
@@ -261,7 +266,7 @@ export function EventsPipelineShell({
 
                 <div className="flex shrink-0 flex-col items-end gap-2 pt-0.5">
                   <Link
-                    href={`${basePath}/${event.id}`}
+                    href={`${resolvedDetailBasePath}/${event.id}`}
                     className="text-xs font-semibold text-neutral-400 hover:text-orange-700"
                     aria-label={`Open ${event.name}`}
                   >

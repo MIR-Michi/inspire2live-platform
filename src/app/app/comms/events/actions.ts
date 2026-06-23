@@ -442,3 +442,72 @@ export async function linkEventInitiative(formData: FormData) {
 
   revalidateEventWorkspacePaths(eventId)
 }
+
+export async function unlinkEventInitiative(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const eventId = asText(formData.get('event_id'))
+  const initiativeId = asText(formData.get('initiative_id'))
+
+  if (!eventId || !initiativeId) throw new Error('Event and initiative are required.')
+
+  const { data: event, error: loadError } = await supabase
+    .from('events')
+    .select('initiative_ids')
+    .eq('id', eventId)
+    .maybeSingle()
+
+  if (loadError) throw new Error(loadError.message)
+  if (!event) throw new Error('Event not found.')
+
+  const initiativeIds = (event.initiative_ids ?? []).filter((id) => id !== initiativeId)
+  const { error } = await supabase.from('events').update({ initiative_ids: initiativeIds }).eq('id', eventId)
+  if (error) throw new Error(error.message)
+
+  revalidateEventWorkspacePaths(eventId)
+}
+
+export async function linkEventPipeline(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const eventId = asText(formData.get('event_id'))
+  const pipelineId = asText(formData.get('pipeline_id'))
+
+  if (!eventId || !pipelineId) throw new Error('Event and pipeline are required.')
+
+  const { data: event, error: loadError } = await supabase
+    .from('events')
+    .select('pipeline_ids')
+    .eq('id', eventId)
+    .maybeSingle()
+
+  if (loadError) throw new Error(loadError.message)
+  if (!event) throw new Error('Event not found.')
+
+  const pipelineIds = Array.from(new Set([...(event.pipeline_ids ?? []), pipelineId]))
+  const { error } = await supabase.from('events').update({ pipeline_ids: pipelineIds }).eq('id', eventId)
+  if (error) throw new Error(error.message)
+
+  revalidateEventWorkspacePaths(eventId)
+}
+
+export async function unlinkEventPipeline(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const eventId = asText(formData.get('event_id'))
+  const pipelineId = asText(formData.get('pipeline_id'))
+
+  if (!eventId || !pipelineId) throw new Error('Event and pipeline are required.')
+
+  const { data: event, error: loadError } = await supabase
+    .from('events')
+    .select('pipeline_ids')
+    .eq('id', eventId)
+    .maybeSingle()
+
+  if (loadError) throw new Error(loadError.message)
+  if (!event) throw new Error('Event not found.')
+
+  const pipelineIds = (event.pipeline_ids ?? []).filter((id) => id !== pipelineId)
+  const { error } = await supabase.from('events').update({ pipeline_ids: pipelineIds }).eq('id', eventId)
+  if (error) throw new Error(error.message)
+
+  revalidateEventWorkspacePaths(eventId)
+}
