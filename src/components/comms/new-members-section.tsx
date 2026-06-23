@@ -7,6 +7,7 @@ import {
   registerNewMember,
   confirmMemberOnboarding,
   declineMemberOnboarding,
+  deleteMemberOnboarding,
   addMemberOnboardingTask,
   updateMemberOnboardingTaskStatus,
   removeMemberOnboardingTask,
@@ -126,33 +127,57 @@ function MemberCard({
         ) : (
           <div className="min-w-0">{nameBlock}</div>
         )}
-        {member.status === 'pending' ? (
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-              Awaiting confirmation
+        <div className="flex items-center gap-2">
+          {member.status === 'pending' ? (
+            <>
+              <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
+                Awaiting confirmation
+              </span>
+              {canApprove && (
+                <>
+                  <form action={confirmMemberOnboarding}>
+                    <input type="hidden" name="onboarding_id" value={member.id} />
+                    <button className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700">
+                      Confirm
+                    </button>
+                  </form>
+                  <form action={declineMemberOnboarding}>
+                    <input type="hidden" name="onboarding_id" value={member.id} />
+                    <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50">
+                      Decline
+                    </button>
+                  </form>
+                </>
+              )}
+            </>
+          ) : (
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-600">
+              {member.completedCount}/{member.totalCount} done
             </span>
-            {canApprove && (
-              <>
-                <form action={confirmMemberOnboarding}>
-                  <input type="hidden" name="onboarding_id" value={member.id} />
-                  <button className="rounded-lg bg-orange-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-orange-700">
-                    Confirm
-                  </button>
-                </form>
-                <form action={declineMemberOnboarding}>
-                  <input type="hidden" name="onboarding_id" value={member.id} />
-                  <button className="rounded-lg border border-neutral-300 px-3 py-1.5 text-xs font-semibold text-neutral-600 hover:bg-neutral-50">
-                    Decline
-                  </button>
-                </form>
-              </>
-            )}
-          </div>
-        ) : (
-          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-600">
-            {member.completedCount}/{member.totalCount} done
-          </span>
-        )}
+          )}
+          {canApprove && (
+            <form
+              action={deleteMemberOnboarding}
+              onSubmit={(event) => {
+                if (
+                  !confirm(
+                    `Delete ${member.fullName}? This removes them from the onboarding list and from the CRM directory.`
+                  )
+                ) {
+                  event.preventDefault()
+                }
+              }}
+            >
+              <input type="hidden" name="onboarding_id" value={member.id} />
+              <button
+                aria-label={`Delete ${member.fullName}`}
+                className="rounded-lg border border-rose-200 bg-rose-50 px-2.5 py-1.5 text-xs font-semibold text-rose-700 hover:bg-rose-100"
+              >
+                Delete
+              </button>
+            </form>
+          )}
+        </div>
       </div>
 
       {isActive && open && (

@@ -70,6 +70,25 @@ export function getRoleBadgeColor(role?: string | null): string {
 // Deliberately NOT in the tree (still reachable elsewhere): Profile (top-right
 // account menu), and Tasks / Bureau / Partners (surfaced contextually).
 
+/** Icon keys resolved to an SVG in the sidebar. */
+export type NavIcon =
+  | 'dashboard'
+  | 'planner'
+  | 'campus'
+  | 'whatsapp'
+  | 'crm'
+  | 'initiatives'
+  | 'board'
+  | 'congress'
+  | 'podcast'
+  | 'events'
+  | 'network'
+  | 'stories'
+  | 'library'
+  | 'resources'
+  | 'admin'
+  | 'feedback'
+
 export type NavItem = {
   /** Stable id for keys/tests. */
   id: string
@@ -77,6 +96,8 @@ export type NavItem = {
   href: string
   /** Space that gates visibility. */
   space: PlatformSpace
+  /** Icon shown to the left of the label. */
+  icon: NavIcon
   /** Minimum access level required to see the item (defaults to 'view'). */
   minLevel?: AccessLevel
   /** Renders a live counter badge sourced from the matching workspace metric. */
@@ -94,46 +115,47 @@ export const MASTER_NAV: NavSection[] = [
   {
     label: 'Overview',
     items: [
-      { id: 'dashboard', label: 'Dashboard', href: '/app/dashboard', space: 'dashboard' },
+      { id: 'dashboard', label: 'Dashboard', href: '/app/dashboard', space: 'dashboard', icon: 'dashboard' },
     ],
   },
   {
     label: 'Workspace',
     items: [
-      { id: 'comms-planner',  label: 'Planner',     href: '/app/comms/planner',  space: 'comms' },
-      { id: 'comms-campus',   label: 'Campus',      href: '/app/comms/campus',   space: 'comms', badge: 'campus' },
-      { id: 'comms-whatsapp', label: 'WhatsApp',    href: '/app/comms/whatsapp', space: 'comms' },
-      { id: 'comms-crm',      label: 'CRM',         href: '/app/comms/crm',      space: 'comms' },
-      { id: 'initiatives',    label: 'Initiatives', href: '/app/initiatives',    space: 'initiatives' },
-      { id: 'board',          label: 'Board',       href: '/app/board',          space: 'board' },
+      { id: 'comms-planner',  label: 'Planner',     href: '/app/comms/planner',  space: 'comms', icon: 'planner' },
+      { id: 'comms-campus',   label: 'Campus',      href: '/app/comms/campus',   space: 'comms', icon: 'campus', badge: 'campus' },
+      { id: 'comms-whatsapp', label: 'WhatsApp',    href: '/app/comms/whatsapp', space: 'comms', icon: 'whatsapp' },
+      { id: 'comms-crm',      label: 'CRM',         href: '/app/comms/crm',      space: 'comms', icon: 'crm' },
+      { id: 'initiatives',    label: 'Initiatives', href: '/app/initiatives',    space: 'initiatives', icon: 'initiatives' },
+      { id: 'board',          label: 'Board',       href: '/app/board',          space: 'board', icon: 'board' },
     ],
   },
   {
     label: 'Events',
     items: [
-      { id: 'congress',      label: 'Annual Congress', href: '/app/congress',        space: 'congress', priority: true },
-      { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast',   space: 'comms' },
-      { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',    space: 'comms' },
+      { id: 'congress',      label: 'Annual Congress', href: '/app/congress',        space: 'congress', icon: 'congress', priority: true },
+      { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast',   space: 'comms', icon: 'podcast' },
+      { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',    space: 'comms', icon: 'events' },
     ],
   },
   {
     label: 'Community',
     items: [
-      { id: 'network', label: 'Network', href: '/app/network', space: 'network' },
-      { id: 'stories', label: 'Stories', href: '/app/stories', space: 'stories' },
+      { id: 'network', label: 'Network', href: '/app/network', space: 'network', icon: 'network' },
+      { id: 'stories', label: 'Stories', href: '/app/stories', space: 'stories', icon: 'stories' },
     ],
   },
   {
     label: 'Content',
     items: [
-      { id: 'comms-library', label: 'Library',   href: '/app/comms/library', space: 'comms' },
-      { id: 'resources',     label: 'Resources', href: '/app/resources',     space: 'resources' },
+      { id: 'comms-library', label: 'Library',   href: '/app/comms/library', space: 'comms', icon: 'library' },
+      { id: 'resources',     label: 'Resources', href: '/app/resources',     space: 'resources', icon: 'resources' },
     ],
   },
   {
     label: 'Account',
     items: [
-      { id: 'admin', label: 'User Management', href: '/app/admin/users', space: 'admin', minLevel: 'manage' },
+      { id: 'admin',    label: 'User Management', href: '/app/admin/users',     space: 'admin', icon: 'admin',    minLevel: 'manage' },
+      { id: 'feedback', label: 'Feedback',         href: '/app/admin/feedback',  space: 'admin', icon: 'feedback', minLevel: 'manage' },
     ],
   },
 ]
@@ -151,30 +173,30 @@ const COMMS_NAV_SECTIONS: NavSection[] = [
   {
     label: 'Overview',
     items: [
-      { id: 'comms-dashboard', label: 'Dashboard', href: '/app/comms/dashboard', space: 'dashboard' },
+      { id: 'comms-dashboard', label: 'Dashboard', href: '/app/comms/dashboard', space: 'dashboard', icon: 'dashboard' },
     ],
   },
   {
     label: 'Workspace',
     items: [
-      { id: 'comms-planner',  label: 'Planner',  href: '/app/comms/planner',  space: 'comms' },
-      { id: 'comms-campus',   label: 'Campus',   href: '/app/comms/campus',   space: 'comms', badge: 'campus' },
-      { id: 'comms-whatsapp', label: 'WhatsApp', href: '/app/comms/whatsapp', space: 'comms' },
-      { id: 'comms-crm',      label: 'CRM',      href: '/app/comms/crm',      space: 'comms' },
+      { id: 'comms-planner',  label: 'Planner',  href: '/app/comms/planner',  space: 'comms', icon: 'planner' },
+      { id: 'comms-campus',   label: 'Campus',   href: '/app/comms/campus',   space: 'comms', icon: 'campus', badge: 'campus' },
+      { id: 'comms-whatsapp', label: 'WhatsApp', href: '/app/comms/whatsapp', space: 'comms', icon: 'whatsapp' },
+      { id: 'comms-crm',      label: 'CRM',      href: '/app/comms/crm',      space: 'comms', icon: 'crm' },
     ],
   },
   {
     label: 'Events',
     items: [
-      { id: 'congress',      label: 'Annual Congress', href: '/app/congress',      space: 'congress', priority: true },
-      { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast', space: 'comms' },
-      { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',  space: 'comms' },
+      { id: 'congress',      label: 'Annual Congress', href: '/app/congress',      space: 'congress', icon: 'congress', priority: true },
+      { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast', space: 'comms', icon: 'podcast' },
+      { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',  space: 'comms', icon: 'events' },
     ],
   },
   {
     label: 'Content',
     items: [
-      { id: 'comms-library', label: 'Library', href: '/app/comms/library', space: 'comms' },
+      { id: 'comms-library', label: 'Library', href: '/app/comms/library', space: 'comms', icon: 'library' },
     ],
   },
 ]

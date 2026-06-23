@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { formatMeetingLabel, type AgendaMeetingGroup } from '@/lib/comms-agenda'
 import { AgendaAddForm } from '@/components/comms/agenda-add-form'
 import { AgendaItemList } from '@/components/comms/agenda-item-list'
+import type { TaskOwnerOption } from '@/components/comms/task-details-button'
 
 /**
  * Weekly meeting agenda.
@@ -19,10 +20,12 @@ export function WeeklyAgenda({
   groups,
   previousLimit,
   showAllHref,
+  ownerOptions = [],
 }: {
   groups: AgendaMeetingGroup[]
   previousLimit?: number
   showAllHref?: string
+  ownerOptions?: TaskOwnerOption[]
 }) {
   const current = groups.find((g) => g.isUpcoming) ?? null
   const previous = groups.filter((g) => !g.isUpcoming)
@@ -43,7 +46,7 @@ export function WeeklyAgenda({
             <AgendaAddForm meetingDate={current.meetingDate} />
           </div>
           {current.items.length > 0 ? (
-            <AgendaItemList items={current.items} />
+            <AgendaItemList items={current.items} ownerOptions={ownerOptions} />
           ) : (
             <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
               No agenda items yet. Add the first one for this meeting.
@@ -57,7 +60,7 @@ export function WeeklyAgenda({
           <h4 className="px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Previous meetings</h4>
           <div className="divide-y divide-neutral-100 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             {shown.map((group) => (
-              <PreviousMeetingRow key={group.meetingDate} group={group} />
+              <PreviousMeetingRow key={group.meetingDate} group={group} ownerOptions={ownerOptions} />
             ))}
           </div>
           {hasMore && showAllHref && (
@@ -71,7 +74,13 @@ export function WeeklyAgenda({
   )
 }
 
-function PreviousMeetingRow({ group }: { group: AgendaMeetingGroup }) {
+function PreviousMeetingRow({
+  group,
+  ownerOptions,
+}: {
+  group: AgendaMeetingGroup
+  ownerOptions: TaskOwnerOption[]
+}) {
   const [open, setOpen] = useState(false)
   const count = group.items.length
 
@@ -92,7 +101,7 @@ function PreviousMeetingRow({ group }: { group: AgendaMeetingGroup }) {
       {open && (
         <div className="space-y-2 bg-neutral-50/50 px-4 pb-4 pt-1">
           {count > 0 ? (
-            <AgendaItemList items={group.items} />
+            <AgendaItemList items={group.items} ownerOptions={ownerOptions} />
           ) : (
             <p className="py-3 text-center text-xs text-neutral-400">No items recorded for this meeting.</p>
           )}
