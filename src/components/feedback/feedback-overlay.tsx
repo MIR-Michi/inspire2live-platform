@@ -327,7 +327,7 @@ export function FeedbackOverlay() {
         type="button"
         data-feedback-ui="toggle"
         onClick={toggle}
-        className="fixed bottom-4 left-4 z-[9995] flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-medium text-neutral-500 shadow hover:bg-neutral-50 hover:text-neutral-700"
+        className="fixed bottom-4 right-4 z-[9995] flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-2 text-xs font-medium text-neutral-500 shadow hover:bg-neutral-50 hover:text-neutral-700"
         title="Activate test mode to leave contextual feedback"
       >
         <svg className="h-3.5 w-3.5" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -369,7 +369,7 @@ export function FeedbackOverlay() {
           type="button"
           data-feedback-ui="pick-btn"
           onClick={enterPickMode}
-          className="fixed bottom-4 left-4 z-[9995] flex items-center gap-2 rounded-full bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-orange-700 active:scale-95"
+          className="fixed bottom-4 right-4 z-[9995] flex items-center gap-2 rounded-full bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-orange-700 active:scale-95"
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
             <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm.75-11.25a.75.75 0 00-1.5 0v2.5h-2.5a.75.75 0 000 1.5h2.5v2.5a.75.75 0 001.5 0v-2.5h2.5a.75.75 0 000-1.5h-2.5v-2.5z" clipRule="evenodd" />
