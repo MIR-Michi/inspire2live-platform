@@ -3691,6 +3691,54 @@ export type Database = {
         }
         Relationships: []
       }
+      feedback_items: {
+        Row: {
+          id: string
+          user_id: string | null
+          user_name: string | null
+          user_role: string | null
+          page_url: string
+          page_title: string | null
+          element_path: string | null
+          element_text: string | null
+          feedback_type: string
+          message: string
+          status: string
+          admin_note: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          user_id?: string | null
+          user_name?: string | null
+          user_role?: string | null
+          page_url: string
+          page_title?: string | null
+          element_path?: string | null
+          element_text?: string | null
+          feedback_type?: string
+          message: string
+          status?: string
+          admin_note?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          user_id?: string | null
+          user_name?: string | null
+          user_role?: string | null
+          page_url?: string
+          page_title?: string | null
+          element_path?: string | null
+          element_text?: string | null
+          feedback_type?: string
+          message?: string
+          status?: string
+          admin_note?: string | null
+          created_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       decision_pipeline: {
