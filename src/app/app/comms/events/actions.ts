@@ -303,6 +303,123 @@ export async function togglePodcastWorkflowItem(formData: FormData) {
   revalidateEventWorkspacePaths(eventId)
 }
 
+/**
+ * Targeted save for a single phase panel — only the relevant columns are updated.
+ * The `section` field discriminates which group of columns to write.
+ */
+export async function saveEventSection(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const eventId = asText(formData.get('event_id'))
+  const section = asText(formData.get('section'))
+  if (!eventId) throw new Error('Event is required.')
+
+  let payload: Record<string, unknown>
+
+  switch (section) {
+    case 'podcast_setup':
+      payload = {
+        name: asText(formData.get('name')),
+        start_date: asText(formData.get('start_date')),
+        end_date: asText(formData.get('end_date')) || null,
+        location_city: asText(formData.get('location_city')) || null,
+        location_country: asText(formData.get('location_country')) || null,
+        organiser: asText(formData.get('organiser')) || null,
+        event_website_url: asText(formData.get('event_website_url')) || null,
+        owner_id: asText(formData.get('owner_id')) || null,
+        push_to_group_calendar: isChecked(formData, 'push_to_group_calendar'),
+        podcast_series_name: asText(formData.get('podcast_series_name')) || null,
+        podcast_hosts: parseDelimitedList(asText(formData.get('podcast_hosts'))),
+        podcast_guests: parseDelimitedList(asText(formData.get('podcast_guests'))),
+        podcast_recording_mode: normalizePodcastRecordingMode(
+          asText(formData.get('podcast_recording_mode')) || 'remote'
+        ),
+        podcast_recording_link: asText(formData.get('podcast_recording_link')) || null,
+        podcast_preparation_notes: asText(formData.get('podcast_preparation_notes')) || null,
+        event_image_url: asText(formData.get('event_image_url')) || null,
+        presentation_asset_url: asText(formData.get('presentation_asset_url')) || null,
+      }
+      if (!payload.name || !payload.start_date) throw new Error('Event name and start date are required.')
+      break
+
+    case 'podcast_run':
+      payload = {
+        podcast_run_of_show: asText(formData.get('podcast_run_of_show')) || null,
+      }
+      break
+
+    case 'podcast_after':
+      payload = {
+        podcast_episode_title: asText(formData.get('podcast_episode_title')) || null,
+        podcast_distribution_channels: parsePodcastDistributionChannels(
+          formData.getAll('podcast_distribution_channels').map((v) => (typeof v === 'string' ? v : ''))
+        ),
+        podcast_followup_notes: asText(formData.get('podcast_followup_notes')) || null,
+        output_report_drafted: isChecked(formData, 'output_report_drafted'),
+        output_linkedin_published: isChecked(formData, 'output_linkedin_published'),
+        output_newsletter_mentioned: isChecked(formData, 'output_newsletter_mentioned'),
+        output_media_stored: isChecked(formData, 'output_media_stored'),
+        notes: asText(formData.get('notes')) || null,
+        presentation_summary: asText(formData.get('presentation_summary')) || null,
+      }
+      break
+
+    case 'event_prepare':
+    case 'event_attend': {
+      const eventType = normalizeEventType(asText(formData.get('event_type')) || 'conference')
+      const isAnnualCongress = isChecked(formData, 'is_annual_congress')
+      const isI2lOrganised = normalizeI2LOwnedFlag({
+        eventType,
+        isI2lOrganised: isChecked(formData, 'is_i2l_organised'),
+        isAnnualCongress,
+      })
+      const name = asText(formData.get('name'))
+      const startDate = asText(formData.get('start_date'))
+      if (!name || !startDate) throw new Error('Event name and start date are required.')
+      payload = {
+        name,
+        event_type: eventType,
+        start_date: startDate,
+        end_date: asText(formData.get('end_date')) || null,
+        location_city: asText(formData.get('location_city')) || null,
+        location_country: asText(formData.get('location_country')) || null,
+        organiser: asText(formData.get('organiser')) || null,
+        event_website_url: asText(formData.get('event_website_url')) || null,
+        owner_id: asText(formData.get('owner_id')) || null,
+        is_i2l_organised: isI2lOrganised,
+        is_annual_congress: isAnnualCongress,
+        push_to_group_calendar: isChecked(formData, 'push_to_group_calendar'),
+        event_image_url: asText(formData.get('event_image_url')) || null,
+        presentation_summary: asText(formData.get('presentation_summary')) || null,
+        presentation_asset_url: asText(formData.get('presentation_asset_url')) || null,
+        attendance_kind:
+          section === 'event_attend'
+            ? normalizeAttendanceKind(asText(formData.get('attendance_kind')) || 'visitor')
+            : 'organiser',
+        i2l_representatives:
+          section === 'event_attend' ? parseValues(formData, 'i2l_representatives') : [],
+      }
+      break
+    }
+
+    case 'event_after':
+      payload = {
+        output_report_drafted: isChecked(formData, 'output_report_drafted'),
+        output_linkedin_published: isChecked(formData, 'output_linkedin_published'),
+        output_newsletter_mentioned: isChecked(formData, 'output_newsletter_mentioned'),
+        output_media_stored: isChecked(formData, 'output_media_stored'),
+        notes: asText(formData.get('notes')) || null,
+      }
+      break
+
+    default:
+      throw new Error('Invalid section.')
+  }
+
+  const { error } = await supabase.from('events').update(payload).eq('id', eventId)
+  if (error) throw new Error(error.message)
+  revalidateEventWorkspacePaths(eventId)
+}
+
 export async function linkEventInitiative(formData: FormData) {
   const { supabase } = await requireCommsOperator()
   const eventId = asText(formData.get('event_id'))
