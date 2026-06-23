@@ -24,6 +24,11 @@ type CommsDbClient = {
 const VALID_STATUSES = new Set(['not_started', 'in_progress', 'completed', 'skipped'])
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
 
+// Monthly campus meetings reuse the agenda/task framework, so agenda and task
+// mutations must also refresh the campus month route (a dynamic page). Passing
+// the bracketed route pattern revalidates every instance of it.
+const CAMPUS_MONTH_ROUTE = '/app/comms/campus/[year]/[month]'
+
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
 }
@@ -69,20 +74,28 @@ export async function addAgendaItem(formData: FormData) {
   if (!title) throw new Error('An agenda title is required.')
 
   const summary = asText(formData.get('summary')) || null
+  const meetingNotes = asNullableText(formData.get('meeting_notes'))
   const meetingDateInput = asText(formData.get('meeting_date'))
   const meetingDate = /^\d{4}-\d{2}-\d{2}$/.test(meetingDateInput) ? meetingDateInput : getNextMeetingDate()
+  // When set, the item belongs to a monthly campus meeting instead of the
+  // weekly comms meeting (both share this table).
+  const campusSessionId = asNullableUuid(formData.get('campus_session_id'))
 
   // The proposer is the owner — automatic and not reassignable from this view.
   const { error } = await agendaSupabase.from('comms_weekly_agenda_items').insert({
     meeting_date: meetingDate,
     title,
     summary,
+    meeting_notes: meetingNotes,
     owner_id: user.id,
     created_by: user.id,
+    campus_session_id: campusSessionId,
   })
   if (error) throw new Error(error.message)
 
   revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/comms/meetings')
+  revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }
 
 export async function updateAgendaItem(formData: FormData) {
@@ -92,18 +105,20 @@ export async function updateAgendaItem(formData: FormData) {
   const id = asText(formData.get('agenda_item_id'))
   const title = asText(formData.get('title'))
   const summary = asText(formData.get('summary')) || null
+  const meetingNotes = asNullableText(formData.get('meeting_notes'))
 
   if (!id) throw new Error('Agenda item is required.')
   if (!title) throw new Error('An agenda title is required.')
 
   const { error } = await agendaSupabase
     .from('comms_weekly_agenda_items')
-    .update({ title, summary, updated_at: new Date().toISOString() })
+    .update({ title, summary, meeting_notes: meetingNotes, updated_at: new Date().toISOString() })
     .eq('id', id)
   if (error) throw new Error(error.message)
 
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/comms/meetings')
+  revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }
 
 export async function deleteAgendaItem(formData: FormData) {
@@ -127,6 +142,7 @@ export async function deleteAgendaItem(formData: FormData) {
 
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/comms/meetings')
+  revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }
 
 export async function reorderAgendaItems(formData: FormData) {
@@ -151,6 +167,7 @@ export async function reorderAgendaItems(formData: FormData) {
 
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/comms/meetings')
+  revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }
 
 // ─── Person-owned tasks ──────────────────────────────────────────────────────
@@ -192,6 +209,7 @@ export async function createCommsTask(formData: FormData) {
 
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/dashboard')
+  revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }
 
 export async function updateCommsTaskOwner(formData: FormData) {
@@ -242,4 +260,5 @@ export async function updateCommsTaskStatus(formData: FormData) {
 
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/dashboard')
+  revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }

@@ -13,7 +13,7 @@ import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-d
 
 function queryBuilder(data: unknown[]) {
   const builder: Record<string, unknown> = {}
-  for (const method of ['select', 'eq', 'neq', 'not', 'in', 'order', 'limit', 'gte', 'lt']) {
+  for (const method of ['select', 'eq', 'neq', 'not', 'in', 'is', 'order', 'limit', 'gte', 'lt']) {
     builder[method] = vi.fn(() => builder)
   }
   builder.then = (onFulfilled: (value: { data: unknown; error: null }) => unknown, onRejected?: (reason: unknown) => unknown) =>

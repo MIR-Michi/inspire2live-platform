@@ -81,6 +81,30 @@ export async function createCampusSession(formData: FormData) {
   redirect(`/app/comms/campus-log/sessions/${data?.id}`)
 }
 
+/**
+ * Creates a campus monthly session and returns the user to where they started
+ * (used from the campus month page so a meeting can be started inline without
+ * leaving the briefing workspace). Mirrors createCampusSession but redirects
+ * back to the originating page instead of the session log.
+ */
+export async function startCampusMeeting(formData: FormData) {
+  const { supabase, user } = await requireCommsOperator()
+  const sessionDate = asText(formData.get('session_date'))
+  const returnPath = safeReturnPath(formData)
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) throw new Error('A valid session date is required.')
+
+  const { error } = await supabase
+    .from('campus_sessions')
+    .insert({ session_date: sessionDate, created_by: user.id })
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/app/comms/campus')
+  revalidatePath(returnPath)
+  redirect(returnPath)
+}
+
 export async function saveCampusSession(formData: FormData) {
   const { supabase } = await requireCommsOperator()
   const sessionId = asText(formData.get('session_id'))

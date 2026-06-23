@@ -3,7 +3,14 @@
 import { useRef, useState } from 'react'
 import { addAgendaItem } from '@/app/app/comms/dashboard/actions'
 
-export function AgendaAddForm({ meetingDate }: { meetingDate: string }) {
+export function AgendaAddForm({
+  meetingDate,
+  campusSessionId,
+}: {
+  meetingDate: string
+  /** When set, the new item is attached to this monthly campus meeting. */
+  campusSessionId?: string
+}) {
   const formRef = useRef<HTMLFormElement>(null)
   const [open, setOpen] = useState(false)
   const [pending, setPending] = useState(false)
@@ -40,6 +47,7 @@ export function AgendaAddForm({ meetingDate }: { meetingDate: string }) {
       className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3"
     >
       <input type="hidden" name="meeting_date" value={meetingDate} />
+      {campusSessionId && <input type="hidden" name="campus_session_id" value={campusSessionId} />}
       <div>
         <label htmlFor="agenda-title" className="text-xs font-semibold text-neutral-600">
           Title
@@ -63,6 +71,19 @@ export function AgendaAddForm({ meetingDate }: { meetingDate: string }) {
           rows={2}
           maxLength={400}
           placeholder="A sentence or two of context."
+          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+        />
+      </div>
+      <div>
+        <label htmlFor="agenda-meeting-notes" className="text-xs font-semibold text-neutral-600">
+          Meeting notes <span className="font-normal text-neutral-400">(optional)</span>
+        </label>
+        <textarea
+          id="agenda-meeting-notes"
+          name="meeting_notes"
+          rows={2}
+          maxLength={4000}
+          placeholder="Notes from the discussion (can be added later)."
           className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
         />
       </div>

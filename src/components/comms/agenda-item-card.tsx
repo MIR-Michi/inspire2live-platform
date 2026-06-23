@@ -101,6 +101,17 @@ export function AgendaItemCard({
             className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none ring-orange-300 focus:ring"
           />
         </label>
+        <label className="block space-y-1">
+          <span className="text-xs font-semibold text-neutral-600">Meeting notes</span>
+          <textarea
+            name="meeting_notes"
+            rows={3}
+            maxLength={4000}
+            defaultValue={item.meetingNotes ?? ''}
+            placeholder="Notes captured during the meeting on this topic."
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none ring-orange-300 focus:ring"
+          />
+        </label>
         {error && <p className="text-xs font-medium text-red-600">{error}</p>}
         <div className="flex items-center gap-2">
           <button
@@ -172,6 +183,13 @@ export function AgendaItemCard({
       </div>
 
       {error && <p className="mt-1 text-xs font-medium text-red-600">{error}</p>}
+
+      {item.meetingNotes && (
+        <div className="mt-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2">
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Meeting notes</p>
+          <p className="mt-0.5 whitespace-pre-wrap text-xs text-neutral-700">{item.meetingNotes}</p>
+        </div>
+      )}
 
       {item.linkedTasks.length > 0 && (
         <div className="mt-2 flex flex-wrap gap-1.5">
