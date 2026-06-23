@@ -110,7 +110,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             </main>
           </div>
         </div>
-        <FeedbackOverlay userName={name} userRole={actualRole} />
+        <FeedbackOverlay />
       </TestModeProvider>
     </RoleLayersProvider>
   )

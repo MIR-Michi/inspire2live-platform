@@ -8,7 +8,7 @@ import {
   type FeedbackItem,
   type FeedbackStatus,
 } from '@/lib/feedback'
-import { updateFeedbackStatus, deleteFeedbackItem } from '@/app/app/admin/feedback/actions'
+import { deleteFeedbackItem } from '@/app/app/admin/feedback/actions'
 import { FeedbackStatusSelect } from '@/components/feedback/feedback-status-select'
 
 export default async function AdminFeedbackPage({

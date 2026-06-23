@@ -14,6 +14,10 @@ export function TestModeProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     try {
+      // Read persisted state after hydration. Intentionally post-mount: localStorage
+      // is unavailable during SSR, so the server renders the stable `false` default
+      // and the client syncs here — keeping the first client render hydration-safe.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsActive(localStorage.getItem('i2l:testMode') === '1')
     } catch {
       // localStorage not available

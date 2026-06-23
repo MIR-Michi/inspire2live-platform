@@ -225,68 +225,46 @@ function SuccessToast({ onDone }: { onDone: () => void }) {
 
 // ─── Main overlay (pick mode + toggle button) ─────────────────────────────────
 
-export function FeedbackOverlay({ userName, userRole }: { userName: string; userRole: string }) {
+type HighlightRect = { top: number; left: number; width: number; height: number }
+
+export function FeedbackOverlay() {
   const { isActive, toggle } = useTestMode()
   const pathname = usePathname()
 
   const [picking, setPicking] = useState(false)
   const [captured, setCaptured] = useState<CapturedContext | null>(null)
   const [showSuccess, setShowSuccess] = useState(false)
-  const highlightRef = useRef<HTMLDivElement | null>(null)
-  const lastHoveredRef = useRef<Element | null>(null)
+  const [highlight, setHighlight] = useState<HighlightRect | null>(null)
 
-  // Exit pick mode when navigating
+  // Exit pick mode when navigating to another page. Route changes are an external
+  // signal (next/navigation), so resetting the transient pick/capture UI here is the
+  // intended use of an effect — synchronising local state to navigation.
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setPicking(false)
     setCaptured(null)
   }, [pathname])
 
-  // Clean up pick mode when test mode is turned off
-  useEffect(() => {
-    if (!isActive) {
-      setPicking(false)
-      setCaptured(null)
-    }
-  }, [isActive])
+  // Toggle test mode and reset any in-progress pick/capture in the same user action,
+  // so re-activating later always starts from a clean state (no effect needed).
+  const handleToggle = useCallback(() => {
+    setPicking(false)
+    setCaptured(null)
+    setHighlight(null)
+    toggle()
+  }, [toggle])
 
-  const clearHighlight = useCallback(() => {
-    if (highlightRef.current) {
-      highlightRef.current.remove()
-      highlightRef.current = null
-    }
-    if (lastHoveredRef.current) {
-      lastHoveredRef.current = null
-    }
+  const enterPickMode = useCallback(() => {
+    setHighlight(null)
+    setPicking(true)
   }, [])
 
   const handleMouseOver = useCallback((e: MouseEvent) => {
     const target = e.target as Element
     if (!target || target.closest('[data-feedback-ui]')) return
 
-    lastHoveredRef.current = target
     const rect = target.getBoundingClientRect()
-
-    let hi = highlightRef.current
-    if (!hi) {
-      hi = document.createElement('div')
-      hi.setAttribute('data-feedback-ui', 'highlight')
-      hi.style.cssText = [
-        'position:fixed',
-        'pointer-events:none',
-        'z-index:9990',
-        'border:2px solid #ea580c',
-        'background:rgba(234,88,12,0.08)',
-        'border-radius:6px',
-        'transition:all 80ms',
-      ].join(';')
-      document.body.appendChild(hi)
-      highlightRef.current = hi
-    }
-
-    hi.style.top = `${rect.top}px`
-    hi.style.left = `${rect.left}px`
-    hi.style.width = `${rect.width}px`
-    hi.style.height = `${rect.height}px`
+    setHighlight({ top: rect.top, left: rect.left, width: rect.width, height: rect.height })
   }, [])
 
   const handleClick = useCallback(
@@ -302,16 +280,18 @@ export function FeedbackOverlay({ userName, userRole }: { userName: string; user
         elementPath: getElementPath(target),
         elementText: getElementText(target),
       }
-      clearHighlight()
+      setHighlight(null)
       setPicking(false)
       setCaptured(ctx)
     },
-    [clearHighlight],
+    [],
   )
 
+  // Attach/detach the global pick-mode listeners. This only syncs to external systems
+  // (document listeners + cursor), which is exactly what effects are for. The highlight
+  // box is gated on `picking` in render, so no state reset is needed on teardown.
   useEffect(() => {
     if (!picking) {
-      clearHighlight()
       document.removeEventListener('mouseover', handleMouseOver)
       document.removeEventListener('click', handleClick, true)
       document.body.style.cursor = ''
@@ -326,9 +306,8 @@ export function FeedbackOverlay({ userName, userRole }: { userName: string; user
       document.body.style.cursor = ''
       document.removeEventListener('mouseover', handleMouseOver)
       document.removeEventListener('click', handleClick, true)
-      clearHighlight()
     }
-  }, [picking, handleMouseOver, handleClick, clearHighlight])
+  }, [picking, handleMouseOver, handleClick])
 
   // Keyboard: Escape exits pick mode or closes modal
   useEffect(() => {
@@ -374,7 +353,7 @@ export function FeedbackOverlay({ userName, userRole }: { userName: string; user
         </span>
         <button
           type="button"
-          onClick={toggle}
+          onClick={handleToggle}
           className="shrink-0 rounded-lg px-2.5 py-1 text-xs font-semibold text-orange-100 hover:bg-orange-700"
         >
           Exit test mode
@@ -389,7 +368,7 @@ export function FeedbackOverlay({ userName, userRole }: { userName: string; user
         <button
           type="button"
           data-feedback-ui="pick-btn"
-          onClick={() => setPicking(true)}
+          onClick={enterPickMode}
           className="fixed bottom-4 left-4 z-[9995] flex items-center gap-2 rounded-full bg-orange-600 px-4 py-2.5 text-sm font-semibold text-white shadow-lg hover:bg-orange-700 active:scale-95"
         >
           <svg className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
@@ -397,6 +376,21 @@ export function FeedbackOverlay({ userName, userRole }: { userName: string; user
           </svg>
           Leave feedback
         </button>
+      )}
+
+      {/* Element highlight box (follows the hovered element while picking) */}
+      {picking && highlight && (
+        <div
+          data-feedback-ui="highlight"
+          aria-hidden="true"
+          className="pointer-events-none fixed z-[9990] rounded-md border-2 border-orange-600 bg-orange-600/10 transition-all duration-75"
+          style={{
+            top: highlight.top,
+            left: highlight.left,
+            width: highlight.width,
+            height: highlight.height,
+          }}
+        />
       )}
 
       {/* Picking mode hint */}
