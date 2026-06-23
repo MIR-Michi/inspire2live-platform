@@ -8,8 +8,8 @@ import {
   type FeedbackItem,
   type FeedbackStatus,
 } from '@/lib/feedback'
-import { deleteFeedbackItem } from '@/app/app/admin/feedback/actions'
 import { FeedbackStatusSelect } from '@/components/feedback/feedback-status-select'
+import { FeedbackDeleteButton } from '@/components/feedback/feedback-delete-button'
 
 export default async function AdminFeedbackPage({
   searchParams,
@@ -195,18 +195,9 @@ function FeedbackRow({ item }: { item: FeedbackItem }) {
       )}
 
       {/* Delete */}
-      <form action={deleteFeedbackItem} className="mt-3">
-        <input type="hidden" name="id" value={item.id} />
-        <button
-          type="submit"
-          className="text-xs font-medium text-rose-500 hover:underline"
-          onClick={(e) => {
-            if (!confirm('Delete this feedback item?')) e.preventDefault()
-          }}
-        >
-          Delete
-        </button>
-      </form>
+      <div className="mt-3">
+        <FeedbackDeleteButton itemId={item.id} />
+      </div>
     </div>
   )
 }
