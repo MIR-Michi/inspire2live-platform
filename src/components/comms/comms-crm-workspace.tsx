@@ -29,6 +29,7 @@ import {
 } from '@/lib/comms-crm'
 import { ROLE_LABELS } from '@/lib/role-access'
 import { CrmImportDialog } from '@/components/comms/crm-import-dialog'
+import { NavSelect } from '@/components/comms/nav-select'
 
 const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
   ([value, label]) => ({ value, label })
@@ -703,7 +704,7 @@ function ContactDetail({
 
           {contact.recentInteractions.length > 0 && (
             <div className="mt-4 space-y-2">
-              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Recent interactions</p>
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Activity feed</p>
               {contact.recentInteractions.map((interaction) => (
                 <div key={interaction.id} className="rounded-lg border border-neutral-200 bg-white px-3 py-2 text-sm">
                   <p className="font-semibold text-neutral-900">{interaction.type.replaceAll('_', ' ')} · {formatCrmDate(interaction.occurredAt)}</p>
@@ -814,42 +815,31 @@ export function CommsCrmWorkspace({
         </label>
       </form>
 
-      <div className="space-y-3">
-        <nav className="flex flex-wrap gap-2" aria-label="Contact type filters">
-          <Link
-            href={buildHref({ kind: 'all', personType: activePersonType, filter: activeFilter, query })}
-            className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeKind === 'all' ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
-          >
-            All
-          </Link>
-          {CRM_CONTACT_KIND_OPTIONS.map((option) => (
-            <Link
-              key={option.value}
-              href={buildHref({ kind: option.value, personType: activePersonType, filter: activeFilter, query })}
-              className={`rounded-full px-3 py-1.5 text-sm font-semibold ${activeKind === option.value ? 'bg-blue-100 text-blue-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
-            >
-              {option.label}
-            </Link>
-          ))}
-        </nav>
-
-        <nav className="flex flex-wrap gap-2" aria-label="Person type filters">
-          <Link
-            href={buildHref({ kind: activeKind, filter: activeFilter, query })}
-            className={`rounded-full px-3 py-1.5 text-xs font-semibold ${!activePersonType ? 'bg-neutral-900 text-white' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
-          >
-            Any type
-          </Link>
-          {CRM_PERSON_TYPE_OPTIONS.map((option) => (
-            <Link
-              key={option.value}
-              href={buildHref({ kind: activeKind, personType: option.value, filter: activeFilter, query })}
-              className={`rounded-full px-3 py-1.5 text-xs font-semibold ${activePersonType === option.value ? 'bg-violet-100 text-violet-800' : 'border border-neutral-200 bg-white text-neutral-700 hover:bg-neutral-50'}`}
-            >
-              {option.label}
-            </Link>
-          ))}
-        </nav>
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+        <NavSelect
+          label="Contact type"
+          value={activeKind}
+          options={[
+            { value: 'all', label: 'All contacts', href: buildHref({ kind: 'all', personType: activePersonType, filter: activeFilter, query }) },
+            ...CRM_CONTACT_KIND_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+              href: buildHref({ kind: option.value, personType: activePersonType, filter: activeFilter, query }),
+            })),
+          ]}
+        />
+        <NavSelect
+          label="User type"
+          value={activePersonType}
+          options={[
+            { value: '', label: 'Any type', href: buildHref({ kind: activeKind, filter: activeFilter, query }) },
+            ...CRM_PERSON_TYPE_OPTIONS.map((option) => ({
+              value: option.value,
+              label: option.label,
+              href: buildHref({ kind: activeKind, personType: option.value, filter: activeFilter, query }),
+            })),
+          ]}
+        />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">

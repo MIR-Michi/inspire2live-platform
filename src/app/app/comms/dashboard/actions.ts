@@ -194,6 +194,37 @@ export async function createCommsTask(formData: FormData) {
   revalidatePath('/app/dashboard')
 }
 
+export async function updateCommsTaskOwner(formData: FormData) {
+  const { supabase, user } = await requireCommsOperator()
+  const tasksSupabase = supabase as unknown as CommsDbClient
+
+  const id = asText(formData.get('task_id'))
+  if (!id) throw new Error('Task is required.')
+  const ownerId = asNullableUuid(formData.get('owner_id'))
+  if (!ownerId) throw new Error('A valid owner is required.')
+
+  const { error } = await tasksSupabase
+    .from('comms_tasks')
+    .update({ owner_id: ownerId, updated_at: new Date().toISOString() })
+    .eq('id', id)
+  if (error) throw new Error(error.message)
+
+  // Let the new owner know, unless they reassigned the task to themselves.
+  if (ownerId !== user.id) {
+    const title = asText(formData.get('task_title')) || 'a task'
+    await notifyUser({
+      recipientId: ownerId,
+      event: 'task_assigned',
+      title: 'A task was assigned to you',
+      body: `You are now the owner of: "${title}"`,
+      linkUrl: '/app/comms/dashboard',
+    })
+  }
+
+  revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/dashboard')
+}
+
 export async function updateCommsTaskStatus(formData: FormData) {
   const { supabase } = await requireCommsOperator()
   const tasksSupabase = supabase as unknown as CommsDbClient

@@ -386,7 +386,7 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
       sourceLabel: contact.source_label ?? base?.sourceLabel ?? 'CRM contact',
       tags: contact.tags.length > 0 ? contact.tags : base?.tags ?? [],
       notes: contact.notes ?? base?.notes ?? null,
-      recentInteractions: (interactionsByContact.get(contact.id) ?? []).slice(0, 3),
+      recentInteractions: (interactionsByContact.get(contact.id) ?? []).slice(0, 12),
     }
 
     if (key) records.delete(key)

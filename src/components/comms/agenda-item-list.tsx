@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { reorderAgendaItems } from '@/app/app/comms/dashboard/actions'
 import { AgendaItemCard } from '@/components/comms/agenda-item-card'
+import type { TaskOwnerOption } from '@/components/comms/task-details-button'
 import type { AgendaItemRecord } from '@/lib/comms-agenda'
 
 function GripIcon() {
@@ -25,7 +26,13 @@ function GripIcon() {
  * order optimistically and persists it via `reorderAgendaItems` — a
  * collaborative action: any comms member can reorder the shared agenda.
  */
-export function AgendaItemList({ items }: { items: AgendaItemRecord[] }) {
+export function AgendaItemList({
+  items,
+  ownerOptions = [],
+}: {
+  items: AgendaItemRecord[]
+  ownerOptions?: TaskOwnerOption[]
+}) {
   const router = useRouter()
   const [order, setOrder] = useState(items)
   const orderRef = useRef(items)
@@ -93,6 +100,7 @@ export function AgendaItemList({ items }: { items: AgendaItemRecord[] }) {
         >
           <AgendaItemCard
             item={item}
+            ownerOptions={ownerOptions}
             dragHandle={
               <span
                 draggable

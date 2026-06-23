@@ -3,14 +3,23 @@
 import { useState } from 'react'
 import { RoleBadge } from '@/components/comms/role-badge'
 import { TaskStatusControl } from '@/components/comms/task-status-control'
+import { updateCommsTaskOwner } from '@/app/app/comms/dashboard/actions'
 import { isCommsTaskCompleted, type CommsTaskRecord } from '@/lib/comms-tasks'
+
+export type TaskOwnerOption = { id: string; label: string }
 
 function formatDate(value: string | null) {
   if (!value) return 'No deadline'
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(value))
 }
 
-export function TaskDetailsButton({ task }: { task: CommsTaskRecord }) {
+export function TaskDetailsButton({
+  task,
+  ownerOptions = [],
+}: {
+  task: CommsTaskRecord
+  ownerOptions?: TaskOwnerOption[]
+}) {
   const [open, setOpen] = useState(false)
   const completed = isCommsTaskCompleted(task.status)
 
@@ -68,8 +77,32 @@ export function TaskDetailsButton({ task }: { task: CommsTaskRecord }) {
                 <div>
                   <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Owner</dt>
                   <dd className="mt-1 flex items-center gap-1.5 text-neutral-800">
-                    {task.ownerLabel ?? 'Unassigned'}
-                    <RoleBadge role={task.ownerRole} />
+                    {ownerOptions.length > 0 ? (
+                      <form action={updateCommsTaskOwner} className="inline-flex items-center gap-1.5">
+                        <input type="hidden" name="task_id" value={task.id} />
+                        <input type="hidden" name="task_title" value={task.title} />
+                        <select
+                          name="owner_id"
+                          defaultValue={task.ownerId ?? ''}
+                          onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                          aria-label="Reassign task owner"
+                          className="rounded-lg border border-neutral-300 px-2 py-1 text-xs font-semibold text-neutral-800 focus:outline-none"
+                        >
+                          {!task.ownerId && <option value="">Unassigned</option>}
+                          {ownerOptions.map((option) => (
+                            <option key={option.id} value={option.id}>
+                              {option.label}
+                            </option>
+                          ))}
+                        </select>
+                        <RoleBadge role={task.ownerRole} />
+                      </form>
+                    ) : (
+                      <>
+                        {task.ownerLabel ?? 'Unassigned'}
+                        <RoleBadge role={task.ownerRole} />
+                      </>
+                    )}
                   </dd>
                 </div>
                 <div>

@@ -472,3 +472,16 @@ export async function loadCommsAgendaGroups(supabase: SupabaseClient): Promise<A
 
   return groupAgendaByMeeting(agendaItems)
 }
+
+/**
+ * Comms-workspace members, for assigning task owners outside the full team
+ * dashboard load (e.g. the standalone weekly meetings page).
+ */
+export async function loadCommsTeamMembers(supabase: SupabaseClient): Promise<TeamMemberOption[]> {
+  const { data } = await supabase.from('profiles').select('id, name, email, role')
+  const profiles = (data ?? []) as Array<{ id: string; name: string | null; email: string | null; role: string | null }>
+  return profiles
+    .filter((p) => canAccessCommsWorkspace(p.role))
+    .map((p) => ({ id: p.id, label: p.name ?? p.email ?? 'Unknown', role: p.role }))
+    .sort((a, b) => a.label.localeCompare(b.label))
+}
