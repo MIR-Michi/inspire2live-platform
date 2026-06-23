@@ -56,6 +56,7 @@ describe('weekly agenda helpers', () => {
         meetingDate: '2026-06-01',
         title: 'Past topic',
         summary: null,
+        meetingNotes: null,
         ownerId: 'a',
         ownerLabel: 'Ana',
         ownerRole: 'Comms',
@@ -79,6 +80,7 @@ describe('weekly agenda helpers', () => {
     const base = {
       meetingDate: '2026-06-08',
       summary: null,
+      meetingNotes: null,
       ownerId: null,
       ownerLabel: null,
       ownerRole: null,

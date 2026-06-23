@@ -11,6 +11,7 @@ export type AgendaItemRecord = {
   meetingDate: string // YYYY-MM-DD
   title: string
   summary: string | null
+  meetingNotes: string | null
   ownerId: string | null
   ownerLabel: string | null
   ownerRole: string | null

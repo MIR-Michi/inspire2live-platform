@@ -1,7 +1,12 @@
 import Link from 'next/link'
-import { addCampusActionItem, addCampusAgendaItem, addCampusDecisionItem, updateCampusDecisionItem } from '@/app/app/comms/campus-log/actions'
+import { addCampusDecisionItem, startCampusMeeting, updateCampusDecisionItem } from '@/app/app/comms/campus-log/actions'
+import { addAgendaItem } from '@/app/app/comms/dashboard/actions'
 import { deleteIntakeItem, markIntakeReviewed } from '@/app/app/comms/intake/actions'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
+import { AgendaAddForm } from '@/components/comms/agenda-add-form'
+import { AgendaItemList } from '@/components/comms/agenda-item-list'
+import { TaskCreateForm } from '@/components/comms/task-create-form'
+import { loadCampusSessionAgenda, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { createClient } from '@/lib/supabase/server'
 
 async function markReviewedAction(formData: FormData) {
@@ -32,6 +37,14 @@ function dateOnly(value: Date) {
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
 }
 
+// The campus team meets on the last Wednesday of the month — the natural default
+// date when starting this month's meeting from the briefing workspace.
+function lastWednesdayOf(year: string, month: string) {
+  const date = new Date(Number(year), Number(month), 0)
+  while (date.getDay() !== 3) date.setDate(date.getDate() - 1)
+  return dateOnly(date)
+}
+
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
 }
@@ -49,27 +62,10 @@ function categoryFor(value: string) {
 }
 
 const FILTERS = ['All', 'Articles', 'Media', 'LinkedIn', 'Sessions', 'Members', 'Social']
-const ACTION_ITEM_EXAMPLES = [
-  'Action: Confirm Nigeria imPACT publication note | Owner: Ifeoma | Due: 2026-06-05',
-  'Action: Prepare Monica birthday newsletter item | Owner: Maryana | Due: 2026-06-12',
-  'Action: Collect Dr. Mao Mao session assets | Owner: Atefeh | Due: 2026-06-18',
-]
 
 function sourceLinkFor(item: { source_url?: string | null; raw_content: string }) {
   if (item.source_url) return item.source_url
   return item.raw_content.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null
-}
-
-function cleanAgendaItem(value: string) {
-  return value.replace(/^Agenda:\s*/i, '').replace(/^Action:\s*/i, '').split('|')[0].trim()
-}
-
-function parseActionItem(value: string) {
-  const parts = value.split('|').map((part) => part.trim())
-  const action = parts[0]?.replace(/^Action:\s*/i, '').replace(/^Agenda:\s*/i, '').trim() || value
-  const owner = parts.find((part) => /^Owner:/i.test(part))?.replace(/^Owner:\s*/i, '').trim() || 'Comms team'
-  const due = parts.find((part) => /^Due:/i.test(part))?.replace(/^Due:\s*/i, '').trim() || 'Before next meeting'
-  return { action, owner, due }
 }
 
 function parseDecisionItem(value: string) {
@@ -141,14 +137,17 @@ export default async function CampusMonthPage({
   }, {})
 
   const primarySession = sessions?.[0]
-  const agendaItems = [
-    ...(primarySession?.action_items_for_publication ?? []),
-    ...incomingItems.slice(0, 3).map((item) => item.raw_content.slice(0, 96)),
-  ].filter((item) => item && !/^Action:/i.test(item))
-  const actionItems = [
-    ...(primarySession?.action_items_for_publication ?? []).filter((item) => /^Action:/i.test(item)),
-    ...ACTION_ITEM_EXAMPLES,
-  ].slice(0, 8)
+
+  // Structured agenda for this monthly meeting — same framework as the weekly
+  // comms meeting: shared agenda items (owner + drag order + meeting notes) with
+  // assignable, linkable tasks. Loaded only when a session exists to attach to.
+  const campusAgenda = primarySession ? await loadCampusSessionAgenda(supabase, primarySession.id) : []
+  const teamMembers = primarySession ? await loadCommsTeamMembers(supabase) : []
+  const campusAgendaOptions = primarySession
+    ? campusAgenda.map((item) => ({ id: item.id, label: item.title, meetingDate: primarySession.session_date }))
+    : []
+  const monthLastWednesday = lastWednesdayOf(year, month)
+
   const decisions = (primarySession?.decisions_for_publication?.length
     ? primarySession.decisions_for_publication
     : (sessions ?? []).flatMap((session) => session.summary ? [`Decision: ${session.summary} | Owner: Session summary`] : []))
@@ -229,10 +228,10 @@ export default async function CampusMonthPage({
                           </form>
                         )}
                         {primarySession && (
-                          <form action={addCampusAgendaItem}>
-                            <input type="hidden" name="session_id" value={primarySession.id} />
-                            <input type="hidden" name="agenda_item" value={item.raw_content} />
-                            <input type="hidden" name="return_path" value={returnPath} />
+                          <form action={addAgendaItem}>
+                            <input type="hidden" name="campus_session_id" value={primarySession.id} />
+                            <input type="hidden" name="meeting_date" value={primarySession.session_date} />
+                            <input type="hidden" name="title" value={item.raw_content.slice(0, 160)} />
                             <button type="submit" className="rounded-lg bg-blue-900 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-800">
                               + Agenda
                             </button>
@@ -318,71 +317,49 @@ export default async function CampusMonthPage({
             </CollapsibleCard>
 
             <CollapsibleCard
-              title="Agenda"
+              title="Agenda & tasks"
               storageKey="campus-agenda"
               bodyClassName="px-0 pb-0"
-              actions={<span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">{agendaItems.length} items</span>}
+              actions={
+                primarySession ? (
+                  <TaskCreateForm teamMembers={teamMembers} agendaItems={campusAgendaOptions} />
+                ) : (
+                  <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                    {campusAgenda.length} items
+                  </span>
+                )
+              }
             >
-              <ol className="divide-y divide-neutral-100 border-t border-neutral-200">
-                {agendaItems.slice(0, 6).map((item, index) => (
-                  <li key={`${item}-${index}`} className="grid grid-cols-[24px_1fr] gap-3 px-4 py-3 text-sm leading-5 text-neutral-700">
-                    <span className="flex h-6 w-6 items-center justify-center rounded-full bg-orange-50 text-xs font-bold text-orange-700">{index + 1}</span>
-                    <span>{cleanAgendaItem(item)}</span>
-                  </li>
-                ))}
-                {agendaItems.length === 0 && (
-                  <li className="px-4 py-8 text-center text-sm text-neutral-500">No agenda items yet.</li>
-                )}
-              </ol>
-            </CollapsibleCard>
-
-            <CollapsibleCard
-              title="Action items"
-              storageKey="campus-actions"
-              bodyClassName="px-0 pb-0"
-              actions={<span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{actionItems.length} items</span>}
-            >
-              <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
-                {actionItems.map((item, index) => {
-                  const actionItem = parseActionItem(item)
-                  return (
-                    <li key={`${item}-${index}`} className="px-4 py-3 text-sm leading-5">
-                      <p className="font-semibold text-neutral-900">{actionItem.action}</p>
-                      <p className="mt-1 text-xs text-neutral-500">
-                        {actionItem.owner} - {actionItem.due}
-                      </p>
-                    </li>
-                  )
-                })}
-              </ul>
-              {primarySession && (
-                <form action={addCampusActionItem} className="grid gap-3 border-t border-neutral-200 p-4">
-                  <input type="hidden" name="session_id" value={primarySession.id} />
-                  <input type="hidden" name="return_path" value={returnPath} />
-                  <input
-                    name="action_item"
-                    required
-                    placeholder="Action item"
-                    className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                  />
-                  <div className="grid gap-3 sm:grid-cols-2">
-                    <input
-                      name="assigned_to"
-                      required
-                      placeholder="Assigned person"
-                      className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                    />
-                    <input
-                      type="date"
-                      name="due_date"
-                      required
-                      className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                    />
-                  </div>
-                  <button type="submit" className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">
-                    Add action item
-                  </button>
-                </form>
+              {primarySession ? (
+                <div className="space-y-3 border-t border-neutral-200 px-4 py-3">
+                  {campusAgenda.length > 0 ? (
+                    <AgendaItemList items={campusAgenda} />
+                  ) : (
+                    <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
+                      No agenda topics yet. Add the first one for this meeting, or use “+ Agenda” on an incoming item.
+                    </p>
+                  )}
+                  <AgendaAddForm meetingDate={primarySession.session_date} campusSessionId={primarySession.id} />
+                  <p className="text-[11px] text-neutral-500">
+                    Use “+ New task” to assign action items to a comms team member and link them to an agenda topic.
+                  </p>
+                </div>
+              ) : (
+                <div className="border-t border-neutral-200 px-4 py-4">
+                  <p className="text-sm text-neutral-600">
+                    No campus meeting exists for this month yet. Create one to start its agenda.
+                  </p>
+                  <form action={startCampusMeeting} className="mt-3">
+                    <input type="hidden" name="return_path" value={returnPath} />
+                    <input type="hidden" name="session_date" value={monthLastWednesday} />
+                    <button
+                      type="submit"
+                      className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                    >
+                      Create this month&apos;s meeting
+                    </button>
+                  </form>
+                </div>
               )}
             </CollapsibleCard>
 
