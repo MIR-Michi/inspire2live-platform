@@ -23,41 +23,14 @@ export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboar
       </div>
 
       <TileGroup groupId="comms-team-dashboard" className="space-y-6">
-        {/* ── WhatsApp channels ── */}
-        <CollapsibleCard key="comms-team-channels" title="WhatsApp channels" storageKey="comms-team-channels">
-          <div className="grid gap-3 sm:grid-cols-2">
-            {channels.map((channel) => (
-              <div key={channel.key} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold text-neutral-900">{channel.label}</h3>
-                  {channel.waitingCount > 0 && (
-                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">
-                      {channel.waitingCount} waiting
-                    </span>
-                  )}
-                </div>
-                <div className="mt-3 space-y-2">
-                  {channel.recent.map((signal) => (
-                    <div key={signal.id} className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2">
-                      <p className="text-xs font-semibold text-neutral-800">{signal.senderName}</p>
-                      <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">{signal.summary}</p>
-                    </div>
-                  ))}
-                  {channel.recent.length === 0 && (
-                    <p className="rounded-lg border border-dashed border-neutral-200 py-4 text-center text-xs text-neutral-400">
-                      No recent signals.
-                    </p>
-                  )}
-                </div>
-                <Link
-                  href="/app/comms/intake"
-                  className="mt-3 inline-flex text-xs font-semibold text-orange-700 hover:underline"
-                >
-                  Open channel intake →
-                </Link>
-              </div>
-            ))}
-          </div>
+        {/* ── Bi-weekly meeting agenda ── */}
+        <CollapsibleCard key="comms-team-agenda" title="Bi-weekly meeting" storageKey="comms-team-agenda" defaultCollapsed>
+          <WeeklyAgenda groups={agendaGroups} previousLimit={5} showAllHref="/app/comms/meetings" ownerOptions={teamMembers} />
+        </CollapsibleCard>
+
+        {/* ── New members ── */}
+        <CollapsibleCard key="comms-team-new-members" title="New members" storageKey="comms-team-new-members" defaultCollapsed>
+          <NewMembersSection members={newMembers} teamMembers={teamMembers} canApprove={canApprove} />
         </CollapsibleCard>
 
         {/* ── Events ── */}
@@ -65,6 +38,7 @@ export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboar
           key="comms-team-events"
           title="Events"
           storageKey="comms-team-events"
+          defaultCollapsed
           actions={
             <Link href="/app/comms/events" className="text-sm font-medium text-orange-600 hover:underline">
               All events →
@@ -119,18 +93,45 @@ export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboar
           </div>
         </CollapsibleCard>
 
-        {/* ── Weekly meeting agenda ── */}
-        <CollapsibleCard key="comms-team-agenda" title="Weekly meeting agenda" storageKey="comms-team-agenda">
-          <WeeklyAgenda groups={agendaGroups} previousLimit={5} showAllHref="/app/comms/meetings" ownerOptions={teamMembers} />
-        </CollapsibleCard>
-
-        {/* ── New members ── */}
-        <CollapsibleCard key="comms-team-new-members" title="New members" storageKey="comms-team-new-members">
-          <NewMembersSection members={newMembers} teamMembers={teamMembers} canApprove={canApprove} />
+        {/* ── WhatsApp channels ── */}
+        <CollapsibleCard key="comms-team-channels" title="WhatsApp channels" storageKey="comms-team-channels" defaultCollapsed>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {channels.map((channel) => (
+              <div key={channel.key} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-sm font-semibold text-neutral-900">{channel.label}</h3>
+                  {channel.waitingCount > 0 && (
+                    <span className="rounded-full bg-orange-100 px-2 py-0.5 text-xs font-bold text-orange-700">
+                      {channel.waitingCount} waiting
+                    </span>
+                  )}
+                </div>
+                <div className="mt-3 space-y-2">
+                  {channel.recent.map((signal) => (
+                    <div key={signal.id} className="rounded-lg border border-neutral-100 bg-neutral-50 px-3 py-2">
+                      <p className="text-xs font-semibold text-neutral-800">{signal.senderName}</p>
+                      <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">{signal.summary}</p>
+                    </div>
+                  ))}
+                  {channel.recent.length === 0 && (
+                    <p className="rounded-lg border border-dashed border-neutral-200 py-4 text-center text-xs text-neutral-400">
+                      No recent signals.
+                    </p>
+                  )}
+                </div>
+                <Link
+                  href="/app/comms/intake"
+                  className="mt-3 inline-flex text-xs font-semibold text-orange-700 hover:underline"
+                >
+                  Open channel intake →
+                </Link>
+              </div>
+            ))}
+          </div>
         </CollapsibleCard>
 
         {/* ── Update feed ── */}
-        <TeamFeed key="comms-team-feed" feed={feed} owners={owners} />
+        <TeamFeed key="comms-team-feed" feed={feed} owners={owners} defaultCollapsed />
       </TileGroup>
     </div>
   )
