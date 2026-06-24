@@ -304,146 +304,164 @@ async function cleanupUserContent(admin: AdminClient, targetIds: string[]): Prom
     }
   }
 
-  // Capture parent entity IDs before we start deleting
-  const initIds = (await admin.from('initiatives').select('id').in('lead_id', targetIds))
-    .data?.map(r => r.id) ?? []
-  const hubIds = (await admin.from('hubs').select('id').in('coordinator_id', targetIds))
-    .data?.map(r => r.id) ?? []
+  // ── Phase 1: resolve all parent entity IDs in parallel ───────────────────
+  const [
+    { data: initData },
+    { data: hubData },
+    { data: engagementData },
+    { data: topicData },
+    { data: taskByUserData },
+    { data: taskByReporterData },
+    { data: discByUserData },
+  ] = await Promise.all([
+    admin.from('initiatives').select('id').in('lead_id', targetIds),
+    admin.from('hubs').select('id').in('coordinator_id', targetIds),
+    admin.from('partner_engagements').select('id').in('partner_id', targetIds),
+    admin.from('congress_topics').select('id').in('submitter_id', targetIds),
+    admin.from('tasks').select('id').in('assignee_id', targetIds),
+    admin.from('tasks').select('id').in('reporter_id', targetIds),
+    admin.from('discussions').select('id').in('author_id', targetIds),
+  ])
 
-  // ── 1. NULL nullable references ──────────────────────────────────────────
-  await tryOp('content_calendar.author_id',
-    () => admin.from('content_calendar').update({ author_id: null }).in('author_id', targetIds))
-  await tryOp('campus_sessions.created_by',
-    () => admin.from('campus_sessions').update({ created_by: null }).in('created_by', targetIds))
-  await tryOp('campus_members.platform_profile_id',
-    () => admin.from('campus_members').update({ platform_profile_id: null }).in('platform_profile_id', targetIds))
-  await tryOp('intake_items.reviewed_by',
-    () => admin.from('intake_items').update({ reviewed_by: null }).in('reviewed_by', targetIds))
-  await tryOp('intake_classification_corrections.corrected_by',
-    () => admin.from('intake_classification_corrections').update({ corrected_by: null }).in('corrected_by', targetIds))
-  await tryOp('intake_classifier_rules.created_by',
-    () => admin.from('intake_classifier_rules').update({ created_by: null }).in('created_by', targetIds))
-  await tryOp('intake_classifier_training_examples.created_by',
-    () => admin.from('intake_classifier_training_examples').update({ created_by: null }).in('created_by', targetIds))
-  await tryOp('media_assets.contributed_by',
-    () => admin.from('media_assets').update({ contributed_by: null }).in('contributed_by', targetIds))
-  await tryOp('media_recovery_requests.requested_by',
-    () => admin.from('media_recovery_requests').update({ requested_by: null }).in('requested_by', targetIds))
-  await tryOp('congress_sessions.session_lead_id',
-    () => admin.from('congress_sessions').update({ session_lead_id: null }).in('session_lead_id', targetIds))
-  await tryOp('congress_sessions.note_taker_id',
-    () => admin.from('congress_sessions').update({ note_taker_id: null }).in('note_taker_id', targetIds))
-  await tryOp('congress_decisions.owner_id',
-    () => admin.from('congress_decisions').update({ owner_id: null }).in('owner_id', targetIds))
-  await tryOp('discussions.decision_made_by',
-    () => admin.from('discussions').update({ decision_made_by: null }).in('decision_made_by', targetIds))
-  await tryOp('partner_engagements.reviewer_id',
-    () => admin.from('partner_engagements').update({ reviewer_id: null }).in('reviewer_id', targetIds))
+  const initIds = initData?.map((r: { id: string }) => r.id) ?? []
+  const hubIds = hubData?.map((r: { id: string }) => r.id) ?? []
+  const engagementIds = engagementData?.map((r: { id: string }) => r.id) ?? []
+  const topicIds = topicData?.map((r: { id: string }) => r.id) ?? []
 
-  // ── 2. Delete owned content, children before parents ─────────────────────
-
-  // Permission audit log
-  await tryOp('permission_audit_log (changed_by)',
-    () => admin.from('permission_audit_log').delete().in('changed_by', targetIds))
-  await tryOp('permission_audit_log (target_user_id)',
-    () => admin.from('permission_audit_log').delete().in('target_user_id', targetIds))
-
-  // Partners
-  const engagementIds = (await admin.from('partner_engagements').select('id').in('partner_id', targetIds))
-    .data?.map(r => r.id) ?? []
-  if (engagementIds.length) {
-    await tryOp('partner_audit_entries (engagement)',
-      () => admin.from('partner_audit_entries').delete().in('engagement_id', engagementIds))
-  }
-  await tryOp('partner_audit_entries (actor)',
-    () => admin.from('partner_audit_entries').delete().in('actor_id', targetIds))
-  await tryOp('partner_engagements',
-    () => admin.from('partner_engagements').delete().in('partner_id', targetIds))
-
-  // Congress topics + votes
-  const topicIds = (await admin.from('congress_topics').select('id').in('submitter_id', targetIds))
-    .data?.map(r => r.id) ?? []
-  if (topicIds.length) {
-    await tryOp('topic_votes',
-      () => admin.from('topic_votes').delete().in('topic_id', topicIds))
-  }
-  await tryOp('congress_topics',
-    () => admin.from('congress_topics').delete().in('submitter_id', targetIds))
-
-  // Tasks (collect IDs so we can delete their comments too)
-  const taskIdsByUser = (await admin.from('tasks').select('id').in('assignee_id', targetIds))
-    .data?.map(r => r.id) ?? []
-  const taskIdsByReporter = (await admin.from('tasks').select('id').in('reporter_id', targetIds))
-    .data?.map(r => r.id) ?? []
-  const taskIdsByInit = initIds.length
-    ? (await admin.from('tasks').select('id').in('initiative_id', initIds)).data?.map(r => r.id) ?? []
-    : []
-  const allTaskIds = [...new Set([...taskIdsByUser, ...taskIdsByReporter, ...taskIdsByInit])]
-  if (allTaskIds.length) {
-    await tryOp('task_comments (task)',
-      () => admin.from('task_comments').delete().in('task_id', allTaskIds))
-  }
-  await tryOp('task_comments (author)',
-    () => admin.from('task_comments').delete().in('author_id', targetIds))
-  await tryOp('tasks (assignee)', () => admin.from('tasks').delete().in('assignee_id', targetIds))
-  await tryOp('tasks (reporter)', () => admin.from('tasks').delete().in('reporter_id', targetIds))
+  let taskIdsByInit: string[] = []
+  let discIdsByInit: string[] = []
   if (initIds.length) {
-    await tryOp('tasks (initiative)', () => admin.from('tasks').delete().in('initiative_id', initIds))
+    const [{ data: tInit }, { data: dInit }] = await Promise.all([
+      admin.from('tasks').select('id').in('initiative_id', initIds),
+      admin.from('discussions').select('id').in('initiative_id', initIds),
+    ])
+    taskIdsByInit = tInit?.map((r: { id: string }) => r.id) ?? []
+    discIdsByInit = dInit?.map((r: { id: string }) => r.id) ?? []
   }
 
-  // Discussions (replies first)
-  const discIdsByUser = (await admin.from('discussions').select('id').in('author_id', targetIds))
-    .data?.map(r => r.id) ?? []
-  const discIdsByInit = initIds.length
-    ? (await admin.from('discussions').select('id').in('initiative_id', initIds)).data?.map(r => r.id) ?? []
-    : []
-  const allDiscIds = [...new Set([...discIdsByUser, ...discIdsByInit])]
-  if (allDiscIds.length) {
-    await tryOp('discussion_replies (discussion)',
-      () => admin.from('discussion_replies').delete().in('discussion_id', allDiscIds))
-  }
-  await tryOp('discussion_replies (author)',
-    () => admin.from('discussion_replies').delete().in('author_id', targetIds))
-  await tryOp('discussions (author)', () => admin.from('discussions').delete().in('author_id', targetIds))
-  if (initIds.length) {
-    await tryOp('discussions (initiative)', () => admin.from('discussions').delete().in('initiative_id', initIds))
-  }
+  const allTaskIds = [...new Set([
+    ...(taskByUserData?.map((r: { id: string }) => r.id) ?? []),
+    ...(taskByReporterData?.map((r: { id: string }) => r.id) ?? []),
+    ...taskIdsByInit,
+  ])]
+  const allDiscIds = [...new Set([
+    ...(discByUserData?.map((r: { id: string }) => r.id) ?? []),
+    ...discIdsByInit,
+  ])]
 
-  // Initiative-scoped content
-  await tryOp('resources (uploader)',
-    () => admin.from('resources').delete().in('uploaded_by_id', targetIds))
-  if (initIds.length) {
-    await tryOp('resources (initiative)',
-      () => admin.from('resources').delete().in('initiative_id', initIds))
-    await tryOp('milestones',
-      () => admin.from('milestones').delete().in('initiative_id', initIds))
-    await tryOp('initiative_members (initiative)',
-      () => admin.from('initiative_members').delete().in('initiative_id', initIds))
-    await tryOp('activity_log (initiative)',
-      () => admin.from('activity_log').delete().in('initiative_id', initIds))
-  }
-  await tryOp('initiative_members (user)',
-    () => admin.from('initiative_members').delete().in('user_id', targetIds))
-  await tryOp('activity_log (actor)',
-    () => admin.from('activity_log').delete().in('actor_id', targetIds))
+  // ── Phase 2: NULL nullable FK columns + permission log (all independent) ──
+  await Promise.all([
+    tryOp('content_calendar.author_id',
+      () => admin.from('content_calendar').update({ author_id: null }).in('author_id', targetIds)),
+    tryOp('campus_sessions.created_by',
+      () => admin.from('campus_sessions').update({ created_by: null }).in('created_by', targetIds)),
+    tryOp('campus_members.platform_profile_id',
+      () => admin.from('campus_members').update({ platform_profile_id: null }).in('platform_profile_id', targetIds)),
+    tryOp('intake_items.reviewed_by',
+      () => admin.from('intake_items').update({ reviewed_by: null }).in('reviewed_by', targetIds)),
+    tryOp('intake_classification_corrections.corrected_by',
+      () => admin.from('intake_classification_corrections').update({ corrected_by: null }).in('corrected_by', targetIds)),
+    tryOp('intake_classifier_rules.created_by',
+      () => admin.from('intake_classifier_rules').update({ created_by: null }).in('created_by', targetIds)),
+    tryOp('intake_classifier_training_examples.created_by',
+      () => admin.from('intake_classifier_training_examples').update({ created_by: null }).in('created_by', targetIds)),
+    tryOp('media_assets.contributed_by',
+      () => admin.from('media_assets').update({ contributed_by: null }).in('contributed_by', targetIds)),
+    tryOp('media_recovery_requests.requested_by',
+      () => admin.from('media_recovery_requests').update({ requested_by: null }).in('requested_by', targetIds)),
+    tryOp('congress_sessions.session_lead_id',
+      () => admin.from('congress_sessions').update({ session_lead_id: null }).in('session_lead_id', targetIds)),
+    tryOp('congress_sessions.note_taker_id',
+      () => admin.from('congress_sessions').update({ note_taker_id: null }).in('note_taker_id', targetIds)),
+    tryOp('congress_decisions.owner_id',
+      () => admin.from('congress_decisions').update({ owner_id: null }).in('owner_id', targetIds)),
+    tryOp('discussions.decision_made_by',
+      () => admin.from('discussions').update({ decision_made_by: null }).in('decision_made_by', targetIds)),
+    tryOp('partner_engagements.reviewer_id',
+      () => admin.from('partner_engagements').update({ reviewer_id: null }).in('reviewer_id', targetIds)),
+    tryOp('permission_audit_log (changed_by)',
+      () => admin.from('permission_audit_log').delete().in('changed_by', targetIds)),
+    tryOp('permission_audit_log (target_user_id)',
+      () => admin.from('permission_audit_log').delete().in('target_user_id', targetIds)),
+  ])
 
-  // Hubs subtree
-  await tryOp('hub_members (user)',
-    () => admin.from('hub_members').delete().in('user_id', targetIds))
-  if (hubIds.length) {
-    await tryOp('hub_members (hub)',
-      () => admin.from('hub_members').delete().in('hub_id', hubIds))
-    await tryOp('hub_initiatives (hub)',
-      () => admin.from('hub_initiatives').delete().in('hub_id', hubIds))
-  }
-  if (initIds.length) {
-    await tryOp('hub_initiatives (initiative)',
-      () => admin.from('hub_initiatives').delete().in('initiative_id', initIds))
-  }
-  await tryOp('hubs', () => admin.from('hubs').delete().in('coordinator_id', targetIds))
+  // ── Phase 3: child content — independent FK chains run in parallel ────────
+  await Promise.all([
+    // Partner chain: audit entries before engagements
+    (async () => {
+      if (engagementIds.length) {
+        await tryOp('partner_audit_entries (engagement)',
+          () => admin.from('partner_audit_entries').delete().in('engagement_id', engagementIds))
+      }
+      await tryOp('partner_audit_entries (actor)',
+        () => admin.from('partner_audit_entries').delete().in('actor_id', targetIds))
+      await tryOp('partner_engagements',
+        () => admin.from('partner_engagements').delete().in('partner_id', targetIds))
+    })(),
+    // Congress topics chain: votes before topics
+    (async () => {
+      if (topicIds.length) {
+        await tryOp('topic_votes',
+          () => admin.from('topic_votes').delete().in('topic_id', topicIds))
+      }
+      await tryOp('congress_topics',
+        () => admin.from('congress_topics').delete().in('submitter_id', targetIds))
+    })(),
+    // Task chain: comments before tasks
+    (async () => {
+      if (allTaskIds.length) {
+        await tryOp('task_comments (task)',
+          () => admin.from('task_comments').delete().in('task_id', allTaskIds))
+      }
+      await tryOp('task_comments (author)',
+        () => admin.from('task_comments').delete().in('author_id', targetIds))
+      await Promise.all([
+        tryOp('tasks (assignee)', () => admin.from('tasks').delete().in('assignee_id', targetIds)),
+        tryOp('tasks (reporter)', () => admin.from('tasks').delete().in('reporter_id', targetIds)),
+        ...(initIds.length ? [tryOp('tasks (initiative)', () => admin.from('tasks').delete().in('initiative_id', initIds))] : []),
+      ])
+    })(),
+    // Discussion chain: replies before discussions
+    (async () => {
+      if (allDiscIds.length) {
+        await tryOp('discussion_replies (discussion)',
+          () => admin.from('discussion_replies').delete().in('discussion_id', allDiscIds))
+      }
+      await tryOp('discussion_replies (author)',
+        () => admin.from('discussion_replies').delete().in('author_id', targetIds))
+      await Promise.all([
+        tryOp('discussions (author)', () => admin.from('discussions').delete().in('author_id', targetIds)),
+        ...(initIds.length ? [tryOp('discussions (initiative)', () => admin.from('discussions').delete().in('initiative_id', initIds))] : []),
+      ])
+    })(),
+    // Resources, milestones, members, activity log
+    (async () => {
+      await Promise.all([
+        tryOp('resources (uploader)', () => admin.from('resources').delete().in('uploaded_by_id', targetIds)),
+        ...(initIds.length ? [tryOp('resources (initiative)', () => admin.from('resources').delete().in('initiative_id', initIds))] : []),
+        ...(initIds.length ? [tryOp('milestones', () => admin.from('milestones').delete().in('initiative_id', initIds))] : []),
+        ...(initIds.length ? [tryOp('initiative_members (initiative)', () => admin.from('initiative_members').delete().in('initiative_id', initIds))] : []),
+        ...(initIds.length ? [tryOp('activity_log (initiative)', () => admin.from('activity_log').delete().in('initiative_id', initIds))] : []),
+        tryOp('initiative_members (user)', () => admin.from('initiative_members').delete().in('user_id', targetIds)),
+        tryOp('activity_log (actor)', () => admin.from('activity_log').delete().in('actor_id', targetIds)),
+      ])
+    })(),
+    // Hub subtree children (hub rows deleted in phase 4)
+    (async () => {
+      await Promise.all([
+        tryOp('hub_members (user)', () => admin.from('hub_members').delete().in('user_id', targetIds)),
+        ...(hubIds.length ? [tryOp('hub_members (hub)', () => admin.from('hub_members').delete().in('hub_id', hubIds))] : []),
+        ...(hubIds.length ? [tryOp('hub_initiatives (hub)', () => admin.from('hub_initiatives').delete().in('hub_id', hubIds))] : []),
+        ...(initIds.length ? [tryOp('hub_initiatives (initiative)', () => admin.from('hub_initiatives').delete().in('initiative_id', initIds))] : []),
+      ])
+    })(),
+  ])
 
-  // Initiatives last
-  await tryOp('initiatives', () => admin.from('initiatives').delete().in('lead_id', targetIds))
+  // ── Phase 4: top-level owned rows — after all their children are gone ─────
+  await Promise.all([
+    tryOp('hubs', () => admin.from('hubs').delete().in('coordinator_id', targetIds)),
+    tryOp('initiatives', () => admin.from('initiatives').delete().in('lead_id', targetIds)),
+  ])
 
   return errors
 }
