@@ -379,6 +379,12 @@ async function cleanupUserContent(admin: AdminClient, targetIds: string[]): Prom
       () => admin.from('discussions').update({ decision_made_by: null }).in('decision_made_by', targetIds)),
     tryOp('partner_engagements.reviewer_id',
       () => admin.from('partner_engagements').update({ reviewer_id: null }).in('reviewer_id', targetIds)),
+    // Reset CRM platform_status so the contact correctly shows "no platform account"
+    // after deletion. profile_id is NULLed automatically by the FK cascade when the
+    // profile row is deleted, but platform_status has no cascade — it would stay
+    // stale ('invited'/'active') without this explicit reset.
+    tryOp('comms_crm_contacts (platform_status)',
+      () => admin.from('comms_crm_contacts').update({ platform_status: 'none' }).in('profile_id', targetIds)),
     tryOp('permission_audit_log (changed_by)',
       () => admin.from('permission_audit_log').delete().in('changed_by', targetIds)),
     tryOp('permission_audit_log (target_user_id)',
