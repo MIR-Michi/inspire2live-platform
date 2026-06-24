@@ -7,12 +7,20 @@ settings it depends on.
 
 1. An admin invites someone (Admin → Users → Invite User). The
    `inviteUserAccount` **server action** calls the Supabase **Admin API**
-   `auth.admin.inviteUserByEmail(email, { data: { role }, redirectTo: <appUrl>/auth/callback })`,
+   `auth.admin.inviteUserByEmail(email, { data: { role }, redirectTo: <appUrl>/auth/confirm })`,
    which creates the auth user (no password yet) and emails a token-hash invite
-   link. The callback URL is resolved with `getAuthCallbackUrl` — it prefers the
+   link. The confirm URL is built with `getAuthBaseUrl` — it prefers the
    canonical `NEXT_PUBLIC_APP_URL` and falls back to the admin's browser origin,
    so invites sent from a preview deployment still land on the allow-listed
    production domain.
+   > `redirectTo` points to `/auth/confirm` (the interstitial), **not**
+   > `/auth/callback` directly. If it pointed to `/auth/callback` and the
+   > production Supabase project uses the default email template
+   > (`{{ .ConfirmationURL }}`), the link would go through Supabase's verify
+   > endpoint which forwards to `redirectTo` — and a link-scanner pre-fetch
+   > would call `verifyOtp` on GET, consuming the single-use token before the
+   > real user clicks. See "Email-link scanners" below.
+   >
    > This replaced an earlier client-side `signInWithOtp` invite, whose PKCE
    > verifier was bound to the *admin's* browser, so the invitee could never
    > complete the link (it failed as "expired or already used"). The Admin API

@@ -105,7 +105,7 @@ describe('resendInvitation', () => {
     expect(mockInviteUserByEmail).toHaveBeenCalledWith(
       'pending@inspire2live.org',
       expect.objectContaining({
-        redirectTo: `${ORIGIN}/auth/callback`,
+        redirectTo: `${ORIGIN}/auth/confirm`,
         data: expect.objectContaining({ role: 'Comms' }),
       }),
     )

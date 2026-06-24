@@ -96,7 +96,7 @@ describe('inviteUserAccount — re-invite after delete', () => {
     expect(mockInviteUserByEmail).toHaveBeenCalledTimes(1)
     expect(mockInviteUserByEmail).toHaveBeenCalledWith(
       'self@inspire2live.org',
-      expect.objectContaining({ redirectTo: `${ORIGIN}/auth/callback` }),
+      expect.objectContaining({ redirectTo: `${ORIGIN}/auth/confirm` }),
     )
   })
 
