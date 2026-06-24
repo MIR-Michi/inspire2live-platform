@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { normalizeRole, ROLE_LABELS } from '@/lib/role-access'
-import { getAuthCallbackUrl } from '@/lib/auth-redirect-url'
+import { getAuthBaseUrl } from '@/lib/auth-redirect-url'
 import { DEMO_EMAILS } from './constants'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -117,10 +117,20 @@ export async function inviteUserAccount(
   try {
     const url = new URL(origin)
     if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('bad protocol')
-    // Prefer the canonical production URL (NEXT_PUBLIC_APP_URL) when configured, so
-    // invites sent from a preview/non-canonical deployment still point at the
-    // allow-listed callback domain. Falls back to the admin's browser origin.
-    redirectTo = getAuthCallbackUrl({ browserOrigin: url.origin })
+    // Point to /auth/confirm (the interstitial), not /auth/callback directly.
+    //
+    // Why: the production Supabase project may still be using the default invite
+    // template ({{ .ConfirmationURL }}). In that case, Supabase's verify endpoint
+    // processes the token and forwards to `redirectTo`. If `redirectTo` is
+    // /auth/callback, the route handler calls verifyOtp on GET and consumes the
+    // single-use token immediately — so any link-scanner pre-fetch (Microsoft
+    // SafeLinks, Gmail, etc.) spends the token before the real user clicks.
+    //
+    // Pointing to /auth/confirm means the scanner only fetches harmless HTML; the
+    // token is consumed only when the human explicitly POSTs (clicks "Accept").
+    // This is the intended design documented in docs/AUTH_INVITE_FLOW.md.
+    const base = getAuthBaseUrl({ browserOrigin: url.origin })
+    redirectTo = `${base}/auth/confirm`
   } catch {
     return { error: 'Could not determine the app URL for the invitation link.' }
   }
