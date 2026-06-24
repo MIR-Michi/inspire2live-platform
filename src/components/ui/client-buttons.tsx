@@ -562,7 +562,7 @@ export function ResendInviteButton({
       setOpen(false)
       setSent(false)
       router.refresh()
-    }, 2000)
+    }, 4000)
   }
 
   return (
