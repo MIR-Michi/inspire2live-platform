@@ -4,7 +4,7 @@ import { useRouter } from 'next/navigation'
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import { ROLE_LABELS } from '@/lib/role-access'
-import { setUserStatus, deleteUser, purgeDemo, inviteUserAccount, type AccountStatus, type PurgeDemoResult } from '@/app/app/admin/users/actions'
+import { setUserStatus, deleteUser, purgeDemo, inviteUserAccount, resendInvitation, type AccountStatus, type PurgeDemoResult } from '@/app/app/admin/users/actions'
 
 /** Derived from the canonical ROLE_LABELS so labels never diverge from the source of truth. */
 const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
@@ -523,6 +523,79 @@ export function InviteUserButton() {
                 className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50"
               >
                 {sent ? '✓ Sent!' : sending ? 'Sending...' : 'Send Invite'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  )
+}
+
+/* ─── Resend invitation link (admin users page) ────────────────────────── */
+export function ResendInviteButton({
+  userId,
+  userName,
+  email,
+}: {
+  userId: string
+  userName: string
+  email: string
+}) {
+  const [open, setOpen] = useState(false)
+  const [working, setWorking] = useState(false)
+  const [sent, setSent] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const router = useRouter()
+
+  const handleConfirm = async () => {
+    setWorking(true)
+    setError(null)
+    const { error } = await resendInvitation(userId, window.location.origin)
+    setWorking(false)
+    if (error) {
+      setError(error)
+      return
+    }
+    setSent(true)
+    setTimeout(() => {
+      setOpen(false)
+      setSent(false)
+      router.refresh()
+    }, 2000)
+  }
+
+  return (
+    <>
+      <button
+        onClick={() => { setOpen(true); setError(null); setSent(false) }}
+        className="rounded border border-blue-300 px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-50"
+      >
+        Resend invite
+      </button>
+      {open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onClick={() => setOpen(false)}>
+          <div className="mx-4 w-full max-w-sm rounded-xl border border-neutral-200 bg-white p-5 shadow-xl" onClick={(e) => e.stopPropagation()}>
+            <h3 className="text-base font-semibold text-neutral-900">Resend invitation to {userName}?</h3>
+            <p className="mt-2 text-sm text-neutral-500">
+              A fresh invitation link will be emailed to <span className="font-medium text-neutral-700">{email}</span>. Any previous link stops working.
+            </p>
+            {sent && (
+              <div className="mt-3 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                ✓ New invitation sent to {email}.
+              </div>
+            )}
+            {error && (
+              <div className="mt-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700">{error}</div>
+            )}
+            <div className="mt-4 flex justify-end gap-2">
+              <button onClick={() => setOpen(false)} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50">Cancel</button>
+              <button
+                onClick={handleConfirm}
+                disabled={working || sent}
+                className="rounded-lg bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50"
+              >
+                {sent ? '✓ Sent' : working ? 'Sending…' : 'Resend link'}
               </button>
             </div>
           </div>

@@ -45,7 +45,7 @@ const COMMS_FLOW: OnboardingFlow = {
     { title: 'WhatsApp & Intake', desc: 'Review incoming messages, classify them, and assign follow-ups.' },
     { title: 'CRM & Library', desc: 'Manage contacts, pipelines, and your shared media assets.' },
   ],
-  landingPath: '/app/dashboard',
+  landingPath: '/app/comms/dashboard',
 }
 
 const GENERIC_FLOW: OnboardingFlow = {

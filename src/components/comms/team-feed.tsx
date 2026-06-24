@@ -13,7 +13,7 @@ import { CollapsibleCard, type CollapsibleCardProps } from '@/components/ui/coll
 
 type DragProps = Pick<
   CollapsibleCardProps,
-  'draggable' | 'isDragging' | 'onDragStart' | 'onDragOver' | 'onDrop' | 'onDragEnd'
+  'draggable' | 'isDragging' | 'onDragStart' | 'onDragOver' | 'onDrop' | 'onDragEnd' | 'defaultCollapsed'
 >
 
 function formatDate(value: string | null) {

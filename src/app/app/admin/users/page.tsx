@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { EditRoleButton, InviteUserButton, AssignCongressRolesButton, UserStatusButton, DeleteUserButton, PurgeDemoUsersButton } from '@/components/ui/client-buttons'
+import { EditRoleButton, InviteUserButton, AssignCongressRolesButton, UserStatusButton, DeleteUserButton, PurgeDemoUsersButton, ResendInviteButton } from '@/components/ui/client-buttons'
 import { DEMO_EMAILS } from '@/app/app/admin/users/constants'
 import { fetchLatestWorkspaceEvent } from '@/lib/congress-workspace/current-event'
 import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
@@ -135,6 +135,9 @@ export default async function AdminUsersPage() {
                       congressTitle={latestCongress?.title}
                     />
                     <EditRoleButton userName={u.name} userId={u.id} currentRole={u.role} />
+                    {!u.onboarding_completed && (
+                      <ResendInviteButton userId={u.id} userName={u.name} email={u.email} />
+                    )}
                     <UserStatusButton userId={u.id} userName={u.name} status={u.status} isSelf={u.id === user.id} />
                     <DeleteUserButton userId={u.id} userName={u.name} isSelf={u.id === user.id} />
                   </div>

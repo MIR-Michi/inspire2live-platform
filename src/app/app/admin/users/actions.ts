@@ -200,6 +200,48 @@ export async function inviteUserAccount(
   return { error: null }
 }
 
+// ─── resendInvitation ────────────────────────────────────────────────────────
+
+/**
+ * Re-sends the invitation link for a still-pending (un-onboarded) user.
+ *
+ * Invitation links expire (default 24h on Supabase). When an invitee misses the
+ * window, the admin needs to issue a fresh one without re-typing the email/role.
+ * This looks up the pending account and delegates to {@link inviteUserAccount},
+ * which already purges the stale auth record first so a brand-new, single-use
+ * token is minted (a plain resend would re-emit the already-spent token, which
+ * verifies as "expired or already used").
+ *
+ * Refuses to act on a fully-onboarded account — there is no pending invite to
+ * renew, and re-inviting would be destructive.
+ */
+export async function resendInvitation(
+  targetUserId: string,
+  origin: string,
+): Promise<{ error: string | null }> {
+  const supabase = await createClient()
+  const { error: authError } = await requireAdmin(supabase)
+  if (authError) return { error: authError }
+
+  if (!targetUserId) return { error: 'Invalid target user id' }
+
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('email, role, onboarding_completed')
+    .eq('id', targetUserId)
+    .maybeSingle()
+
+  if (!profile?.email) return { error: 'Could not find this user’s email address.' }
+  if (profile.onboarding_completed) {
+    return { error: 'This user has already completed onboarding — there is no pending invitation to resend.' }
+  }
+
+  // Delegates to the invite path, which purges the stale token before issuing a
+  // fresh one. requireAdmin runs again there (cheap, and keeps the action safe
+  // to call on its own).
+  return inviteUserAccount(profile.email, profile.role ?? 'PatientAdvocate', origin)
+}
+
 // ─── Shared helpers (not exported — only async functions may be exported from
 //     a 'use server' module, but internal helpers can be any shape) ───────────
 
