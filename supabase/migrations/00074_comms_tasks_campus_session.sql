@@ -1,5 +1,5 @@
 -- ============================================================
--- MIGRATION 00072: Tie comms_tasks to a campus meeting
+-- MIGRATION 00074: Tie comms_tasks to a campus meeting
 --
 -- The monthly Campus meeting gets a standard checklist of tasks
 -- (identify speaker & topic, receive bio & picture, prep meeting,
