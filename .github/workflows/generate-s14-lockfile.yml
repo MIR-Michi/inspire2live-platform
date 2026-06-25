@@ -1,0 +1,39 @@
+name: Generate Sprint 14 lockfile
+
+on:
+  push:
+    branches:
+      - fix/s14-lockfile-and-frozen-installs
+
+permissions:
+  contents: read
+
+jobs:
+  generate:
+    name: Generate pnpm lockfile artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: fix/s14-lockfile-and-frozen-installs
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+          cache-dependency-path: pnpm-lock.yaml
+
+      - name: Regenerate pnpm lockfile
+        run: pnpm install --lockfile-only
+
+      - name: Upload regenerated lockfile
+        uses: actions/upload-artifact@v4
+        with:
+          name: s14-pnpm-lock
+          path: pnpm-lock.yaml
+          retention-days: 1
