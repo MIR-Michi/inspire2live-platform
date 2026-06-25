@@ -131,5 +131,9 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
+  // Exclude static assets AND all /api/* routes.
+  // API routes authenticate themselves (HMAC signatures, bearer tokens) —
+  // they must not hit the Supabase session middleware, which can interfere
+  // with unauthenticated external callers such as the WhatsApp webhook.
+  matcher: ['/((?!_next/static|_next/image|favicon.ico|api/|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)'],
 }
