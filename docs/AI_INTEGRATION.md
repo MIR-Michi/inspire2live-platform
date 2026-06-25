@@ -23,6 +23,18 @@ Related environment variables:
 | `AI_SETTINGS_ENCRYPTION_KEY` | Server only | Encryption material for stored provider credentials. |
 | `NEXT_PUBLIC_FEATURE_AI` | Client and server | Feature flag for AI UI and server calls. |
 
+## Dependency and lockfile caveat
+
+Whenever `@anthropic-ai/sdk` or any other package is added or changed, update `pnpm-lock.yaml` in the same PR. Vercel and GitHub CI can fail with `ERR_PNPM_OUTDATED_LOCKFILE` when `package.json` and `pnpm-lock.yaml` do not match.
+
+The proper fix is to run:
+
+```bash
+pnpm install --lockfile-only
+```
+
+Then commit both `package.json` and `pnpm-lock.yaml`. The current Sprint 14 branch uses `pnpm install --no-frozen-lockfile` in `vercel.json` as a temporary preview-build safety valve only. Before merging to `main`, restore frozen installs once the lockfile is regenerated.
+
 ## Shared wrapper
 
 All provider calls must go through `src/lib/ai/client.ts`. Product code must not instantiate the SDK directly. The wrapper centralizes configuration, model and effort validation, structured output setup, usage logging, and typed errors.
