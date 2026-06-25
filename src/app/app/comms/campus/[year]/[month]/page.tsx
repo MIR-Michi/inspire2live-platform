@@ -6,7 +6,8 @@ import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { AgendaAddForm } from '@/components/comms/agenda-add-form'
 import { AgendaItemList } from '@/components/comms/agenda-item-list'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
-import { loadCampusSessionAgenda, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
+import { CampusMeetingChecklist } from '@/components/comms/campus-meeting-checklist'
+import { loadCampusMeetingTasks, loadCampusSessionAgenda, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { createClient } from '@/lib/supabase/server'
 
 async function markReviewedAction(formData: FormData) {
@@ -143,6 +144,8 @@ export default async function CampusMonthPage({
   // assignable, linkable tasks. Loaded only when a session exists to attach to.
   const campusAgenda = primarySession ? await loadCampusSessionAgenda(supabase, primarySession.id) : []
   const teamMembers = primarySession ? await loadCommsTeamMembers(supabase) : []
+  const meetingTasks = primarySession ? await loadCampusMeetingTasks(supabase, primarySession.id) : []
+  const completedMeetingTasks = meetingTasks.filter((task) => task.status === 'completed').length
   const campusAgendaOptions = primarySession
     ? campusAgenda.map((item) => ({ id: item.id, label: item.title, meetingDate: primarySession.session_date }))
     : []
@@ -315,6 +318,25 @@ export default async function CampusMonthPage({
                 ))}
               </ul>
             </CollapsibleCard>
+
+            {primarySession && (
+              <CollapsibleCard
+                title="Meeting checklist"
+                storageKey="campus-checklist"
+                bodyClassName="px-0 pb-0"
+                actions={
+                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                    {completedMeetingTasks}/{meetingTasks.length} done
+                  </span>
+                }
+              >
+                <CampusMeetingChecklist tasks={meetingTasks} teamMembers={teamMembers} />
+                <p className="px-4 py-3 text-[11px] text-neutral-500">
+                  Standard tasks for every campus meeting. Reassign an owner or update status; each
+                  task also appears on its owner&apos;s personal dashboard.
+                </p>
+              </CollapsibleCard>
+            )}
 
             <CollapsibleCard
               title="Agenda & tasks"

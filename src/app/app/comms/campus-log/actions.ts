@@ -4,6 +4,29 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
+import { CAMPUS_MEETING_TASK_TEMPLATE } from '@/lib/campus-meeting-tasks'
+
+/**
+ * Seeds the standard campus-meeting checklist as comms_tasks tied to a newly
+ * created session. Each task is owned by the meeting's creator (every task must
+ * have an owner) and can be reassigned afterwards. Best-effort: a failure to
+ * seed must not block creating the meeting itself.
+ */
+async function seedCampusMeetingTasks(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any,
+  sessionId: string,
+  ownerId: string
+) {
+  const rows = CAMPUS_MEETING_TASK_TEMPLATE.map((title) => ({
+    title,
+    owner_id: ownerId,
+    status: 'not_started',
+    campus_session_id: sessionId,
+    created_by: ownerId,
+  }))
+  await supabase.from('comms_tasks').insert(rows)
+}
 
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
@@ -77,6 +100,8 @@ export async function createCampusSession(formData: FormData) {
 
   if (error) throw new Error(error.message)
 
+  if (data?.id) await seedCampusMeetingTasks(supabase, data.id, user.id)
+
   revalidatePath('/app/comms/campus-log')
   redirect(`/app/comms/campus-log/sessions/${data?.id}`)
 }
@@ -94,11 +119,15 @@ export async function startCampusMeeting(formData: FormData) {
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) throw new Error('A valid session date is required.')
 
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('campus_sessions')
     .insert({ session_date: sessionDate, created_by: user.id })
+    .select('id')
+    .maybeSingle()
 
   if (error) throw new Error(error.message)
+
+  if (data?.id) await seedCampusMeetingTasks(supabase, data.id, user.id)
 
   revalidatePath('/app/comms/campus')
   revalidatePath(returnPath)
