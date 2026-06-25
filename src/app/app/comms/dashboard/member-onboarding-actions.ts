@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
+import { notifyUser } from '@/lib/notify'
 
 // Loosely-typed client for the member_onboarding tables that are not yet in the
 // generated Database types.
@@ -45,6 +46,8 @@ async function requireCommsOperator() {
 function revalidate() {
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/comms/crm')
+  // Onboarding tasks assigned to a person surface on their personal dashboard.
+  revalidatePath('/app/dashboard')
 }
 
 // ─── Registration & gating ──────────────────────────────────────────────────
@@ -121,7 +124,9 @@ export async function addMemberOnboardingTask(formData: FormData) {
   if (!onboardingId) throw new Error('Member is required.')
   const title = asText(formData.get('title'))
   if (!title) throw new Error('A task title is required.')
+  // Every task must have an owner — a task cannot be set up without one.
   const assigneeId = asNullableUuid(formData.get('assignee_id'))
+  if (!assigneeId) throw new Error('An owner is required for every task.')
 
   const { count } = await db
     .from('member_onboarding_tasks')
@@ -140,6 +145,51 @@ export async function addMemberOnboardingTask(formData: FormData) {
 
   // Adding work to a member previously marked complete reopens them.
   await reconcileMemberCompletion(db, onboardingId)
+
+  if (assigneeId !== user.id) {
+    await notifyUser({
+      recipientId: assigneeId,
+      event: 'task_assigned',
+      title: 'New onboarding task assigned to you',
+      body: `You have been assigned an onboarding task: "${title}"`,
+      linkUrl: '/app/dashboard',
+    })
+  }
+
+  revalidate()
+}
+
+/**
+ * Reassigns an onboarding task to a different owner. Every task must keep an
+ * owner, so a valid assignee is required (you cannot clear it).
+ */
+export async function updateMemberOnboardingTaskAssignee(formData: FormData) {
+  const { supabase, user } = await requireCommsOperator()
+  const db = supabase as AnyDb
+
+  const taskId = asNullableUuid(formData.get('task_id'))
+  if (!taskId) throw new Error('Task is required.')
+  const assigneeId = asNullableUuid(formData.get('assignee_id'))
+  if (!assigneeId) throw new Error('A valid owner is required.')
+
+  const { data: updated, error } = await db
+    .from('member_onboarding_tasks')
+    .update({ assignee_id: assigneeId, updated_at: new Date().toISOString() })
+    .eq('id', taskId)
+    .select('title')
+    .single()
+  if (error) throw new Error(error.message)
+
+  if (assigneeId !== user.id) {
+    await notifyUser({
+      recipientId: assigneeId,
+      event: 'task_assigned',
+      title: 'An onboarding task was assigned to you',
+      body: `You are now the owner of: "${updated?.title ?? 'an onboarding task'}"`,
+      linkUrl: '/app/dashboard',
+    })
+  }
+
   revalidate()
 }
 

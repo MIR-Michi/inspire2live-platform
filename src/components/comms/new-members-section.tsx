@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { NewMemberRecord, MemberTaskStatus } from '@/lib/member-onboarding'
 import type { TeamMemberOption } from '@/lib/comms-dashboard-data'
 import {
@@ -10,6 +10,7 @@ import {
   deleteMemberOnboarding,
   addMemberOnboardingTask,
   updateMemberOnboardingTaskStatus,
+  updateMemberOnboardingTaskAssignee,
   removeMemberOnboardingTask,
 } from '@/app/app/comms/dashboard/member-onboarding-actions'
 
@@ -29,12 +30,6 @@ export function NewMembersSection({
   teamMembers: TeamMemberOption[]
   canApprove: boolean
 }) {
-  const labelById = useMemo(() => {
-    const map = new Map<string, string>()
-    for (const m of teamMembers) map.set(m.id, m.label)
-    return map
-  }, [teamMembers])
-
   return (
     <div className="space-y-4">
       {/* Register a new member — email may be a not-yet-live @inspire2live.org address. */}
@@ -71,7 +66,7 @@ export function NewMembersSection({
         </p>
       ) : (
         members.map((member) => (
-          <MemberCard key={member.id} member={member} teamMembers={teamMembers} labelById={labelById} canApprove={canApprove} />
+          <MemberCard key={member.id} member={member} teamMembers={teamMembers} canApprove={canApprove} />
         ))
       )}
     </div>
@@ -81,12 +76,10 @@ export function NewMembersSection({
 function MemberCard({
   member,
   teamMembers,
-  labelById,
   canApprove,
 }: {
   member: NewMemberRecord
   teamMembers: TeamMemberOption[]
-  labelById: Map<string, string>
   canApprove: boolean
 }) {
   const isActive = member.status === 'active'
@@ -184,12 +177,28 @@ function MemberCard({
         <div className="mt-3 space-y-2 border-t border-neutral-100 pt-3">
           {member.tasks.map((task) => (
             <div key={task.id} className="flex flex-wrap items-center gap-2">
-              <span className="min-w-0 flex-1 text-sm text-neutral-800">
-                {task.title}
-                {task.assigneeId && (
-                  <span className="ml-2 text-xs text-neutral-500">· {labelById.get(task.assigneeId) ?? 'Assigned'}</span>
-                )}
-              </span>
+              <span className="min-w-0 flex-1 text-sm text-neutral-800">{task.title}</span>
+              <form action={updateMemberOnboardingTaskAssignee}>
+                <input type="hidden" name="task_id" value={task.id} />
+                <select
+                  name="assignee_id"
+                  defaultValue={task.assigneeId ?? ''}
+                  onChange={(e) => e.currentTarget.form?.requestSubmit()}
+                  aria-label={`Reassign owner of ${task.title}`}
+                  className="rounded-lg border border-neutral-300 px-2 py-1 text-xs text-neutral-700"
+                >
+                  {!task.assigneeId && (
+                    <option value="" disabled>
+                      Select owner…
+                    </option>
+                  )}
+                  {teamMembers.map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.label}
+                    </option>
+                  ))}
+                </select>
+              </form>
               <form action={updateMemberOnboardingTaskStatus}>
                 <input type="hidden" name="task_id" value={task.id} />
                 <select
@@ -229,8 +238,15 @@ function MemberCard({
               placeholder="Add a task (e.g. create email address)"
               className="min-w-0 flex-1 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm outline-none ring-orange-300 focus:ring"
             />
-            <select name="assignee_id" defaultValue="" className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs">
-              <option value="">Unassigned</option>
+            <select
+              name="assignee_id"
+              required
+              defaultValue=""
+              className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs"
+            >
+              <option value="" disabled>
+                Select owner…
+              </option>
               {teamMembers.map((m) => (
                 <option key={m.id} value={m.id}>
                   {m.label}

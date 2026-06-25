@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { TileGroup } from '@/components/ui/tile-group'
 import { TaskStatusControl } from '@/components/comms/task-status-control'
+import { MemberTaskStatusControl } from '@/components/comms/member-task-status-control'
 import type { CommsTaskRecord } from '@/lib/comms-tasks'
 import type {
   PersonalTask,
@@ -9,6 +10,7 @@ import type {
   PersonalIncomingItem,
   PersonalProjectSummary,
   PersonalDecision,
+  PersonalMemberTask,
 } from '@/lib/comms-personal-dashboard-data'
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -39,6 +41,7 @@ export function CommsDashboardPanel({
   name,
   tasks,
   commsTasks,
+  memberTasks,
   contentItems,
   incomingItems,
   projectSummaries,
@@ -47,6 +50,7 @@ export function CommsDashboardPanel({
   name: string | null | undefined
   tasks: PersonalTask[]
   commsTasks: CommsTaskRecord[]
+  memberTasks: PersonalMemberTask[]
   contentItems: PersonalContentItem[]
   incomingItems: PersonalIncomingItem[]
   projectSummaries: PersonalProjectSummary[]
@@ -77,7 +81,7 @@ export function CommsDashboardPanel({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="My Open Tasks" value={openTasks.length + openCommsTasks.length} sub="assigned to you" />
+        <StatCard label="My Open Tasks" value={openTasks.length + openCommsTasks.length + memberTasks.length} sub="assigned to you" />
         <StatCard label="Overdue Tasks" value={overdueCommsTasks.length} sub="need attention" />
         <StatCard label="Incoming Messages" value={incomingItems.length} sub="waiting for review" />
         <StatCard label="Project Summaries" value={projectSummaries.length} sub="campus and events" />
@@ -124,6 +128,38 @@ export function CommsDashboardPanel({
             {commsTasks.length === 0 && (
               <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
                 No tasks assigned to you yet.
+              </p>
+            )}
+          </div>
+        </CollapsibleCard>
+
+        <CollapsibleCard
+          key="comms-personal-member-tasks"
+          tone="orange"
+          title="New-member onboarding"
+          storageKey="comms-personal-member-tasks"
+          actions={
+            <Link href="/app/comms/dashboard?view=team" className="text-xs font-semibold text-orange-700 hover:underline">
+              Open new members
+            </Link>
+          }
+        >
+          <div className="space-y-2">
+            {memberTasks.map((task) => (
+              <div
+                key={task.id}
+                className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium text-neutral-900">{task.title}</p>
+                  <p className="mt-0.5 text-xs text-neutral-500">Onboarding · {task.memberName}</p>
+                </div>
+                <MemberTaskStatusControl taskId={task.id} status={task.status} />
+              </div>
+            ))}
+            {memberTasks.length === 0 && (
+              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
+                No onboarding tasks assigned to you.
               </p>
             )}
           </div>

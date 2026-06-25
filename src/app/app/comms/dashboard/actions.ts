@@ -241,6 +241,7 @@ export async function updateCommsTaskOwner(formData: FormData) {
 
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/dashboard')
+  revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }
 
 export async function updateCommsTaskStatus(formData: FormData) {

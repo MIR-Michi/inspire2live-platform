@@ -8,6 +8,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
+import type { MemberTaskStatus } from '@/lib/member-onboarding'
 
 export type PersonalTask = {
   id: string
@@ -34,10 +35,17 @@ export type PersonalIncomingItem = {
 }
 export type PersonalProjectSummary = { id: string; title: string; summary: string; href: string; label: string }
 export type PersonalDecision = { id: string; decision: string; owner: string; href: string; meeting: string }
+export type PersonalMemberTask = {
+  id: string
+  title: string
+  status: MemberTaskStatus
+  memberName: string
+}
 
 export type CommsPersonalDashboardData = {
   tasks: PersonalTask[]
   commsTasks: CommsTaskRecord[]
+  memberTasks: PersonalMemberTask[]
   contentItems: PersonalContentItem[]
   incomingItems: PersonalIncomingItem[]
   projectSummaries: PersonalProjectSummary[]
@@ -71,6 +79,7 @@ export async function loadCommsPersonalDashboardData(
   const [
     { data: personalTaskRows },
     { data: commsTaskRows },
+    { data: memberTaskRows },
     { data: contentRows },
     { data: incomingRows },
     { data: campusRows },
@@ -88,6 +97,17 @@ export async function loadCommsPersonalDashboardData(
       .select('id, title, description, due_date, status, agenda_item_id, comms_weekly_agenda_items(title)')
       .eq('owner_id', userId)
       .order('due_date', { ascending: true, nullsFirst: false })
+      .limit(20),
+    // Onboarding tasks assigned to this user from the New Members section. These
+    // live in their own table (member_onboarding_tasks), so without this they
+    // never surfaced on the assignee's personal dashboard.
+    db
+      .from('member_onboarding_tasks')
+      .select('id, title, status, onboarding_id, member_onboarding!inner(full_name, status)')
+      .eq('assignee_id', userId)
+      .in('status', ['not_started', 'in_progress'])
+      .eq('member_onboarding.status', 'active')
+      .order('created_at', { ascending: true })
       .limit(20),
     supabase
       .from('content_calendar')
@@ -185,9 +205,25 @@ export async function loadCommsPersonalDashboardData(
     agendaItemTitle: row.comms_weekly_agenda_items?.title ?? null,
   }))
 
+  const memberTasks: PersonalMemberTask[] = ((memberTaskRows ?? []) as Array<{
+    id: string
+    title: string
+    status: string
+    member_onboarding?: { full_name?: string | null } | { full_name?: string | null }[] | null
+  }>).map((row) => {
+    const member = Array.isArray(row.member_onboarding) ? row.member_onboarding[0] : row.member_onboarding
+    return {
+      id: row.id,
+      title: row.title,
+      status: (row.status as MemberTaskStatus) ?? 'not_started',
+      memberName: member?.full_name ?? 'New member',
+    }
+  })
+
   return {
     tasks: (personalTaskRows ?? []) as PersonalTask[],
     commsTasks,
+    memberTasks,
     contentItems: (contentRows ?? []) as PersonalContentItem[],
     incomingItems: (incomingRows ?? []) as PersonalIncomingItem[],
     projectSummaries,
