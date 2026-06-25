@@ -27,7 +27,14 @@ Every capability follows one rule: **Claude proposes, a human disposes.** AI out
 
 ## Technical approach
 
-**Stack.** Server-side only, via the official `@anthropic-ai/sdk` (TypeScript). All model calls run in Next.js server actions, route handlers, or cron endpoints — never in the browser, and the API key is never exposed client-side. Default model **`claude-opus-4-8`**; per-workload model choice (e.g. a faster/cheaper model for high-volume classification) is a tuning decision recorded per feature, not a blanket default.
+**Stack.** Server-side only, via the official `@anthropic-ai/sdk` (TypeScript). All model calls run in Next.js server actions, route handlers, or cron endpoints — never in the browser, and the API key is never exposed client-side.
+
+**Admin-managed AI settings.** Rather than living only in an env var, the AI configuration is owned by the Platform Admin in a settings page and stored in an `ai_settings` table (single org-wide record):
+- **API key** — the admin enters the Anthropic API key in settings. It is **encrypted at rest** (app-level encryption with a server-only secret, or Supabase Vault), readable only by server code, and **never returned to the browser** — the UI shows only "set / not set" plus the last 4 chars, and the field is write-only. `ANTHROPIC_API_KEY` (env) remains a fallback/bootstrap default when no key is set in settings.
+- **Model** — the admin selects the default model from the current catalog (`claude-opus-4-8` default, plus `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-haiku-4-5`, `claude-fable-5`).
+- **Reasoning** — the admin selects the default reasoning effort (`low` / `medium` / `high` / `xhigh` / `max`) with adaptive thinking; the options offered are constrained by the chosen model (e.g. `xhigh` is Opus 4.7/4.8, `max` is Opus 4.6+/Sonnet 4.6, Haiku has no effort), and the wrapper validates the pairing.
+
+The `src/lib/ai/client.ts` wrapper resolves config in this order: `ai_settings` (key, model, effort) → env var fallback for the key. A per-feature override may still pin a different model/effort where a workload needs it (e.g. a faster model for high-volume classification), but the admin-selected values are the defaults everywhere else.
 
 **Key API features we lean on** (see `docs/AI_INTEGRATION.md`, produced in S14-T02):
 - **Structured outputs** (`messages.parse()` + a Zod schema via `zodOutputFormat`) for classification, extraction, summaries, and news items — guarantees parseable, schema-valid JSON instead of free-text we have to parse.
@@ -46,15 +53,17 @@ Every capability follows one rule: **Claude proposes, a human disposes.** AI out
 - **Untrusted input.** `intake_items.raw_content`, uploaded transcripts, fetched web pages, and monitoring-mention text are external data. Wrap them in clearly delimited blocks and treat them as data, never as instructions — and never let them silently redirect a job (prompt-injection hygiene).
 - **Human-in-the-loop.** Suggestions are written as `suggested_*` / pending records that a human confirms; nothing is auto-published or auto-sent.
 - **Citations required** for anything web-sourced; store the URL and a confidence signal.
-- **Cost + rate controls.** A single AI client wrapper enforces model defaults, timeouts, retries, and per-job usage logging (tokens + estimated cost) into an `ai_usage_log` table so spend is visible.
+- **Secret storage.** The admin-entered API key is encrypted at rest, accessible only to server code, and never serialized to the client (write-only field; masked display). Admin-only RLS on `ai_settings`.
+- **Cost + rate controls.** A single AI client wrapper enforces the admin-selected model/effort defaults, timeouts, retries, and per-job usage logging (tokens + estimated cost) into an `ai_usage_log` table so spend is visible.
 - **Feature-flagged.** Everything sits behind `NEXT_PUBLIC_FEATURE_AI` (UI) + a server guard, so it can ship dark and be enabled per environment.
 - **Privacy.** Tracking a member in any monitor is **opt-in per contact** and limited to public information; no scraping of private accounts. Per-user feeds are private to that user; the org feed is visible to all stakeholders.
 - **Transcript handling.** Uploaded transcripts may contain sensitive discussion — store them under comms-only RLS, restrict access to the meeting's participants/comms team, and allow deletion of the raw transcript after a summary is produced.
 
 ## Acceptance criteria
 
-- [ ] `@anthropic-ai/sdk` added; `ANTHROPIC_API_KEY` documented in `.env.example`, `README.md`, and `docs/ENVIRONMENT_REFERENCE.md`; a server-only `src/lib/ai/client.ts` wrapper exists with model default, structured-output + web-search helpers, timeout/retry, and usage logging.
-- [ ] `docs/AI_INTEGRATION.md` documents the patterns, the guardrails, the model-per-workload choices, and the prompt-injection policy for untrusted input.
+- [ ] `@anthropic-ai/sdk` added; a server-only `src/lib/ai/client.ts` wrapper exists with structured-output + web-search helpers, timeout/retry, and usage logging.
+- [ ] **Admin AI settings:** a Platform Admin can enter the Anthropic API key (encrypted at rest, write-only/masked, never sent to the browser), select the default model, and select the default reasoning effort (constrained to the chosen model) in an admin settings page; the wrapper resolves config from `ai_settings` with the `ANTHROPIC_API_KEY` env as fallback; a "Test connection" check confirms the key works.
+- [ ] `docs/AI_INTEGRATION.md` documents the patterns, the guardrails, secret handling, the model/reasoning settings, the model-per-workload choices, and the prompt-injection policy for untrusted input.
 - [ ] `NEXT_PUBLIC_FEATURE_AI` flag gates all AI UI and a server guard rejects AI calls when disabled.
 - [ ] **Structure incoming content:** an intake item can be classified + structured by Claude into a reviewable suggestion (content type, summary, entities, suggested channel/action, founder signal); the rule-based classifier remains as a deterministic fast-path/fallback; a human confirms before it routes.
 - [ ] **Transcript upload:** a user can upload a meeting transcript (txt/vtt/srt/docx) to a Storage bucket; text is extracted and stored in `meeting_transcripts` under comms-only RLS, optionally linked to a campus session/agenda item.
