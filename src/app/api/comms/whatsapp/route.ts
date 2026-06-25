@@ -16,7 +16,14 @@ export async function GET(request: Request) {
   const challenge = url.searchParams.get('hub.challenge')
   const expected = process.env.WHATSAPP_VERIFY_TOKEN
 
-  if (mode === 'subscribe' && expected && verifyToken === expected && challenge) {
+  if (!expected) {
+    return NextResponse.json(
+      { ok: false, error: 'WHATSAPP_VERIFY_TOKEN is not configured.' },
+      { status: 500 },
+    )
+  }
+
+  if (mode === 'subscribe' && verifyToken === expected && challenge) {
     return new Response(challenge, { status: 200 })
   }
 
