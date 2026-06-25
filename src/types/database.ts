@@ -448,6 +448,7 @@ export type Database = {
           bio: string | null
           city: string | null
           consent_status: string
+          contact_kind: string | null
           country: string | null
           created_at: string
           created_by: string | null
@@ -455,16 +456,21 @@ export type Database = {
           field_of_expertise: string[]
           full_name: string
           id: string
+          intended_role: string | null
           last_interaction_at: string | null
           lifecycle_stage: string
+          member_onboarding_id: string | null
           next_follow_up_at: string | null
+          normalized_email: string | null
           notes: string | null
           organisation: string | null
           person_type: string | null
           phone: string | null
           picture_url: string | null
+          platform_status: string
           preferred_channel: string | null
           privacy_notes: string | null
+          profile_id: string | null
           relationship_owner_id: string | null
           relationship_owner_label: string | null
           retention_review_at: string | null
@@ -477,11 +483,14 @@ export type Database = {
           title: string | null
           updated_at: string
           updated_by: string | null
+          welcomed_by_peter: boolean
+          whatsapp_id: string | null
         }
         Insert: {
           bio?: string | null
           city?: string | null
           consent_status?: string
+          contact_kind?: string | null
           country?: string | null
           created_at?: string
           created_by?: string | null
@@ -489,16 +498,21 @@ export type Database = {
           field_of_expertise?: string[]
           full_name: string
           id?: string
+          intended_role?: string | null
           last_interaction_at?: string | null
           lifecycle_stage?: string
+          member_onboarding_id?: string | null
           next_follow_up_at?: string | null
+          normalized_email?: string | null
           notes?: string | null
           organisation?: string | null
           person_type?: string | null
           phone?: string | null
           picture_url?: string | null
+          platform_status?: string
           preferred_channel?: string | null
           privacy_notes?: string | null
+          profile_id?: string | null
           relationship_owner_id?: string | null
           relationship_owner_label?: string | null
           retention_review_at?: string | null
@@ -511,11 +525,14 @@ export type Database = {
           title?: string | null
           updated_at?: string
           updated_by?: string | null
+          welcomed_by_peter?: boolean
+          whatsapp_id?: string | null
         }
         Update: {
           bio?: string | null
           city?: string | null
           consent_status?: string
+          contact_kind?: string | null
           country?: string | null
           created_at?: string
           created_by?: string | null
@@ -523,16 +540,21 @@ export type Database = {
           field_of_expertise?: string[]
           full_name?: string
           id?: string
+          intended_role?: string | null
           last_interaction_at?: string | null
           lifecycle_stage?: string
+          member_onboarding_id?: string | null
           next_follow_up_at?: string | null
+          normalized_email?: string | null
           notes?: string | null
           organisation?: string | null
           person_type?: string | null
           phone?: string | null
           picture_url?: string | null
+          platform_status?: string
           preferred_channel?: string | null
           privacy_notes?: string | null
+          profile_id?: string | null
           relationship_owner_id?: string | null
           relationship_owner_label?: string | null
           retention_review_at?: string | null
@@ -545,6 +567,8 @@ export type Database = {
           title?: string | null
           updated_at?: string
           updated_by?: string | null
+          welcomed_by_peter?: boolean
+          whatsapp_id?: string | null
         }
         Relationships: []
       }
