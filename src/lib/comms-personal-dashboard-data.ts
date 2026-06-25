@@ -7,17 +7,9 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
-import type { MemberTaskStatus } from '@/lib/member-onboarding'
+import { loadTasksForUser } from '@/lib/tasks/repository'
+import type { UnifiedTask } from '@/lib/tasks/types'
 
-export type PersonalTask = {
-  id: string
-  title: string
-  status: string
-  priority: string
-  due_date: string | null
-  initiative_id: string
-}
 export type PersonalContentItem = {
   id: string
   title: string
@@ -35,17 +27,11 @@ export type PersonalIncomingItem = {
 }
 export type PersonalProjectSummary = { id: string; title: string; summary: string; href: string; label: string }
 export type PersonalDecision = { id: string; decision: string; owner: string; href: string; meeting: string }
-export type PersonalMemberTask = {
-  id: string
-  title: string
-  status: MemberTaskStatus
-  memberName: string
-}
 
 export type CommsPersonalDashboardData = {
-  tasks: PersonalTask[]
-  commsTasks: CommsTaskRecord[]
-  memberTasks: PersonalMemberTask[]
+  // All of this user's tasks, across every source, via the unified domain
+  // layer (ADR-0008). Replaces the previous per-table task queries.
+  tasks: UnifiedTask[]
   contentItems: PersonalContentItem[]
   incomingItems: PersonalIncomingItem[]
   projectSummaries: PersonalProjectSummary[]
@@ -72,43 +58,15 @@ export async function loadCommsPersonalDashboardData(
   const today = new Date()
   const nextMonth = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate()).toISOString()
 
-  // Loosely-typed handle for comms_tasks (not yet in generated Database types).
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const db = supabase as any
-
   const [
-    { data: personalTaskRows },
-    { data: commsTaskRows },
-    { data: memberTaskRows },
+    tasks,
     { data: contentRows },
     { data: incomingRows },
     { data: campusRows },
     { data: eventRows },
   ] = await Promise.all([
-    supabase
-      .from('tasks')
-      .select('id, title, status, priority, due_date, initiative_id')
-      .eq('assignee_id', userId)
-      .neq('status', 'done')
-      .order('due_date', { ascending: true })
-      .limit(8),
-    db
-      .from('comms_tasks')
-      .select('id, title, description, due_date, status, agenda_item_id, comms_weekly_agenda_items(title)')
-      .eq('owner_id', userId)
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .limit(20),
-    // Onboarding tasks assigned to this user from the New Members section. These
-    // live in their own table (member_onboarding_tasks), so without this they
-    // never surfaced on the assignee's personal dashboard.
-    db
-      .from('member_onboarding_tasks')
-      .select('id, title, status, onboarding_id, member_onboarding!inner(full_name, status)')
-      .eq('assignee_id', userId)
-      .in('status', ['not_started', 'in_progress'])
-      .eq('member_onboarding.status', 'active')
-      .order('created_at', { ascending: true })
-      .limit(20),
+    // All of this user's tasks, across every source (ADR-0008).
+    loadTasksForUser(supabase, userId),
     supabase
       .from('content_calendar')
       .select('id, title, status, scheduled_at, source_link')
@@ -184,46 +142,8 @@ export async function loadCommsPersonalDashboardData(
     )
     .slice(0, 4)
 
-  const commsTasks: CommsTaskRecord[] = ((commsTaskRows ?? []) as Array<{
-    id: string
-    title: string
-    description: string | null
-    due_date: string | null
-    status: string
-    agenda_item_id: string | null
-    comms_weekly_agenda_items?: { title: string | null } | null
-  }>).map((row) => ({
-    id: row.id,
-    title: row.title,
-    description: row.description,
-    ownerId: userId,
-    ownerLabel: null,
-    ownerRole: null,
-    dueDate: row.due_date,
-    status: normalizeCommsTaskStatus(row.status),
-    agendaItemId: row.agenda_item_id,
-    agendaItemTitle: row.comms_weekly_agenda_items?.title ?? null,
-  }))
-
-  const memberTasks: PersonalMemberTask[] = ((memberTaskRows ?? []) as Array<{
-    id: string
-    title: string
-    status: string
-    member_onboarding?: { full_name?: string | null } | { full_name?: string | null }[] | null
-  }>).map((row) => {
-    const member = Array.isArray(row.member_onboarding) ? row.member_onboarding[0] : row.member_onboarding
-    return {
-      id: row.id,
-      title: row.title,
-      status: (row.status as MemberTaskStatus) ?? 'not_started',
-      memberName: member?.full_name ?? 'New member',
-    }
-  })
-
   return {
-    tasks: (personalTaskRows ?? []) as PersonalTask[],
-    commsTasks,
-    memberTasks,
+    tasks,
     contentItems: (contentRows ?? []) as PersonalContentItem[],
     incomingItems: (incomingRows ?? []) as PersonalIncomingItem[],
     projectSummaries,

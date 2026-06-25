@@ -16,6 +16,11 @@ function queryBuilder(data: unknown[]) {
   for (const method of ['select', 'eq', 'neq', 'not', 'in', 'is', 'order', 'limit', 'gte', 'lt']) {
     builder[method] = vi.fn(() => builder)
   }
+  // Terminal single-row fetch (used by the unified task repository for the
+  // owner profile lookup): resolve the first row, or null when empty.
+  builder.maybeSingle = vi.fn(() =>
+    Promise.resolve({ data: Array.isArray(data) ? data[0] ?? null : null, error: null })
+  )
   builder.then = (onFulfilled: (value: { data: unknown; error: null }) => unknown, onRejected?: (reason: unknown) => unknown) =>
     Promise.resolve({ data, error: null }).then(onFulfilled, onRejected)
   return builder
@@ -222,9 +227,26 @@ describe('loadCommsPersonalDashboardData', () => {
   const eventRows = [
     { id: 'ev1', name: 'Networking night', start_date: '2026-06-20', location_city: 'Berlin', location_country: 'Germany', notes: null },
   ]
-  const taskRows = [
-    { id: 't1', title: 'Draft post', status: 'todo', priority: 'high', due_date: '2026-06-10', initiative_id: 'init1' },
+  // Tasks now arrive through the unified_tasks view (ADR-0008), normalized by
+  // the task repository rather than read straight from the `tasks` table.
+  const unifiedRows = [
+    {
+      source: 'comms',
+      id: 'ct1',
+      title: 'Confirm speaker',
+      description: 'Follow up after the meeting.',
+      owner_id: 'user-1',
+      status: 'not_started',
+      due_date: '2026-06-12',
+      priority: null,
+      position: null,
+      context_kind: 'standalone',
+      context_id: null,
+      created_at: '2026-06-01T09:00:00Z',
+      updated_at: '2026-06-01T09:00:00Z',
+    },
   ]
+  const profileRows = [{ id: 'user-1', name: 'Me', email: 'me@x.com' }]
   const contentRows = [
     { id: 'c1', title: 'Newsletter', status: 'draft', scheduled_at: '2026-06-12', source_link: null },
   ]
@@ -233,18 +255,29 @@ describe('loadCommsPersonalDashboardData', () => {
   ]
 
   const supabase = buildSupabase({
-    tasks: taskRows,
+    unified_tasks: unifiedRows,
+    profiles: profileRows,
     content_calendar: contentRows,
     intake_items: incomingRows,
     campus_sessions: campusRows,
     events: eventRows,
   })
 
-  it('passes through assignee-scoped tasks, content and incoming items as-is', async () => {
+  it('maps unified tasks and passes content and incoming items through as-is', async () => {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const data = await loadCommsPersonalDashboardData(supabase as any, 'user-1')
 
-    expect(data.tasks).toEqual(taskRows)
+    expect(data.tasks).toHaveLength(1)
+    expect(data.tasks[0]).toMatchObject({
+      source: 'comms',
+      id: 'ct1',
+      title: 'Confirm speaker',
+      status: 'not_started',
+      dueDate: '2026-06-12',
+      ownerLabel: 'Me',
+      editable: true,
+      context: { kind: 'standalone' },
+    })
     expect(data.contentItems).toEqual(contentRows)
     expect(data.incomingItems).toEqual(incomingRows)
   })

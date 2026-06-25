@@ -1,16 +1,14 @@
 import Link from 'next/link'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { TileGroup } from '@/components/ui/tile-group'
-import { TaskStatusControl } from '@/components/comms/task-status-control'
-import { MemberTaskStatusControl } from '@/components/comms/member-task-status-control'
-import type { CommsTaskRecord } from '@/lib/comms-tasks'
+import { UnifiedTaskList } from '@/components/tasks/unified-task-list'
+import { isTaskOpen } from '@/lib/tasks/status'
+import type { UnifiedTask } from '@/lib/tasks/types'
 import type {
-  PersonalTask,
   PersonalContentItem,
   PersonalIncomingItem,
   PersonalProjectSummary,
   PersonalDecision,
-  PersonalMemberTask,
 } from '@/lib/comms-personal-dashboard-data'
 
 function StatCard({ label, value, sub }: { label: string; value: string | number; sub?: string }) {
@@ -23,44 +21,29 @@ function StatCard({ label, value, sub }: { label: string; value: string | number
   )
 }
 
-function formatShortDate(value: string | null) {
-  if (!value) return 'No date'
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
-}
-
-function isOverdueTask(task: CommsTaskRecord, todayKey: string) {
-  return Boolean(
-    task.dueDate &&
-      task.dueDate < todayKey &&
-      task.status !== 'completed' &&
-      task.status !== 'skipped'
-  )
+function isOverdueTask(task: UnifiedTask, todayKey: string) {
+  return Boolean(task.dueDate && task.dueDate < todayKey && isTaskOpen(task.status))
 }
 
 export function CommsDashboardPanel({
   name,
   tasks,
-  commsTasks,
-  memberTasks,
-  contentItems,
+  contentItems: _contentItems,
   incomingItems,
   projectSummaries,
   decisions,
 }: {
   name: string | null | undefined
-  tasks: PersonalTask[]
-  commsTasks: CommsTaskRecord[]
-  memberTasks: PersonalMemberTask[]
+  tasks: UnifiedTask[]
   contentItems: PersonalContentItem[]
   incomingItems: PersonalIncomingItem[]
   projectSummaries: PersonalProjectSummary[]
   decisions: PersonalDecision[]
 }) {
   const firstName = (name ?? 'there').split(' ')[0]
-  const openTasks = tasks.filter((task) => task.status !== 'done')
-  const openCommsTasks = commsTasks.filter((task) => task.status !== 'completed' && task.status !== 'skipped')
   const todayKey = new Date().toISOString().slice(0, 10)
-  const overdueCommsTasks = openCommsTasks.filter((task) => isOverdueTask(task, todayKey))
+  const openTasks = tasks.filter((task) => isTaskOpen(task.status))
+  const overdueTasks = openTasks.filter((task) => isOverdueTask(task, todayKey))
 
   return (
     <section className="space-y-5 rounded-2xl border border-orange-200 bg-orange-50/70 p-5 shadow-sm">
@@ -81,8 +64,8 @@ export function CommsDashboardPanel({
       </div>
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <StatCard label="My Open Tasks" value={openTasks.length + openCommsTasks.length + memberTasks.length} sub="assigned to you" />
-        <StatCard label="Overdue Tasks" value={overdueCommsTasks.length} sub="need attention" />
+        <StatCard label="My Open Tasks" value={openTasks.length} sub="assigned to you" />
+        <StatCard label="Overdue Tasks" value={overdueTasks.length} sub="need attention" />
         <StatCard label="Incoming Messages" value={incomingItems.length} sub="waiting for review" />
         <StatCard label="Project Summaries" value={projectSummaries.length} sub="campus and events" />
       </div>
@@ -90,79 +73,12 @@ export function CommsDashboardPanel({
       <TileGroup groupId="comms-personal-dashboard" className="grid gap-4 lg:grid-cols-2">
         <CollapsibleCard
           key="comms-personal-tasks"
+          className="lg:col-span-2"
           tone="orange"
           title="My tasks"
           storageKey="comms-personal-tasks"
         >
-          <div className="space-y-2">
-            {commsTasks.map((task) => {
-              const overdue = isOverdueTask(task, todayKey)
-              return (
-                <div
-                  key={task.id}
-                  className={[
-                    'flex flex-wrap items-start justify-between gap-2 rounded-lg border px-3 py-2',
-                    overdue ? 'border-red-200 bg-red-50' : 'border-neutral-200',
-                  ].join(' ')}
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <p className="text-sm font-medium text-neutral-900">{task.title}</p>
-                      {overdue && (
-                        <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
-                          Overdue
-                        </span>
-                      )}
-                    </div>
-                    {task.description && <p className="mt-0.5 line-clamp-2 text-xs text-neutral-600">{task.description}</p>}
-                    {task.dueDate && (
-                      <p className={`mt-1 text-xs ${overdue ? 'font-semibold text-red-700' : 'text-neutral-500'}`}>
-                        Due {formatShortDate(task.dueDate)}
-                      </p>
-                    )}
-                  </div>
-                  <TaskStatusControl taskId={task.id} status={task.status} />
-                </div>
-              )
-            })}
-            {commsTasks.length === 0 && (
-              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
-                No tasks assigned to you yet.
-              </p>
-            )}
-          </div>
-        </CollapsibleCard>
-
-        <CollapsibleCard
-          key="comms-personal-member-tasks"
-          tone="orange"
-          title="New-member onboarding"
-          storageKey="comms-personal-member-tasks"
-          actions={
-            <Link href="/app/comms/dashboard?view=team" className="text-xs font-semibold text-orange-700 hover:underline">
-              Open new members
-            </Link>
-          }
-        >
-          <div className="space-y-2">
-            {memberTasks.map((task) => (
-              <div
-                key={task.id}
-                className="flex flex-wrap items-start justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2"
-              >
-                <div className="min-w-0 flex-1">
-                  <p className="text-sm font-medium text-neutral-900">{task.title}</p>
-                  <p className="mt-0.5 text-xs text-neutral-500">Onboarding · {task.memberName}</p>
-                </div>
-                <MemberTaskStatusControl taskId={task.id} status={task.status} />
-              </div>
-            ))}
-            {memberTasks.length === 0 && (
-              <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
-                No onboarding tasks assigned to you.
-              </p>
-            )}
-          </div>
+          <UnifiedTaskList tasks={tasks} />
         </CollapsibleCard>
 
         <CollapsibleCard
