@@ -52,6 +52,8 @@ These remain planning placeholders until the Sprint 04 pilot review is complete.
 - [`sprint-10-brand-identity-alignment/`](sprint-10-brand-identity-alignment/description.md)
 - [`sprint-11-crm-people-and-pipelines/`](sprint-11-crm-people-and-pipelines/tasks.md)
 - [`sprint-12-whatsapp-webhook-production-hardening/`](sprint-12-whatsapp-webhook-production-hardening/description.md) — hardens the Sprint 05 WhatsApp webhook + outbound reply integration for production use (delivery status, failure triage, threading, ops docs).
+- [`sprint-13-contact-identity-unification/`](sprint-13-contact-identity-unification/description.md) — single canonical contact identity (CRM spine + email resolution); see ADR-0007.
+- [`sprint-14-ai-augmentation/`](sprint-14-ai-augmentation/description.md) — Claude-powered comms intelligence: structure incoming content, summarize meetings, propose follow-up tasks, a stakeholder news feed, and member monitoring.
 
 ## How to read a sprint
 
