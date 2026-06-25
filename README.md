@@ -52,11 +52,14 @@ Go to your Vercel project → **Settings → Environment Variables** and add:
 | `NEXT_PUBLIC_APP_NAME` | Display name of the app | ✅ |
 | `RESEND_API_KEY` | Resend API key for emails | ✅ |
 | `CRON_SECRET` | Secret for protected cron endpoints | ✅ |
+| `ANTHROPIC_API_KEY` | Server-side fallback for Claude when no admin-managed AI credential exists | optional |
+| `AI_SETTINGS_ENCRYPTION_KEY` | Server-side encryption material for admin-managed AI credentials | required for stored AI credentials |
 | `NEXT_PUBLIC_FEATURE_CONGRESS` | Enable Congress feature | optional |
 | `NEXT_PUBLIC_FEATURE_HUBS` | Enable Hubs feature | optional |
 | `NEXT_PUBLIC_FEATURE_PARTNERS` | Enable Partners feature | optional |
+| `NEXT_PUBLIC_FEATURE_AI` | Enable Sprint 14 AI UI and server calls | optional |
 
-> **Important:** `SUPABASE_SERVICE_ROLE_KEY` must be set as a **Server-side only** variable in Vercel — never expose it to the browser.
+> **Important:** `SUPABASE_SERVICE_ROLE_KEY`, `ANTHROPIC_API_KEY`, and `AI_SETTINGS_ENCRYPTION_KEY` must be set as **Server-side only** variables in Vercel where applicable. Never expose them to the browser.
 
 ### Supabase Auth Callback URL
 
