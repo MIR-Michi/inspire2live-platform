@@ -2,7 +2,7 @@
 
 > **Purpose:** Every environment variable explained — what it does, what breaks without it, where to get it.  
 > **Audience:** Developers, DevOps, anyone configuring a new environment.  
-> **Last reviewed:** 2026-02-24
+> **Last reviewed:** 2026-06-25
 
 ---
 
@@ -51,6 +51,22 @@
 
 **If missing:** Cron endpoints will reject requests (401). No impact on interactive features.
 
+### AI / Claude (Sprint 14)
+
+AI configuration is primarily managed from `/app/admin/ai` and stored in `public.ai_settings`. Environment variables remain necessary for bootstrap, fallback, and encrypted storage.
+
+| Variable | Scope | Required | Default | Description |
+|----------|-------|----------|---------|-------------|
+| `ANTHROPIC_API_KEY` | Server only | ❌ | — | Fallback Claude credential when no encrypted admin-managed credential exists in `ai_settings`. |
+| `AI_SETTINGS_ENCRYPTION_KEY` | Server only | ✅ when storing an admin-managed credential | — | Encryption material used by the server-side AI settings helper. Use a high-entropy value and keep stable across deployments. |
+| `NEXT_PUBLIC_FEATURE_AI` | Client + Server | ❌ | `false` | Feature flag for AI UI and server calls. Server code also checks `requireAiEnabled()`. |
+
+**If `ANTHROPIC_API_KEY` is missing:** AI calls still work if an encrypted credential is stored in Admin AI Settings. If neither is configured, AI calls fail with a configuration error.
+
+**If `AI_SETTINGS_ENCRYPTION_KEY` is missing:** Admins cannot store or decrypt the admin-managed credential. The environment fallback can still work.
+
+**If `NEXT_PUBLIC_FEATURE_AI` is false:** Product-facing AI capabilities remain hidden and server guarded. The admin connection test can still run for setup.
+
 ### WhatsApp Cloud API (Required for the Communications WhatsApp inbox)
 
 Powers the inbound webhook (`GET`/`POST /api/comms/whatsapp`) that captures
@@ -63,7 +79,7 @@ walkthrough.
 | `WHATSAPP_VERIFY_TOKEN` | Server only | ✅ (inbound) | — | A string you choose. Enter the **same** value in the Meta webhook config; Meta echoes it back during the `GET` verification handshake. |
 | `WHATSAPP_APP_SECRET` | Server only | ✅ (inbound) | — | Meta App secret (App Settings → Basic). Used to verify the `x-hub-signature-256` HMAC on every inbound `POST`. Preferred auth method. |
 | `WHATSAPP_WEBHOOK_SECRET` | Server only | ⚠️ Fallback | — | Shared secret checked against the `x-inspire2live-webhook-secret` header. Only used when `WHATSAPP_APP_SECRET` is unset (e.g. a relay/proxy that can't sign with the App secret). |
-| `WHATSAPP_ACCESS_TOKEN` | Server only | ✅ (outbound) | — | Graph API token (temporary 24h or long-lived System User token). **Never exposed to the browser.** Required to send replies. |
+| `WHATSAPP_ACCESS_TOKEN` | Server only | ✅ (outbound) | — | Graph API token (temporary 24h or System User (long-lived) token). **Never exposed to the browser.** Required to send replies. |
 | `WHATSAPP_PHONE_NUMBER_ID` | Server only | ✅ (outbound) | — | The sending phone number's ID, from WhatsApp → API Setup. |
 | `WHATSAPP_BUSINESS_ACCOUNT_ID` | Server only | ❌ | — | The WABA ID, from API Setup. Informational/reference today. |
 
@@ -81,6 +97,7 @@ configured"; inbound capture is unaffected.
 | `NEXT_PUBLIC_FEATURE_CONGRESS` | Client | ❌ | `false` | Show/hide Congress features in UI |
 | `NEXT_PUBLIC_FEATURE_HUBS` | Client | ❌ | `false` | Show/hide Hub Network features |
 | `NEXT_PUBLIC_FEATURE_PARTNERS` | Client | ❌ | `false` | Show/hide Partner Portal features |
+| `NEXT_PUBLIC_FEATURE_AI` | Client + Server | ❌ | `false` | Show/hide AI features and guard server-side AI calls |
 
 **If missing:** Features default to hidden. Safe.
 
@@ -97,6 +114,7 @@ SUPABASE_SERVICE_ROLE_KEY=<your-service-role-key>
 RESEND_API_KEY=re_...
 NEXT_PUBLIC_APP_URL=http://localhost:3000
 NEXT_PUBLIC_APP_NAME=Inspire2Live Platform (Dev)
+NEXT_PUBLIC_FEATURE_AI=false
 ```
 
 ### Vercel Production
@@ -111,6 +129,8 @@ All variables set in: **Vercel → Project → Settings → Environment Variable
 | `RESEND_API_KEY` | Production only | Production |
 | `NEXT_PUBLIC_APP_URL` | Production only | Production: `https://inspire2live-platform.vercel.app` |
 | `CRON_SECRET` | Production only | Production |
+| `ANTHROPIC_API_KEY` | Production only | Production fallback |
+| `AI_SETTINGS_ENCRYPTION_KEY` | Production only | Production |
 | `WHATSAPP_VERIFY_TOKEN` | Production only | Production |
 | `WHATSAPP_APP_SECRET` | Production only | Production |
 | `WHATSAPP_ACCESS_TOKEN` | Production only | Production |
@@ -130,6 +150,7 @@ These settings live outside the codebase but affect behavior:
 | **Supabase Redirect URLs** | Same page | Must include `{NEXT_PUBLIC_APP_URL}/auth/callback` |
 | **Resend Domain** | Resend Dashboard → Domains | Must match email sender domain |
 | **Vercel Domain** | Vercel → Domains | Must match `NEXT_PUBLIC_APP_URL` |
+| **AI Settings** | Platform Admin → AI Settings | Stores encrypted provider credential, default model, and default reasoning effort |
 
 ---
 
@@ -141,8 +162,11 @@ These settings live outside the codebase but affect behavior:
 | Auth redirects to `localhost` in production | `NEXT_PUBLIC_APP_URL` set to `localhost` OR Supabase Site URL not updated |
 | Magic links expire immediately | Supabase Site URL ≠ actual app URL |
 | Emails not sending | `RESEND_API_KEY` missing or invalid |
+| AI settings save fails | `AI_SETTINGS_ENCRYPTION_KEY` missing or not stable across deployments |
+| AI calls fail with configuration error | No encrypted admin-managed credential and no `ANTHROPIC_API_KEY` fallback |
+| AI UI is hidden | `NEXT_PUBLIC_FEATURE_AI` is unset or false |
 | Build works locally but fails on Vercel | Env var missing in Vercel (check all three scopes: Development, Preview, Production) |
 
 ---
 
-*Last updated: 2026-02-24 · Maintainer: Michael Wittinger*
+*Last updated: 2026-06-25 · Maintainer: Michael Wittinger*
