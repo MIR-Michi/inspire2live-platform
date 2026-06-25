@@ -69,6 +69,12 @@ export default async function AdminUsersPage() {
         </div>
         <div className="flex items-center gap-2">
           <a
+            href="/app/admin/ai"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            AI Settings
+          </a>
+          <a
             href="/app/admin/permissions"
             className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
           >
