@@ -259,15 +259,23 @@ function buildMessageRequest(input: RunAiMessageInput, config: AiConfig): Record
     request.thinking = { type: 'adaptive' }
     outputConfig.effort = config.effort
   }
-  if (input.structuredFormat) {
-    outputConfig.format = {
-      ...input.structuredFormat,
-      schema: sanitizeStructuredSchema(input.structuredFormat.schema),
-    }
-  }
+  if (input.structuredFormat) outputConfig.format = buildOutputFormat(input.structuredFormat)
   if (Object.keys(outputConfig).length > 0) request.output_config = outputConfig
 
   return request
+}
+
+/**
+ * Build the `output_config.format` payload. The provider only permits `type`
+ * and `schema` here — `name`/`description` on AiStructuredFormat are for our own
+ * documentation and must NOT be sent ("output_config.format.name: Extra inputs
+ * are not permitted"). The schema is also sanitized of unsupported keywords.
+ */
+export function buildOutputFormat(format: AiStructuredFormat): { type: string; schema: Record<string, unknown> } {
+  return {
+    type: format.type,
+    schema: sanitizeStructuredSchema(format.schema),
+  }
 }
 
 // Anthropic structured outputs accept only a subset of JSON Schema. Validation
