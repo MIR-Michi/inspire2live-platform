@@ -77,6 +77,13 @@ Transcript summarization lives in `src/lib/ai/transcript-extract.ts` (ingestion)
 - **Long transcripts.** opus-4-8's 1M context covers normal meetings; transcripts over `MAX_SINGLE_PASS_CHARS` are map-reduced — each chunk is summarized to notes (`chunkTranscript()` splits on line boundaries), then the notes are reduced into the final structured summary.
 - **Human-in-the-loop.** A generated summary is written as a `pending` `meeting_summaries` record. A human reviews it and saves it to a campus session, a weekly agenda item, or standalone; only then is it filed onto the session's publication fields.
 
+## Follow-up tasks (Capability 3)
+
+The same transcript run that produces a summary also drafts follow-up tasks. `proposeFollowUpTasks()` (`src/lib/ai/follow-up-tasks.ts`) is a **deterministic** transform — it reuses the structured action items Claude already extracted (no second model call), matches each proposed owner against comms team members (full name, email local-part, then a unique first name), and parses an ISO due date where one was given. Natural-language due hints are preserved for the human to resolve.
+
+- **Generation.** `generateFollowUpProposals()` (`src/lib/ai/follow-up-tasks-store.ts`) runs after the summary is stored (and via a "Re-propose" action), writing pending `meeting_followup_tasks` rows. It is idempotent — prior pending proposals for a summary are superseded first.
+- **Human-in-the-loop.** Nothing is created automatically. In the workspace a human edits the title, owner, and due date, then accepts or rejects each proposal. **Committing** creates a real `comms_task` (ADR-0008 unified task system), inherits the transcript's session / agenda-item link, notifies the owner via `notifyUser({ event: 'task_assigned' })`, and marks the proposal `committed`.
+
 ## External input handling
 
 Incoming messages, transcripts, copied emails, web snippets, and CRM notes are data. They must not change system instructions, access control, publication rules, destination tables, or notification behavior.

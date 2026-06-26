@@ -3,8 +3,10 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
+import { loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { TranscriptUploadForm } from '@/components/comms/transcript-upload-form'
 import { TranscriptCard, type TranscriptCardData } from '@/components/comms/transcript-card'
+import type { FollowUpProposal } from '@/components/comms/follow-up-tasks-panel'
 
 type CampusSessionOption = { id: string; label: string }
 type AgendaItemOption = { id: string; label: string }
@@ -33,15 +35,41 @@ export default async function CommsTranscriptsPage() {
     }
   }
 
-  const [transcriptsRes, summariesRes, sessionsRes, agendaRes] = await Promise.all([
+  const [transcriptsRes, summariesRes, sessionsRes, agendaRes, proposalsRes, owners] = await Promise.all([
     db.from('meeting_transcripts').select('id, title, source_filename, source_format, storage_path, raw_deleted_at, campus_session_id, agenda_item_id, extracted_text, created_at').order('created_at', { ascending: false }),
     db.from('meeting_summaries').select('id, transcript_id, tldr, decisions, action_items, publication_blurb, status, chunked, model, created_at').order('created_at', { ascending: false }),
     db.from('campus_sessions').select('id, session_date, theme').order('session_date', { ascending: false }),
     db.from('comms_weekly_agenda_items').select('id, title, meeting_date').order('meeting_date', { ascending: false }),
+    db.from('meeting_followup_tasks').select('id, summary_id, transcript_id, title, description, proposed_owner_id, proposed_owner_label, owner_match, due_date, raw_owner, raw_due, status, created_at').order('created_at', { ascending: true }),
+    loadCommsTeamMembers(supabase),
   ])
 
   const transcriptRows = (transcriptsRes.data ?? []) as Array<Record<string, unknown>>
   const summaryRows = (summariesRes.data ?? []) as Array<Record<string, unknown>>
+  const proposalRows = (proposalsRes.data ?? []) as Array<Record<string, unknown>>
+
+  const ownerOptions = owners.map((member) => ({ id: member.id, label: member.label }))
+
+  // Group non-superseded proposals by the summary they belong to.
+  const proposalsBySummary = new Map<string, FollowUpProposal[]>()
+  for (const row of proposalRows) {
+    if (String(row.status) === 'superseded') continue
+    const summaryId = String(row.summary_id)
+    const list = proposalsBySummary.get(summaryId) ?? []
+    list.push({
+      id: String(row.id),
+      title: String(row.title ?? ''),
+      description: (row.description as string | null) ?? null,
+      proposedOwnerId: (row.proposed_owner_id as string | null) ?? null,
+      proposedOwnerLabel: (row.proposed_owner_label as string | null) ?? null,
+      ownerMatch: row.owner_match === 'matched' ? 'matched' : 'unmatched',
+      dueDate: (row.due_date as string | null) ?? null,
+      rawOwner: (row.raw_owner as string | null) ?? null,
+      rawDue: (row.raw_due as string | null) ?? null,
+      status: String(row.status),
+    })
+    proposalsBySummary.set(summaryId, list)
+  }
 
   const campusSessions: CampusSessionOption[] = ((sessionsRes.data ?? []) as Array<{ id: string; session_date: string; theme: string | null }>).map((s) => ({
     id: s.id,
@@ -86,6 +114,7 @@ export default async function CommsTranscriptsPage() {
             model: (summary.model as string | null) ?? null,
           }
         : null,
+      followUpProposals: summary ? proposalsBySummary.get(String(summary.id)) ?? [] : [],
     }
   })
 
@@ -124,6 +153,7 @@ export default async function CommsTranscriptsPage() {
               transcript={transcript}
               campusSessions={campusSessions}
               agendaItems={agendaItems}
+              owners={ownerOptions}
               aiEnabled={aiEnabled}
             />
           ))
