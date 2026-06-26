@@ -6,7 +6,12 @@ import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard
 import { TeamDashboard } from '@/components/comms/team-dashboard'
 import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-data'
 import { loadCommsTeamDashboardData } from '@/lib/comms-dashboard-data'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { getRunStatus } from '@/lib/ai/org-newsfeed-run'
 import type { EventScopeFilter } from '@/lib/comms-event-pipeline'
+
+// The "Refresh now" server action runs the web-search newsfeed job inline.
+export const maxDuration = 300
 
 const VALID_VIEWS = new Set(['personal', 'team'])
 const VALID_SCOPES = new Set<EventScopeFilter>(['all', 'i2l', 'networking', 'past'])
@@ -52,6 +57,7 @@ export default async function CommsDashboardPage({
         <TeamDashboard
           data={await loadCommsTeamDashboardData(supabase, { scopeFilter: scope })}
           canApprove={profile?.role === 'PlatformAdmin'}
+          newsfeedRunStatus={await getRunStatus(createAdminClient()).catch(() => null)}
         />
       )}
     </div>

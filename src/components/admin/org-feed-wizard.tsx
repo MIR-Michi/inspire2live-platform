@@ -3,10 +3,10 @@
 import { useMemo, useState, useTransition } from 'react'
 import {
   saveOrgFeedConfig,
-  runNewsfeedNow,
   type OrgFeedActionState,
 } from '@/app/app/admin/org-feed/actions'
-import { normalizeDomain } from '@/lib/ai/org-feed-config'
+import { useOrgNewsfeedRun } from '@/components/comms/use-org-newsfeed-run'
+import { normalizeDomain, type OrgNewsfeedRunStatus } from '@/lib/ai/org-feed-config'
 import {
   ALL_SUGGESTED_SOURCES,
   ALL_SUGGESTED_THEMES,
@@ -50,12 +50,14 @@ export function OrgFeedWizard({
   itemCount,
   lastUpdated,
   aiEnabled,
+  initialRunStatus,
 }: {
   initialConfig: InitialConfig
   isConfigured: boolean
   itemCount: number
   lastUpdated: string | null
   aiEnabled: boolean
+  initialRunStatus: OrgNewsfeedRunStatus | null
 }) {
   // Reconcile stored values against the catalog so existing configs (incl. ones
   // made with the old free-text form) round-trip into checkboxes + custom chips.
@@ -85,34 +87,44 @@ export function OrgFeedWizard({
   const [watchPeople, setWatchPeople] = useState<string[]>(initialConfig.watchPeople)
 
   const [state, setState] = useState<OrgFeedActionState>(INITIAL_STATE)
-  const [pending, startTransition] = useTransition()
+  const [savePending, startSave] = useTransition()
+  // Generation runs in the background; the hook polls until it finishes.
+  const run = useOrgNewsfeedRun(initialRunStatus)
+  const busy = savePending || run.busy
 
   const allThemes = [...themes, ...customThemes]
   const allTopics = [...topics, ...customTopics]
   const allSources = [...sources, ...customSources]
   const hasFocus = allThemes.length > 0 || allTopics.length > 0 || watchOrganization || watchCrmInternal || watchPeople.length > 0
 
+  const buildPayload = () => ({
+    themes: allThemes,
+    topics: allTopics,
+    allowedSources: allSources,
+    blockedSources: blocked,
+    region,
+    cadence,
+    enabled,
+    watchOrganization,
+    organizationAliases: orgAliases,
+    watchCrmInternal,
+    watchPeople,
+  })
+
   const save = () => {
-    startTransition(async () => {
-      const result = await saveOrgFeedConfig({
-        themes: allThemes,
-        topics: allTopics,
-        allowedSources: allSources,
-        blockedSources: blocked,
-        region,
-        cadence,
-        enabled,
-        watchOrganization,
-        organizationAliases: orgAliases,
-        watchCrmInternal,
-        watchPeople,
-      })
-      setState(result)
-    })
+    setState(INITIAL_STATE)
+    startSave(async () => setState(await saveOrgFeedConfig(buildPayload())))
   }
 
+  // "Save & run": persist the on-screen selections, then kick off the
+  // background run. The hook polls until it finishes and refreshes the data.
   const runNow = () => {
-    startTransition(async () => setState(await runNewsfeedNow()))
+    setState(INITIAL_STATE)
+    run.start(async () => {
+      const saved = await saveOrgFeedConfig(buildPayload())
+      if (!saved.ok) { setState(saved); return false }
+      return true
+    })
   }
 
   return (
@@ -299,14 +311,22 @@ export function OrgFeedWizard({
             )}
 
             <div className="flex flex-wrap items-center gap-3 border-t border-neutral-100 pt-4">
-              <button type="button" onClick={runNow} disabled={pending || !aiEnabled} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50" title={aiEnabled ? 'Save first, then run the web-search job now' : 'AI features are disabled'}>
-                {pending ? 'Working…' : 'Run now'}
+              <button type="button" onClick={runNow} disabled={busy || !aiEnabled} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50" title={aiEnabled ? 'Saves your current setup, then runs the web-search job in the background' : 'AI features are disabled'}>
+                {run.starting ? 'Starting…' : run.running ? `Generating… ${run.elapsed}s` : 'Save & run now'}
               </button>
               <span className="text-xs text-neutral-500">
                 {itemCount} item{itemCount === 1 ? '' : 's'} in the feed
                 {lastUpdated ? ` · updated ${new Date(lastUpdated).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
               </span>
             </div>
+            {run.running && (
+              <p className="text-xs text-neutral-500">
+                Saved. Generating in the background — searching the web and compiling cited items (usually 1–3 minutes). You can leave this page; items appear when it finishes.
+              </p>
+            )}
+            {!run.busy && run.message && (
+              <p className={`text-xs ${run.status === 'error' ? 'text-red-700' : 'text-emerald-700'}`}>{run.message}</p>
+            )}
           </Section>
         )}
 
@@ -325,8 +345,8 @@ export function OrgFeedWizard({
                 Next →
               </button>
             )}
-            <button type="button" onClick={save} disabled={pending} className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-400">
-              {pending ? 'Saving…' : isConfigured ? 'Save changes' : 'Save configuration'}
+            <button type="button" onClick={save} disabled={busy} className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-400">
+              {savePending ? 'Saving…' : isConfigured ? 'Save changes' : 'Save configuration'}
             </button>
           </div>
         </div>

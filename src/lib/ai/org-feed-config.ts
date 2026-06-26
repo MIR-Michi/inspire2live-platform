@@ -8,6 +8,16 @@
 
 export type OrgFeedCadence = 'daily' | 'weekly' | 'monthly'
 
+export type OrgNewsfeedRunState = 'idle' | 'running' | 'success' | 'error'
+
+export type OrgNewsfeedRunStatus = {
+  status: OrgNewsfeedRunState
+  message: string | null
+  startedAt: string | null
+  finishedAt: string | null
+  inserted: number | null
+}
+
 export type OrgFeedConfig = {
   topics: string[]
   themes: string[]

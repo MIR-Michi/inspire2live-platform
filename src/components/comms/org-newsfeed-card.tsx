@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
 import Link from 'next/link'
-import { refreshOrgNewsfeed, type NewsfeedActionState } from '@/app/app/comms/dashboard/newsfeed-actions'
+import { useOrgNewsfeedRun } from '@/components/comms/use-org-newsfeed-run'
 import type { OrgNewsItem } from '@/lib/comms-dashboard-data'
+import type { OrgNewsfeedRunStatus } from '@/lib/ai/org-feed-config'
 
 const CATEGORY_META: Record<string, { label: string; color: string }> = {
   medical: { label: 'Medical', color: 'bg-blue-100 text-blue-700' },
@@ -16,8 +16,6 @@ const CATEGORY_META: Record<string, { label: string; color: string }> = {
   other: { label: 'News', color: 'bg-neutral-100 text-neutral-700' },
 }
 
-const INITIAL_STATE: NewsfeedActionState = { ok: false }
-
 function formatDate(value: string | null) {
   if (!value) return ''
   return new Date(value).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })
@@ -27,17 +25,14 @@ export function OrgNewsfeedCard({
   items,
   isAdmin,
   aiEnabled,
+  initialRunStatus,
 }: {
   items: OrgNewsItem[]
   isAdmin: boolean
   aiEnabled: boolean
+  initialRunStatus: OrgNewsfeedRunStatus | null
 }) {
-  const [state, setState] = useState<NewsfeedActionState>(INITIAL_STATE)
-  const [pending, startTransition] = useTransition()
-
-  const onRefresh = () => {
-    startTransition(async () => setState(await refreshOrgNewsfeed(INITIAL_STATE)))
-  }
+  const { running, starting, busy, elapsed, message, status, start } = useOrgNewsfeedRun(initialRunStatus)
 
   return (
     <div className="space-y-3">
@@ -51,18 +46,25 @@ export function OrgNewsfeedCard({
           </Link>
           <button
             type="button"
-            onClick={onRefresh}
-            disabled={pending || !aiEnabled}
+            onClick={() => start()}
+            disabled={busy || !aiEnabled}
             className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-400"
-            title={aiEnabled ? 'Run the web-search job now' : 'AI features are disabled'}
+            title={aiEnabled ? 'Run the web-search job in the background' : 'AI features are disabled'}
           >
-            {pending ? 'Refreshing…' : 'Refresh now'}
+            {starting ? 'Starting…' : running ? `Generating… ${elapsed}s` : 'Refresh now'}
           </button>
         </div>
       )}
 
-      {(state.error || state.message) && (
-        <p className={`text-xs ${state.ok ? 'text-emerald-700' : 'text-red-700'}`}>{state.ok ? state.message : state.error}</p>
+      {/* A run started by anyone is visible to the whole team. */}
+      {running && (
+        <p className="text-xs text-neutral-500">
+          Updating the feed in the background — searching the web and compiling cited items (usually 1–3 minutes). You can leave this page; items appear when it finishes.
+        </p>
+      )}
+
+      {!busy && message && (
+        <p className={`text-xs ${status === 'error' ? 'text-red-700' : 'text-emerald-700'}`}>{message}</p>
       )}
 
       <div className="space-y-2">

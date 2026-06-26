@@ -195,9 +195,12 @@ export async function runAiMessage<T = string>(input: RunAiMessageInput): Promis
 
   const client = getAnthropicClient(config.apiKey, timeoutMs)
   const request = buildMessageRequest(input, config)
+  // Cap retries for long calls so a slow request can't retry-compound past the
+  // serverless duration limit (SDK default is 2).
+  const requestOptions = input.retries !== undefined ? { maxRetries: input.retries } : undefined
 
   try {
-    const rawResponse = await client.messages.create(request as never)
+    const rawResponse = await client.messages.create(request as never, requestOptions)
     const usage = usageFromResponse(rawResponse, config.model, Date.now() - startedAt)
     await logAiUsage({ input, config, usage, success: true })
     return {
