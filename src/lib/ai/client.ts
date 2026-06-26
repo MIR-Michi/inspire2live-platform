@@ -233,11 +233,16 @@ function buildMessageRequest(input: RunAiMessageInput, config: AiConfig): Record
     max_tokens: input.maxTokens ?? 1024,
     messages: input.messages,
   }
+  const outputConfig: Record<string, unknown> = {}
 
   if (input.system) request.system = input.system
   if (typeof input.temperature === 'number') request.temperature = input.temperature
-  if (config.effort !== 'none') request.thinking = { type: 'adaptive', effort: config.effort }
-  if (input.structuredFormat) request.output_config = { format: input.structuredFormat }
+  if (config.effort !== 'none') {
+    request.thinking = { type: 'adaptive' }
+    outputConfig.effort = config.effort
+  }
+  if (input.structuredFormat) outputConfig.format = input.structuredFormat
+  if (Object.keys(outputConfig).length > 0) request.output_config = outputConfig
 
   return request
 }
