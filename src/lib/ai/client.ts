@@ -259,10 +259,60 @@ function buildMessageRequest(input: RunAiMessageInput, config: AiConfig): Record
     request.thinking = { type: 'adaptive' }
     outputConfig.effort = config.effort
   }
-  if (input.structuredFormat) outputConfig.format = input.structuredFormat
+  if (input.structuredFormat) {
+    outputConfig.format = {
+      ...input.structuredFormat,
+      schema: sanitizeStructuredSchema(input.structuredFormat.schema),
+    }
+  }
   if (Object.keys(outputConfig).length > 0) request.output_config = outputConfig
 
   return request
+}
+
+// Anthropic structured outputs accept only a subset of JSON Schema. Validation
+// keywords like `maxItems`/`minLength`/`minimum` are rejected
+// ("For 'array' type, property 'maxItems' is not supported"). We keep them in
+// our local schemas (and re-validate the parsed output ourselves), but strip
+// them from the schema actually sent to the provider.
+const UNSUPPORTED_SCHEMA_KEYS = new Set([
+  'minItems',
+  'maxItems',
+  'uniqueItems',
+  'minLength',
+  'maxLength',
+  'pattern',
+  'format',
+  'minimum',
+  'maximum',
+  'exclusiveMinimum',
+  'exclusiveMaximum',
+  'multipleOf',
+  'minProperties',
+  'maxProperties',
+])
+
+export function sanitizeStructuredSchema<T>(schema: T): T {
+  if (Array.isArray(schema)) return schema.map((entry) => sanitizeStructuredSchema(entry)) as unknown as T
+  if (schema && typeof schema === 'object') {
+    const out: Record<string, unknown> = {}
+    for (const [key, value] of Object.entries(schema as Record<string, unknown>)) {
+      if (UNSUPPORTED_SCHEMA_KEYS.has(key)) continue
+      // `properties` keys are arbitrary field names — never treat them as
+      // schema keywords; only sanitize each field's nested schema.
+      if (key === 'properties' && value && typeof value === 'object' && !Array.isArray(value)) {
+        const props: Record<string, unknown> = {}
+        for (const [propName, propSchema] of Object.entries(value as Record<string, unknown>)) {
+          props[propName] = sanitizeStructuredSchema(propSchema)
+        }
+        out[key] = props
+      } else {
+        out[key] = sanitizeStructuredSchema(value)
+      }
+    }
+    return out as T
+  }
+  return schema
 }
 
 function usageFromResponse(rawResponse: unknown, model: AiModelId, latencyMs: number): AiUsage {
