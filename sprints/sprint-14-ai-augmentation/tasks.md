@@ -41,10 +41,10 @@ Theme: Claude-powered comms intelligence. Status values: `Not Started` · `In Pr
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S14-T16 | `org_feed_config` (single admin-owned record: topics, themes, allowed/blocked sources, region, cadence) + `news_feed_items` migration (headline, summary, category, region, source_url, relevance, published_at) + RLS (admin writes config; all stakeholders read items) | TBD | Not Started | `source_url` mandatory — citations |
-| S14-T17 | Platform Admin UI to edit `org_feed_config` (alongside the AI settings page); validate domains/topics | TBD | Not Started | Admin-only; gated by platform role |
-| S14-T18 | `generateOrgNewsfeed()` — web-search tool + structured output driven by `org_feed_config`; tailored to I2L themes + active initiatives; dedupe against existing items; prompt-cache the config prefix | TBD | Not Started | Citations stored as `source_url` |
-| S14-T19 | `CRON_SECRET`-protected `/api/comms/newsfeed` route + `vercel.json` cron; render org items in the dashboard "Field Newsfeed" card for all stakeholders | TBD | Not Started | Mirrors `api/comms/digest` auth pattern |
+| S14-T16 | `org_feed_config` (single admin-owned record: topics, themes, allowed/blocked sources, region, cadence) + `news_feed_items` migration (headline, summary, category, region, source_url, relevance, published_at) + RLS (admin writes config; all stakeholders read items) | Opus 4.8 | Completed | Added `00080_org_news_feed.sql`; `source_url` mandatory + unique (dedupe); config admin-only RLS, items readable by all authenticated |
+| S14-T17 | Platform Admin UI to edit `org_feed_config` (alongside the AI settings page); validate domains/topics | Opus 4.8 | Completed | Added `/app/admin/org-feed` page + actions (linked from AI Settings / User Management); `validateOrgFeedConfig()` parses topics/themes and validates+normalizes domains; "Run now" button |
+| S14-T18 | `generateOrgNewsfeed()` — web-search tool + structured output driven by `org_feed_config`; tailored to I2L themes + active initiatives; dedupe against existing items; prompt-cache the config prefix | Opus 4.8 | Completed | Added `src/lib/ai/org-newsfeed.ts` using the web-search tool (`web_search_20260209`, domain-scoped) + structured output; wrapper extended with `tools`/`cacheSystemPrompt`; blocked-domain re-enforcement, URL-normalized dedupe, citations as `source_url` |
+| S14-T19 | `CRON_SECRET`-protected `/api/comms/newsfeed` route + `vercel.json` cron; render org items in the dashboard "Field Newsfeed" card for all stakeholders | Opus 4.8 | Completed | Added `GET /api/comms/newsfeed` (mirrors digest auth) + daily `vercel.json` cron + shared `runOrgNewsfeedJob` (upsert-on-`source_url`); dashboard Field Newsfeed card now reads `news_feed_items` with source-linked headlines |
 
 ## Capability 5 — Per-user net monitoring
 
