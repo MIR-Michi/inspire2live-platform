@@ -18,9 +18,9 @@ Theme: Claude-powered comms intelligence. Status values: `Not Started` · `In Pr
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S14-T08 | `structureIntakeItem()` — Claude classifies + extracts (content type, summary, entities, suggested channel/action, founder signal) via a Zod schema; `raw_content` wrapped as untrusted data | TBD | Not Started | Reuses `IntakeContentType` from `comms-workflow` |
-| S14-T09 | Wire into intake review UI as a reviewable suggestion; keep `comms-classifier.ts` as deterministic fast-path/fallback; human confirms before routing | TBD | Not Started | Augment, don't replace, the rule engine |
-| S14-T10 | Batch backfill script for historical `intake_items` via the Batch API (50% cost); idempotent, resumable | TBD | Not Started | Non-latency-sensitive — batch, not live |
+| S14-T08 | `structureIntakeItem()` — Claude classifies + extracts (content type, summary, entities, suggested channel/action, founder signal) via a Zod schema; `raw_content` wrapped as untrusted data | GPT-5.5 | Completed | Added schema-constrained `structureIntakeItem()` with runtime validation, untrusted external-data wrappers, deterministic fallback, and reuse of `IntakeContentType` taxonomy |
+| S14-T09 | Wire into intake review UI as a reviewable suggestion; keep `comms-classifier.ts` as deterministic fast-path/fallback; human confirms before routing | GPT-5.5 | Completed | Added pending `intake_ai_suggestions`, server actions, and intake queue review panel; applying a suggestion updates classification only, and routing still requires human confirmation |
+| S14-T10 | Batch backfill script for historical `intake_items` via the Batch API (50% cost); idempotent, resumable | GPT-5.5 | Completed | Added `scripts/backfill-intake-ai-suggestions.mjs` with create and ingest modes; skips items that already have pending or applied suggestions |
 
 ## Capability 2 — Summarize meetings from a transcript
 
