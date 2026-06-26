@@ -6,9 +6,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runOrgNewsfeedJob } from './org-newsfeed-job'
 import type { OrgNewsfeedRunStatus } from './org-feed-config'
 
-// A run is considered stale (crashed/abandoned) after this long, so a new one
-// can start instead of being blocked forever by a 'running' flag.
-const STALE_RUN_MS = 8 * 60 * 1000
+// A run is considered stale once it has been 'running' longer than the
+// serverless function could possibly live (300s cap + buffer). Past this the
+// background job was killed without recording a result, so we surface it as a
+// timeout and allow a new run.
+const STALE_RUN_MS = 330 * 1000
 
 type StatusRow = {
   last_run_status: string | null
@@ -44,7 +46,18 @@ export async function getRunStatus(supabase: SupabaseClient<Database>): Promise<
   const db = supabase as unknown as LooseDb
   const { data } = await db.from('org_feed_config').select(STATUS_COLUMNS).eq('singleton', true).maybeSingle()
   if (!data) return null
-  return rowToStatus(data)
+  const status = rowToStatus(data)
+
+  // A run still 'running' past the function's max lifetime was killed before it
+  // could record a result — surface it as a timeout so the UI stops polling.
+  if (status.status === 'running' && status.startedAt) {
+    const age = Date.now() - new Date(status.startedAt).getTime()
+    if (age > STALE_RUN_MS) {
+      return { ...status, status: 'error', message: 'The previous run was interrupted before finishing (it took too long). Try running it again.' }
+    }
+  }
+
+  return status
 }
 
 /**
@@ -97,11 +110,22 @@ export async function executeAndRecordRun(userId: string | null): Promise<void> 
     const result = await runOrgNewsfeedJob(admin, { createdBy: userId, force: true })
     if (result.skipped === 'no_config') {
       await finish('error', 'No configuration to run.', null)
+    } else if (result.inserted > 0) {
+      await finish('success', `Added ${result.inserted} new item${result.inserted === 1 ? '' : 's'} (from ${result.generated} found).`, result.inserted)
     } else {
-      const message = result.inserted > 0
-        ? `Added ${result.inserted} new item${result.inserted === 1 ? '' : 's'} (from ${result.generated} found).`
-        : 'Ran successfully — no new items found this time.'
-      await finish('success', message, result.inserted)
+      // No items: explain where it stopped so a dry run is diagnosable.
+      const candidates = result.candidates ?? 0
+      let why: string
+      if (candidates === 0) {
+        why = result.outputWasJson === false
+          ? 'the model did not return structured results (no items).'
+          : 'the web search returned no usable items — try broadening topics/region or removing narrow source restrictions.'
+      } else if ((result.validated ?? 0) === 0) {
+        why = `the model returned ${candidates} item(s) but none had a usable source link.`
+      } else {
+        why = `found ${candidates} item(s), but all were already in the feed (duplicates).`
+      }
+      await finish('success', `No new items added — ${why}`, 0)
     }
   } catch (error) {
     await finish('error', error instanceof Error ? error.message : 'Newsfeed run failed.', null)

@@ -234,7 +234,7 @@ export function OrgFeedWizard({
         )}
 
         {step === 3 && (
-          <Section title="Trusted sources" hint="Optionally limit the search to reputable domains, and block ones you never want. Leave allowed empty to search the whole web.">
+          <Section title="Trusted sources" hint="Preferred domains nudge the search toward reputable sources (it still searches the whole web). Blocked domains are excluded entirely. Tip: don't add search engines like google.com here.">
             <p className="text-xs font-semibold text-neutral-700">Preferred sources</p>
             <div className="flex flex-wrap gap-1.5">
               {SUGGESTED_SOURCES.map((s) => (
