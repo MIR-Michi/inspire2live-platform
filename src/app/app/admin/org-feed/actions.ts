@@ -21,6 +21,10 @@ export type OrgFeedConfigInput = {
   region: string
   cadence: string
   enabled: boolean
+  watchOrganization: boolean
+  organizationAliases: string[]
+  watchCrmInternal: boolean
+  watchPeople: string[]
 }
 
 async function requirePlatformAdmin(): Promise<{ id: string } | null> {
@@ -47,6 +51,10 @@ export async function saveOrgFeedConfig(input: OrgFeedConfigInput): Promise<OrgF
       region: input.region,
       cadence: input.cadence,
       enabled: input.enabled,
+      watchOrganization: input.watchOrganization,
+      organizationAliases: input.organizationAliases.join('\n'),
+      watchCrmInternal: input.watchCrmInternal,
+      watchPeople: input.watchPeople.join('\n'),
     })
     if (!validation.ok) return { ok: false, error: validation.errors.join(' ') }
 
@@ -66,6 +74,10 @@ export async function saveOrgFeedConfig(input: OrgFeedConfigInput): Promise<OrgF
         region: validation.config.region,
         cadence: validation.config.cadence,
         enabled: validation.config.enabled,
+        watch_organization: validation.config.watchOrganization,
+        organization_aliases: validation.config.organizationAliases,
+        watch_crm_internal: validation.config.watchCrmInternal,
+        watch_people: validation.config.watchPeople,
         updated_by: user.id,
         updated_at: new Date().toISOString(),
       },

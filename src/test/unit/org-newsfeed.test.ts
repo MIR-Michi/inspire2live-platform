@@ -33,6 +33,22 @@ describe('buildNewsfeedSystemPrompt', () => {
     expect(prompt).toContain('tabloid.com')
     expect(prompt).toContain('mandatory citation')
   })
+
+  it('adds a mention-monitoring section for watched entities', () => {
+    const prompt = buildNewsfeedSystemPrompt(DEFAULT_ORG_FEED_CONFIG, {
+      organizations: ['Inspire2Live'],
+      people: ['Peter Kapitein'],
+    })
+    expect(prompt).toContain('Mention monitoring')
+    expect(prompt).toContain('Inspire2Live')
+    expect(prompt).toContain('Peter Kapitein')
+    expect(prompt).toContain('mentionOf')
+  })
+
+  it('omits the mention section when nothing is watched', () => {
+    const prompt = buildNewsfeedSystemPrompt(DEFAULT_ORG_FEED_CONFIG)
+    expect(prompt).not.toContain('Mention monitoring')
+  })
 })
 
 describe('normalizeUrl', () => {
@@ -86,6 +102,7 @@ describe('dedupeNewsItems', () => {
     sourceName: null,
     relevance: 50,
     publishedAt: null,
+    mentionOf: null,
   })
 
   it('drops items already stored and repeats within the batch', () => {

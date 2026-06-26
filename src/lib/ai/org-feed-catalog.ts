@@ -60,6 +60,9 @@ export const SUGGESTED_REGIONS: string[] = [
   'Latin America',
 ]
 
+/** Suggested individuals to monitor for public mentions (quick-add in the wizard). */
+export const SUGGESTED_PEOPLE: string[] = ['Peter Kapitein']
+
 export const CADENCE_OPTIONS: Array<{ value: 'daily' | 'weekly' | 'monthly'; label: string; description: string }> = [
   { value: 'daily', label: 'Daily', description: 'Fresh items every day — best for fast-moving topics.' },
   { value: 'weekly', label: 'Weekly', description: 'A weekly digest — a balanced default.' },

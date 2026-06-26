@@ -13,6 +13,10 @@ type OrgFeedConfigRow = {
   region: string | null
   cadence: string | null
   enabled: boolean | null
+  watch_organization: boolean | null
+  organization_aliases: string[] | null
+  watch_crm_internal: boolean | null
+  watch_people: string[] | null
   updated_at: string | null
 }
 
@@ -38,7 +42,7 @@ export default async function AdminOrgFeedPage() {
   }
 
   const [{ data: config }, { count }] = await Promise.all([
-    admin.from('org_feed_config').select('topics, themes, allowed_sources, blocked_sources, region, cadence, enabled, updated_at').eq('singleton', true).maybeSingle(),
+    admin.from('org_feed_config').select('topics, themes, allowed_sources, blocked_sources, region, cadence, enabled, watch_organization, organization_aliases, watch_crm_internal, watch_people, updated_at').eq('singleton', true).maybeSingle(),
     admin.from('news_feed_items').select('id', { count: 'exact', head: true }),
   ])
 
@@ -50,6 +54,10 @@ export default async function AdminOrgFeedPage() {
     region: config?.region ?? null,
     cadence: config?.cadence ?? DEFAULT_ORG_FEED_CONFIG.cadence,
     enabled: config?.enabled ?? DEFAULT_ORG_FEED_CONFIG.enabled,
+    watchOrganization: config?.watch_organization ?? DEFAULT_ORG_FEED_CONFIG.watchOrganization,
+    organizationAliases: config?.organization_aliases ?? DEFAULT_ORG_FEED_CONFIG.organizationAliases,
+    watchCrmInternal: config?.watch_crm_internal ?? DEFAULT_ORG_FEED_CONFIG.watchCrmInternal,
+    watchPeople: config?.watch_people ?? DEFAULT_ORG_FEED_CONFIG.watchPeople,
   }
 
   return (

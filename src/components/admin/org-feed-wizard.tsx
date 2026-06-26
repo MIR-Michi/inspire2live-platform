@@ -12,6 +12,7 @@ import {
   ALL_SUGGESTED_THEMES,
   ALL_SUGGESTED_TOPICS,
   CADENCE_OPTIONS,
+  SUGGESTED_PEOPLE,
   SUGGESTED_REGIONS,
   SUGGESTED_SOURCES,
   SUGGESTED_THEMES,
@@ -27,9 +28,13 @@ type InitialConfig = {
   region: string | null
   cadence: string
   enabled: boolean
+  watchOrganization: boolean
+  organizationAliases: string[]
+  watchCrmInternal: boolean
+  watchPeople: string[]
 }
 
-const STEPS = ['Themes', 'Topics', 'Sources', 'Scope', 'Review'] as const
+const STEPS = ['Themes', 'Topics', 'Mentions', 'Sources', 'Scope', 'Review'] as const
 const INITIAL_STATE: OrgFeedActionState = { ok: false }
 
 function toggle(set: Set<string>, value: string): Set<string> {
@@ -73,13 +78,19 @@ export function OrgFeedWizard({
   const [cadence, setCadence] = useState<string>(initialConfig.cadence || 'weekly')
   const [enabled, setEnabled] = useState<boolean>(initialConfig.enabled)
 
+  // Mention monitoring.
+  const [watchOrganization, setWatchOrganization] = useState<boolean>(initialConfig.watchOrganization)
+  const [orgAliases, setOrgAliases] = useState<string[]>(initialConfig.organizationAliases.length > 0 ? initialConfig.organizationAliases : ['Inspire2Live'])
+  const [watchCrmInternal, setWatchCrmInternal] = useState<boolean>(initialConfig.watchCrmInternal)
+  const [watchPeople, setWatchPeople] = useState<string[]>(initialConfig.watchPeople)
+
   const [state, setState] = useState<OrgFeedActionState>(INITIAL_STATE)
   const [pending, startTransition] = useTransition()
 
   const allThemes = [...themes, ...customThemes]
   const allTopics = [...topics, ...customTopics]
   const allSources = [...sources, ...customSources]
-  const hasFocus = allThemes.length > 0 || allTopics.length > 0
+  const hasFocus = allThemes.length > 0 || allTopics.length > 0 || watchOrganization || watchCrmInternal || watchPeople.length > 0
 
   const save = () => {
     startTransition(async () => {
@@ -91,6 +102,10 @@ export function OrgFeedWizard({
         region,
         cadence,
         enabled,
+        watchOrganization,
+        organizationAliases: orgAliases,
+        watchCrmInternal,
+        watchPeople,
       })
       setState(result)
     })
@@ -106,7 +121,7 @@ export function OrgFeedWizard({
       <div className="flex flex-wrap gap-1 border-b border-neutral-100 bg-neutral-50/60 px-3 py-3">
         {STEPS.map((label, i) => {
           const active = i === step
-          const done = stepHasContent(i, { allThemes, allTopics, allSources, blocked, region, cadence })
+          const done = stepHasContent(i, { allThemes, allTopics, allSources, blocked, region, cadence, watchOrganization, watchCrmInternal, watchPeople })
           return (
             <button
               key={label}
@@ -162,6 +177,51 @@ export function OrgFeedWizard({
         )}
 
         {step === 2 && (
+          <Section title="People & mentions" hint="Also monitor recent public mentions of Inspire2Live and its people — across news, articles, press, and public social media.">
+            <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-neutral-200 p-3">
+              <input type="checkbox" checked={watchOrganization} onChange={(e) => setWatchOrganization(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-neutral-300" />
+              <span>
+                <span className="text-sm font-semibold text-neutral-900">Monitor Inspire2Live mentions</span>
+                <span className="block text-xs text-neutral-500">Surface coverage and posts that mention the organization by name.</span>
+              </span>
+            </label>
+            {watchOrganization && (
+              <div className="space-y-2 pl-6">
+                <p className="text-xs font-semibold text-neutral-700">Names & aliases to match</p>
+                <CustomAdder label="Add an alias" placeholder="e.g. Inspire to Live" existing={orgAliases} onAdd={(v) => setOrgAliases((a) => [...a, v])} />
+                <ChipRow values={orgAliases} onRemove={(v) => setOrgAliases((a) => a.filter((x) => x !== v))} tone="custom" />
+              </div>
+            )}
+
+            <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-neutral-200 p-3">
+              <input type="checkbox" checked={watchCrmInternal} onChange={(e) => setWatchCrmInternal(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-neutral-300" />
+              <span>
+                <span className="text-sm font-semibold text-neutral-900">Include the Inspire2Live team from the CRM</span>
+                <span className="block text-xs text-neutral-500">Everyone with an <code>@inspire2live.org</code> email in the platform/CRM is added to mention monitoring — resolved automatically on each run.</span>
+              </span>
+            </label>
+
+            <div>
+              <p className="text-xs font-semibold text-neutral-700">Specific people to track</p>
+              <div className="mt-1 flex flex-wrap gap-1.5">
+                {SUGGESTED_PEOPLE.map((p) => {
+                  const active = watchPeople.some((x) => x.toLowerCase() === p.toLowerCase())
+                  return (
+                    <ToggleChip key={p} active={active} onClick={() => setWatchPeople((list) => (active ? list.filter((x) => x.toLowerCase() !== p.toLowerCase()) : [...list, p]))}>{p}</ToggleChip>
+                  )
+                })}
+              </div>
+              <CustomAdder label="Add a person" placeholder="e.g. Jane Doe" existing={watchPeople} onAdd={(v) => setWatchPeople((a) => [...a, v])} />
+              <ChipRow values={watchPeople.filter((p) => !SUGGESTED_PEOPLE.some((s) => s.toLowerCase() === p.toLowerCase()))} onRemove={(v) => setWatchPeople((a) => a.filter((x) => x !== v))} tone="custom" />
+            </div>
+
+            <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
+              Mentions use public information only (news, articles, public social posts) and always carry a source link. Tracking individuals should follow your privacy policy.
+            </p>
+          </Section>
+        )}
+
+        {step === 3 && (
           <Section title="Trusted sources" hint="Optionally limit the search to reputable domains, and block ones you never want. Leave allowed empty to search the whole web.">
             <p className="text-xs font-semibold text-neutral-700">Preferred sources</p>
             <div className="flex flex-wrap gap-1.5">
@@ -180,7 +240,7 @@ export function OrgFeedWizard({
           </Section>
         )}
 
-        {step === 3 && (
+        {step === 4 && (
           <Section title="Scope & schedule" hint="Where to focus, how often to refresh, and whether the feed is live.">
             <p className="text-xs font-semibold text-neutral-700">Region focus</p>
             <div className="flex flex-wrap gap-1.5">
@@ -209,11 +269,20 @@ export function OrgFeedWizard({
           </Section>
         )}
 
-        {step === 4 && (
+        {step === 5 && (
           <Section title="Review & save" hint="Here's what the feed will monitor. You can jump back to any step to adjust.">
             <div className="space-y-3">
               <ReviewRow label="Themes" values={allThemes} />
               <ReviewRow label="Topics" values={allTopics} />
+              <ReviewRow
+                label="Mentions"
+                values={[
+                  ...(watchOrganization ? orgAliases.map((a) => `Org: ${a}`) : []),
+                  ...(watchCrmInternal ? ['Inspire2Live CRM team'] : []),
+                  ...watchPeople,
+                ]}
+                empty="Not monitoring mentions"
+              />
               <ReviewRow label="Preferred sources" values={allSources} empty="Whole web" />
               <ReviewRow label="Blocked sources" values={blocked} empty="None" />
               <div className="flex flex-wrap gap-6 text-sm">
@@ -268,13 +337,14 @@ export function OrgFeedWizard({
 
 function stepHasContent(
   i: number,
-  ctx: { allThemes: string[]; allTopics: string[]; allSources: string[]; blocked: string[]; region: string; cadence: string }
+  ctx: { allThemes: string[]; allTopics: string[]; allSources: string[]; blocked: string[]; region: string; cadence: string; watchOrganization: boolean; watchCrmInternal: boolean; watchPeople: string[] }
 ): boolean {
   switch (i) {
     case 0: return ctx.allThemes.length > 0
     case 1: return ctx.allTopics.length > 0
-    case 2: return ctx.allSources.length > 0 || ctx.blocked.length > 0
-    case 3: return Boolean(ctx.region) || Boolean(ctx.cadence)
+    case 2: return ctx.watchOrganization || ctx.watchCrmInternal || ctx.watchPeople.length > 0
+    case 3: return ctx.allSources.length > 0 || ctx.blocked.length > 0
+    case 4: return Boolean(ctx.region) || Boolean(ctx.cadence)
     default: return false
   }
 }

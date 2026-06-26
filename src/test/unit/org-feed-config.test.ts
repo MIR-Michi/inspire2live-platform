@@ -77,10 +77,34 @@ describe('validateOrgFeedConfig', () => {
     if (!result.ok) expect(result.errors.join(' ')).toContain('Invalid allowed source domains')
   })
 
-  it('requires a topic or theme when enabling the feed', () => {
+  it('requires a topic, theme, or mention when enabling the feed', () => {
     const result = validateOrgFeedConfig({ topics: '', themes: '', enabled: true })
     expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.errors.join(' ')).toContain('at least one topic or theme')
+    if (!result.ok) expect(result.errors.join(' ')).toContain('at least one topic, theme, or mention')
+  })
+
+  it('accepts an enabled feed with only mention monitoring', () => {
+    const result = validateOrgFeedConfig({ topics: '', themes: '', enabled: true, watchOrganization: true })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.config.watchOrganization).toBe(true)
+      // Defaults the org alias when monitoring the org without one.
+      expect(result.config.organizationAliases).toEqual(['Inspire2Live'])
+    }
+  })
+
+  it('parses watched people and CRM-internal flag', () => {
+    const result = validateOrgFeedConfig({
+      topics: 'x',
+      enabled: true,
+      watchCrmInternal: true,
+      watchPeople: 'Peter Kapitein\nJane Doe',
+    })
+    expect(result.ok).toBe(true)
+    if (result.ok) {
+      expect(result.config.watchCrmInternal).toBe(true)
+      expect(result.config.watchPeople).toEqual(['Peter Kapitein', 'Jane Doe'])
+    }
   })
 
   it('allows an empty disabled config', () => {

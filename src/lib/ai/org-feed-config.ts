@@ -16,9 +16,16 @@ export type OrgFeedConfig = {
   region: string | null
   cadence: OrgFeedCadence
   enabled: boolean
+  // Mention monitoring.
+  watchOrganization: boolean
+  organizationAliases: string[]
+  watchCrmInternal: boolean
+  watchPeople: string[]
 }
 
 export const ORG_FEED_CADENCES: OrgFeedCadence[] = ['daily', 'weekly', 'monthly']
+
+export const DEFAULT_ORGANIZATION_ALIAS = 'Inspire2Live'
 
 export const DEFAULT_ORG_FEED_CONFIG: OrgFeedConfig = {
   topics: [],
@@ -28,6 +35,10 @@ export const DEFAULT_ORG_FEED_CONFIG: OrgFeedConfig = {
   region: null,
   cadence: 'weekly',
   enabled: true,
+  watchOrganization: true,
+  organizationAliases: [DEFAULT_ORGANIZATION_ALIAS],
+  watchCrmInternal: false,
+  watchPeople: [],
 }
 
 const MAX_LIST_ITEMS = 50
@@ -101,6 +112,10 @@ export function validateOrgFeedConfig(input: {
   region?: string | null
   cadence?: string | null
   enabled?: boolean
+  watchOrganization?: boolean
+  organizationAliases?: string | null
+  watchCrmInternal?: boolean
+  watchPeople?: string | null
 }): OrgFeedConfigValidation {
   const errors: string[] = []
 
@@ -108,12 +123,23 @@ export function validateOrgFeedConfig(input: {
   const themes = parseList(input.themes)
   const allowed = parseDomainList(input.allowedSources)
   const blocked = parseDomainList(input.blockedSources)
+  const watchPeople = parseList(input.watchPeople)
+  const watchOrganization = input.watchOrganization ?? false
+  const watchCrmInternal = input.watchCrmInternal ?? false
+
+  // Default the org alias when monitoring the org but no alias was given.
+  let organizationAliases = parseList(input.organizationAliases)
+  if (watchOrganization && organizationAliases.length === 0) organizationAliases = [DEFAULT_ORGANIZATION_ALIAS]
 
   if (allowed.invalid.length > 0) errors.push(`Invalid allowed source domains: ${allowed.invalid.join(', ')}`)
   if (blocked.invalid.length > 0) errors.push(`Invalid blocked source domains: ${blocked.invalid.join(', ')}`)
 
-  if (input.enabled && topics.length === 0 && themes.length === 0) {
-    errors.push('Add at least one topic or theme before enabling the feed.')
+  // The feed has something to do if it has a topic/theme OR is monitoring
+  // the organization, CRM-internal people, or named individuals.
+  const hasContent =
+    topics.length > 0 || themes.length > 0 || watchOrganization || watchCrmInternal || watchPeople.length > 0
+  if (input.enabled && !hasContent) {
+    errors.push('Add at least one topic, theme, or mention to monitor before enabling the feed.')
   }
 
   if (errors.length > 0) return { ok: false, errors }
@@ -128,6 +154,10 @@ export function validateOrgFeedConfig(input: {
       region: input.region?.trim() ? input.region.trim().slice(0, 120) : null,
       cadence: normalizeCadence(input.cadence),
       enabled: input.enabled ?? true,
+      watchOrganization,
+      organizationAliases,
+      watchCrmInternal,
+      watchPeople,
     },
   }
 }

@@ -30,6 +30,7 @@ export type OrgNewsItem = {
   sourceUrl: string
   sourceName: string | null
   publishedAt: string | null
+  mentionOf: string | null
 }
 
 export type ChannelKey = 'campus' | 'communications'
@@ -412,7 +413,7 @@ export async function loadCommsTeamDashboardData(
     loadMeetingTranscriptsByDate(supabase, agendaGroups.map((g) => g.meetingDate)),
     db
       .from('news_feed_items')
-      .select('id, headline, summary, category, region, source_url, source_name, published_at, created_at')
+      .select('id, headline, summary, category, region, source_url, source_name, published_at, created_at, mention_of')
       .order('published_at', { ascending: false, nullsFirst: false })
       .order('created_at', { ascending: false })
       .limit(8),
@@ -427,6 +428,7 @@ export async function loadCommsTeamDashboardData(
     sourceUrl: String(row.source_url ?? ''),
     sourceName: (row.source_name as string | null) ?? null,
     publishedAt: (row.published_at as string | null) ?? (row.created_at as string | null) ?? null,
+    mentionOf: (row.mention_of as string | null) ?? null,
   }))
 
   return {
