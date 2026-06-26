@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useState, useTransition } from 'react'
 import {
   saveOrgFeedConfig,
   runNewsfeedNow,
@@ -86,6 +86,14 @@ export function OrgFeedWizard({
 
   const [state, setState] = useState<OrgFeedActionState>(INITIAL_STATE)
   const [pending, startTransition] = useTransition()
+  const [running, setRunning] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!running) return
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(timer)
+  }, [running])
 
   const allThemes = [...themes, ...customThemes]
   const allTopics = [...topics, ...customTopics]
@@ -112,7 +120,14 @@ export function OrgFeedWizard({
   }
 
   const runNow = () => {
-    startTransition(async () => setState(await runNewsfeedNow()))
+    setState(INITIAL_STATE)
+    setElapsed(0)
+    setRunning(true)
+    startTransition(async () => {
+      const result = await runNewsfeedNow()
+      setRunning(false)
+      setState(result)
+    })
   }
 
   return (
@@ -300,13 +315,18 @@ export function OrgFeedWizard({
 
             <div className="flex flex-wrap items-center gap-3 border-t border-neutral-100 pt-4">
               <button type="button" onClick={runNow} disabled={pending || !aiEnabled} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50" title={aiEnabled ? 'Save first, then run the web-search job now' : 'AI features are disabled'}>
-                {pending ? 'Working…' : 'Run now'}
+                {running ? `Running… ${elapsed}s` : 'Run now'}
               </button>
               <span className="text-xs text-neutral-500">
                 {itemCount} item{itemCount === 1 ? '' : 's'} in the feed
                 {lastUpdated ? ` · updated ${new Date(lastUpdated).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
               </span>
             </div>
+            {running && (
+              <p className="text-xs text-neutral-500">
+                Searching the web and compiling cited items — this usually takes 1–3 minutes. Save your config first; keep this tab open while it runs.
+              </p>
+            )}
           </Section>
         )}
 

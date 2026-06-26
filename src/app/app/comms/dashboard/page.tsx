@@ -8,6 +8,9 @@ import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-d
 import { loadCommsTeamDashboardData } from '@/lib/comms-dashboard-data'
 import type { EventScopeFilter } from '@/lib/comms-event-pipeline'
 
+// The "Refresh now" server action runs the web-search newsfeed job inline.
+export const maxDuration = 300
+
 const VALID_VIEWS = new Set(['personal', 'team'])
 const VALID_SCOPES = new Set<EventScopeFilter>(['all', 'i2l', 'networking', 'past'])
 

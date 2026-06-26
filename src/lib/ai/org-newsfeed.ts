@@ -1,8 +1,15 @@
 import 'server-only'
 
 import { runAiMessage, webSearchTool, wrapExternalData } from './client'
-import { DEFAULT_AI_MODEL, type AiModelId, type AiReasoningEffort } from './models'
+import type { AiModelId, AiReasoningEffort } from './models'
 import type { OrgFeedConfig } from './org-feed-config'
+
+// Per the model-per-workload policy: the news feed is a web-search aggregation
+// job, best served by a fast balanced model, not the heavy reasoning default.
+const NEWSFEED_MODEL: AiModelId = 'claude-sonnet-4-6'
+// Web search + compilation is slow; allow well beyond the 60s wrapper default
+// (but under the 300s serverless cap).
+const NEWSFEED_TIMEOUT_MS = 280_000
 
 export type NewsFeedItem = {
   headline: string
@@ -233,15 +240,16 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
 
   const result = await runAiMessage<unknown>({
     feature: 'org_newsfeed',
-    model: input.model ?? DEFAULT_AI_MODEL,
+    model: input.model ?? NEWSFEED_MODEL,
     effort: input.effort ?? 'medium',
     maxTokens: 6000,
+    timeoutMs: NEWSFEED_TIMEOUT_MS,
     createdBy: input.createdBy,
     system: buildNewsfeedSystemPrompt(config, watched),
     cacheSystemPrompt: true,
     tools: [
       webSearchTool({
-        maxUses: 8,
+        maxUses: 6,
         allowedDomains: config.allowedSources,
         blockedDomains: config.blockedSources,
       }),

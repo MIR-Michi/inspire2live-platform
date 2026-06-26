@@ -22,6 +22,9 @@ type OrgFeedConfigRow = {
 
 export const metadata = { title: 'Org News Feed · Admin' }
 
+// The "Run now" server action runs the web-search newsfeed job inline.
+export const maxDuration = 300
+
 export default async function AdminOrgFeedPage() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()

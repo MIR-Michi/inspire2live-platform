@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { refreshOrgNewsfeed, type NewsfeedActionState } from '@/app/app/comms/dashboard/newsfeed-actions'
 import type { OrgNewsItem } from '@/lib/comms-dashboard-data'
@@ -34,8 +34,17 @@ export function OrgNewsfeedCard({
 }) {
   const [state, setState] = useState<NewsfeedActionState>(INITIAL_STATE)
   const [pending, startTransition] = useTransition()
+  const [elapsed, setElapsed] = useState(0)
+
+  useEffect(() => {
+    if (!pending) return
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(timer)
+  }, [pending])
 
   const onRefresh = () => {
+    setState(INITIAL_STATE)
+    setElapsed(0)
     startTransition(async () => setState(await refreshOrgNewsfeed(INITIAL_STATE)))
   }
 
@@ -56,12 +65,18 @@ export function OrgNewsfeedCard({
             className="rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-400"
             title={aiEnabled ? 'Run the web-search job now' : 'AI features are disabled'}
           >
-            {pending ? 'Refreshing…' : 'Refresh now'}
+            {pending ? `Refreshing… ${elapsed}s` : 'Refresh now'}
           </button>
         </div>
       )}
 
-      {(state.error || state.message) && (
+      {pending && (
+        <p className="text-xs text-neutral-500">
+          Searching the web and compiling cited items — this usually takes 1–3 minutes. Keep this tab open.
+        </p>
+      )}
+
+      {!pending && (state.error || state.message) && (
         <p className={`text-xs ${state.ok ? 'text-emerald-700' : 'text-red-700'}`}>{state.ok ? state.message : state.error}</p>
       )}
 
