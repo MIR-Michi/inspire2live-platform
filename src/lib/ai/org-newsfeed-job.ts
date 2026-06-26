@@ -3,7 +3,8 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { DEFAULT_ORG_FEED_CONFIG, normalizeCadence, type OrgFeedConfig } from './org-feed-config'
-import { generateOrgNewsfeed } from './org-newsfeed'
+import { generateOrgNewsfeed, type WatchedEntities } from './org-newsfeed'
+import { INTERNAL_EMAIL_DOMAIN } from '@/lib/comms-crm'
 
 export type OrgNewsfeedJobResult = {
   ok: boolean
@@ -21,6 +22,10 @@ type OrgFeedConfigRow = {
   region: string | null
   cadence: string | null
   enabled: boolean | null
+  watch_organization: boolean | null
+  organization_aliases: string[] | null
+  watch_crm_internal: boolean | null
+  watch_people: string[] | null
 }
 
 function rowToConfig(row: OrgFeedConfigRow | null): OrgFeedConfig {
@@ -33,7 +38,57 @@ function rowToConfig(row: OrgFeedConfigRow | null): OrgFeedConfig {
     region: row.region,
     cadence: normalizeCadence(row.cadence),
     enabled: row.enabled ?? true,
+    watchOrganization: row.watch_organization ?? false,
+    organizationAliases: row.organization_aliases ?? [],
+    watchCrmInternal: row.watch_crm_internal ?? false,
+    watchPeople: row.watch_people ?? [],
   }
+}
+
+/** Names of people with an @inspire2live.org email in the CRM / platform. */
+async function resolveCrmInternalNames(supabase: SupabaseClient<Database>): Promise<string[]> {
+  const reader = supabase as unknown as {
+    from: (table: string) => {
+      select: (columns: string) => {
+        ilike: (column: string, pattern: string) => { limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null }> }
+      }
+    }
+  }
+  const pattern = `%@${INTERNAL_EMAIL_DOMAIN}`
+
+  const [contacts, profiles] = await Promise.all([
+    reader.from('comms_crm_contacts').select('full_name, normalized_email').ilike('normalized_email', pattern).limit(300),
+    reader.from('profiles').select('name, email').ilike('email', pattern).limit(300),
+  ])
+
+  const names = new Map<string, string>()
+  for (const row of contacts.data ?? []) {
+    const name = typeof row.full_name === 'string' ? row.full_name.trim() : ''
+    if (name) names.set(name.toLowerCase(), name)
+  }
+  for (const row of profiles.data ?? []) {
+    const name = typeof row.name === 'string' ? row.name.trim() : ''
+    if (name) names.set(name.toLowerCase(), name)
+  }
+  return [...names.values()].slice(0, 100)
+}
+
+/** Build the watched org + people list from config (+ CRM-internal if enabled). */
+async function resolveWatchedEntities(supabase: SupabaseClient<Database>, config: OrgFeedConfig): Promise<WatchedEntities> {
+  const organizations = config.watchOrganization ? config.organizationAliases : []
+
+  const people = new Map<string, string>()
+  for (const person of config.watchPeople) {
+    const name = person.trim()
+    if (name) people.set(name.toLowerCase(), name)
+  }
+  if (config.watchCrmInternal) {
+    for (const name of await resolveCrmInternalNames(supabase)) {
+      if (!people.has(name.toLowerCase())) people.set(name.toLowerCase(), name)
+    }
+  }
+
+  return { organizations, people: [...people.values()] }
 }
 
 // org_feed_config / news_feed_items are not in the generated Database types yet.
@@ -62,7 +117,7 @@ export async function runOrgNewsfeedJob(
 
   const { data: configRow, error: configError } = await db
     .from('org_feed_config')
-    .select('topics, themes, allowed_sources, blocked_sources, region, cadence, enabled')
+    .select('topics, themes, allowed_sources, blocked_sources, region, cadence, enabled, watch_organization, organization_aliases, watch_crm_internal, watch_people')
     .eq('singleton', true)
     .maybeSingle()
   if (configError) throw new Error(configError.message)
@@ -87,8 +142,11 @@ export async function runOrgNewsfeedJob(
   const existingUrls = (existing ?? []).map((row) => row.source_url)
   const existingHeadlines = (existing ?? []).map((row) => row.headline)
 
+  const watched = await resolveWatchedEntities(supabase, config)
+
   const generated = await generateOrgNewsfeed({
     config,
+    watched,
     existingUrls,
     existingHeadlines,
     createdBy: options?.createdBy ?? null,
@@ -107,6 +165,7 @@ export async function runOrgNewsfeedJob(
     source_name: item.sourceName,
     relevance: item.relevance,
     published_at: item.publishedAt,
+    mention_of: item.mentionOf,
     created_by: options?.createdBy ?? null,
   }))
 

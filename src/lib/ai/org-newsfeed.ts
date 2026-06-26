@@ -13,6 +13,12 @@ export type NewsFeedItem = {
   sourceName: string | null
   relevance: number
   publishedAt: string | null
+  mentionOf: string | null
+}
+
+export type WatchedEntities = {
+  organizations: string[]
+  people: string[]
 }
 
 export type OrgNewsfeedResult = {
@@ -24,6 +30,7 @@ export type OrgNewsfeedResult = {
 
 export type GenerateOrgNewsfeedInput = {
   config: OrgFeedConfig
+  watched?: WatchedEntities
   existingUrls?: string[]
   existingHeadlines?: string[]
   maxItems?: number
@@ -32,7 +39,7 @@ export type GenerateOrgNewsfeedInput = {
   effort?: AiReasoningEffort
 }
 
-const NEWS_CATEGORIES = ['medical', 'research', 'policy', 'advocacy', 'funding', 'event', 'other']
+const NEWS_CATEGORIES = ['medical', 'research', 'policy', 'advocacy', 'funding', 'event', 'mention', 'other']
 
 export const NEWS_FEED_JSON_SCHEMA = {
   type: 'object',
@@ -56,6 +63,8 @@ export const NEWS_FEED_JSON_SCHEMA = {
           sourceName: { type: ['string', 'null'], maxLength: 160 },
           relevance: { type: 'integer', minimum: 0, maximum: 100 },
           publishedAt: { type: ['string', 'null'], maxLength: 40 },
+          // The watched entity (org alias or person) the item mentions, if any.
+          mentionOf: { type: ['string', 'null'], maxLength: 160 },
         },
       },
     },
@@ -68,8 +77,12 @@ const ORG_PROFILE = `Inspire2Live is an international patient-driven cancer orga
  * The stable, cacheable system prefix: org profile + the admin's feed config.
  * Reused verbatim across every call in a job so it can be prompt-cached.
  */
-export function buildNewsfeedSystemPrompt(config: OrgFeedConfig): string {
-  const lines = [
+export function buildNewsfeedSystemPrompt(config: OrgFeedConfig, watched?: WatchedEntities): string {
+  const organizations = watched?.organizations ?? []
+  const people = watched?.people ?? []
+  const hasMentions = organizations.length > 0 || people.length > 0
+
+  const lines: Array<string | null> = [
     'You assemble an organization-wide news feed for the Inspire2Live communications team.',
     ORG_PROFILE,
     '',
@@ -79,15 +92,26 @@ export function buildNewsfeedSystemPrompt(config: OrgFeedConfig): string {
     `- Region focus: ${config.region ?? 'global'}`,
     config.allowedSources.length > 0 ? `- Prefer these source domains: ${config.allowedSources.join(', ')}` : null,
     config.blockedSources.length > 0 ? `- Never use these source domains: ${config.blockedSources.join(', ')}` : null,
-    '',
-    'Rules:',
-    '- Use the web_search tool to find recent, real items. Never invent a story or a URL.',
-    '- Every item MUST include a working sourceUrl copied from a real search result (mandatory citation).',
-    '- Tailor relevance (0-100) to how directly the item serves the topics, themes, and active patient-advocacy mission.',
-    '- Prefer reputable medical, research, policy, and advocacy sources. Exclude blocked domains entirely.',
-    '- Keep headlines factual; summaries are 1-2 neutral sentences.',
-    '- Return only schema-valid JSON.',
   ]
+
+  if (hasMentions) {
+    lines.push('')
+    lines.push('Mention monitoring (also surface recent PUBLIC mentions of these entities — news, articles, press, blogs, and public social-media posts):')
+    if (organizations.length > 0) lines.push(`- Organizations: ${organizations.join(', ')}`)
+    if (people.length > 0) lines.push(`- People: ${people.join(', ')}`)
+    lines.push('For a mention item, set category to "mention" and mentionOf to the exact watched entity it is about. Only public information — never private accounts or personal data.')
+  }
+
+  lines.push('')
+  lines.push('Rules:')
+  lines.push('- Use the web_search tool to find recent, real items. Never invent a story or a URL.')
+  lines.push('- Every item MUST include a working sourceUrl copied from a real search result (mandatory citation).')
+  lines.push('- Tailor relevance (0-100) to how directly the item serves the topics, themes, mission, and watched entities.')
+  lines.push('- Prefer reputable sources. Exclude blocked domains entirely.')
+  lines.push('- Keep headlines factual; summaries are 1-2 neutral sentences.')
+  lines.push('- Set mentionOf to null for general topical news that is not about a watched entity.')
+  lines.push('- Return only schema-valid JSON.')
+
   return lines.filter((line) => line !== null).join('\n')
 }
 
@@ -161,6 +185,7 @@ function normalizeItem(value: unknown, blockedSources: string[]): NewsFeedItem |
     sourceName: nullableString(raw.sourceName, 160) ?? host,
     relevance: clampRelevance(raw.relevance),
     publishedAt: nullableString(raw.publishedAt, 40),
+    mentionOf: nullableString(raw.mentionOf, 160),
   }
 }
 
@@ -194,8 +219,9 @@ export function dedupeNewsItems(items: NewsFeedItem[], existingUrls: string[] = 
  * the admin's feed config. Citations are mandatory and stored as source_url.
  */
 export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Promise<OrgNewsfeedResult> {
-  const { config } = input
+  const { config, watched } = input
   const maxItems = input.maxItems ?? 12
+  const hasMentions = (watched?.organizations.length ?? 0) > 0 || (watched?.people.length ?? 0) > 0
 
   const existingContext = wrapExternalData(
     'newsfeed.existing',
@@ -211,7 +237,7 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
     effort: input.effort ?? 'medium',
     maxTokens: 6000,
     createdBy: input.createdBy,
-    system: buildNewsfeedSystemPrompt(config),
+    system: buildNewsfeedSystemPrompt(config, watched),
     cacheSystemPrompt: true,
     tools: [
       webSearchTool({
@@ -230,7 +256,7 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
       {
         role: 'user',
         content: [
-          `Find up to ${maxItems} recent news items that match the monitoring brief. Search the web, then return the structured JSON. Each item needs a real sourceUrl.`,
+          `Find up to ${maxItems} recent items that match the monitoring brief — a mix of topical news${hasMentions ? ' and recent public mentions of the watched organizations and people' : ''}. Search the web, then return the structured JSON. Each item needs a real sourceUrl.`,
           existingContext,
         ].join('\n\n'),
       },

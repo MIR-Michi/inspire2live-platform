@@ -12,6 +12,7 @@ const CATEGORY_META: Record<string, { label: string; color: string }> = {
   advocacy: { label: 'Advocacy', color: 'bg-orange-100 text-orange-700' },
   funding: { label: 'Funding', color: 'bg-amber-100 text-amber-700' },
   event: { label: 'Event', color: 'bg-purple-100 text-purple-700' },
+  mention: { label: 'Mention', color: 'bg-pink-100 text-pink-700' },
   other: { label: 'News', color: 'bg-neutral-100 text-neutral-700' },
 }
 
@@ -81,6 +82,7 @@ export function OrgNewsfeedCard({
               </div>
               {item.summary && <p className="mt-1.5 line-clamp-2 text-xs text-neutral-500">{item.summary}</p>}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-neutral-400">
+                {item.mentionOf && <span className="rounded-full bg-pink-50 px-2 py-0.5 font-medium text-pink-700">Mentions {item.mentionOf}</span>}
                 {item.sourceName && <span>{item.sourceName}</span>}
                 {item.region && (<><span>·</span><span>{item.region}</span></>)}
                 {item.publishedAt && (<><span>·</span><span>{formatDate(item.publishedAt)}</span></>)}
