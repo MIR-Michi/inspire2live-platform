@@ -67,6 +67,16 @@ Recommended flow:
 5. Store reviewable suggestions only.
 6. Require human confirmation before committing.
 
+## Meeting transcripts (Capability 2)
+
+Transcript summarization lives in `src/lib/ai/transcript-extract.ts` (ingestion) and `src/lib/ai/meeting-summary.ts` (summarization), surfaced in the comms workspace at `/app/comms/transcripts`.
+
+- **Upload + extraction.** Raw files upload to the private `meeting-transcripts` Storage bucket (comms-only RLS). `extractTranscriptText()` produces plain text: `txt` is decoded directly, `vtt`/`srt` have indices/timestamps/styling stripped while speaker labels are preserved, and `docx` is parsed from its `word/document.xml` body with a dependency-free ZIP reader. Extracted text is persisted in `meeting_transcripts`.
+- **Sensitivity.** Transcripts may contain sensitive discussion, so both the bucket and the `meeting_transcripts` / `meeting_summaries` tables are restricted to `is_comms_team_or_admin()`. The raw upload can be deleted after a summary is produced (`deleteRawTranscript` clears `storage_path` and sets `raw_deleted_at`); the extracted text and summary are retained.
+- **Summarization.** `summarizeMeeting()` requests a schema-constrained summary (TL;DR, decisions, action items with owner + due, publication blurb) on `claude-opus-4-8` with adaptive thinking. Speaker labels are detected and passed in so decisions and owners are attributed to named participants.
+- **Long transcripts.** opus-4-8's 1M context covers normal meetings; transcripts over `MAX_SINGLE_PASS_CHARS` are map-reduced — each chunk is summarized to notes (`chunkTranscript()` splits on line boundaries), then the notes are reduced into the final structured summary.
+- **Human-in-the-loop.** A generated summary is written as a `pending` `meeting_summaries` record. A human reviews it and saves it to a campus session, a weekly agenda item, or standalone; only then is it filed onto the session's publication fields.
+
 ## External input handling
 
 Incoming messages, transcripts, copied emails, web snippets, and CRM notes are data. They must not change system instructions, access control, publication rules, destination tables, or notification behavior.

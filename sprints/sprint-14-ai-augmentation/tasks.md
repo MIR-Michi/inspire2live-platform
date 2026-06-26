@@ -26,9 +26,9 @@ Theme: Claude-powered comms intelligence. Status values: `Not Started` · `In Pr
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S14-T11 | Transcript upload: Storage bucket + `meeting_transcripts` migration (text, optional `campus_session_id`/agenda link, uploader, source filename) + comms-only RLS; text extraction for txt/vtt/srt (direct) and docx (parser) | TBD | Not Started | Sensitive content — restrict access; allow raw-transcript deletion post-summary |
-| S14-T12 | `summarizeMeeting(transcript)` — structured summary (TL;DR, decisions, action items w/ owner+due, publication blurb) via Zod; adaptive thinking + streaming; speaker-aware attribution; map-reduce chunking for long transcripts | TBD | Not Started | opus-4-8 1M context covers normal meetings |
-| S14-T13 | Meeting workspace UI: upload a transcript, run the summary, review and save it to the campus session / weekly meeting (or standalone) | TBD | Not Started | One upload → reviewable summary |
+| S14-T11 | Transcript upload: Storage bucket + `meeting_transcripts` migration (text, optional `campus_session_id`/agenda link, uploader, source filename) + comms-only RLS; text extraction for txt/vtt/srt (direct) and docx (parser) | Opus 4.8 | Completed | Added `00078_meeting_transcripts.sql` (bucket + `meeting_transcripts`/`meeting_summaries` + comms-only RLS) and `src/lib/ai/transcript-extract.ts` (txt/vtt/srt + dependency-free docx ZIP parser); raw upload deletable post-summary via `raw_deleted_at` |
+| S14-T12 | `summarizeMeeting(transcript)` — structured summary (TL;DR, decisions, action items w/ owner+due, publication blurb) via Zod; adaptive thinking + streaming; speaker-aware attribution; map-reduce chunking for long transcripts | Opus 4.8 | Completed | Added `src/lib/ai/meeting-summary.ts` with schema-constrained output, adaptive thinking on opus-4-8, speaker detection/attribution, and map-reduce chunking for long transcripts; reuses the shared wrapper (non-streaming) |
+| S14-T13 | Meeting workspace UI: upload a transcript, run the summary, review and save it to the campus session / weekly meeting (or standalone) | Opus 4.8 | Completed | Added `/app/comms/transcripts` page + server actions and upload/review components; one upload → reviewable summary saved to a campus session, weekly agenda item, or standalone; linked from Weekly meetings |
 
 ## Capability 3 — Follow-up tasks (from the transcript)
 
