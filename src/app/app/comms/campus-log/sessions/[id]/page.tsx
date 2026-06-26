@@ -3,7 +3,11 @@ import { notFound } from 'next/navigation'
 import { saveCampusSession } from '@/app/app/comms/campus-log/actions'
 import { triggerSessionTeamsStub } from '@/app/app/comms/integration-actions'
 import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
+import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-panel'
 import { getIntegrationStubFlags } from '@/lib/comms-integrations'
+import { loadCampusSessionTranscript } from '@/lib/comms-meeting-transcripts'
+import { loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
+import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { createClient } from '@/lib/supabase/server'
 
 const CAMPUS_SESSION_DETAIL_SELECT =
@@ -33,6 +37,12 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
       : Promise.resolve({ data: null }),
   ])
 
+  const [transcript, teamMembers] = await Promise.all([
+    loadCampusSessionTranscript(supabase, session.id),
+    loadCommsTeamMembers(supabase),
+  ])
+  const transcriptOwners = teamMembers.map((member) => ({ id: member.id, label: member.label }))
+
   const hubSet = new Set(session.participating_hub_ids ?? [])
   const initiativeSet = new Set(session.initiative_ids ?? [])
   const outputSet = new Set(session.published_outputs ?? [])
@@ -49,6 +59,16 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
         <h1 className="text-3xl font-semibold text-neutral-900">{session.theme || 'Untitled session'}</h1>
         <p className="text-sm text-neutral-500">{formatDate(session.session_date)}</p>
       </div>
+
+      <section className="space-y-2">
+        <h2 className="text-sm font-semibold text-neutral-900">Meeting transcript &amp; AI summary</h2>
+        <MeetingTranscriptPanel
+          context={{ kind: 'campus', campusSessionId: session.id }}
+          transcript={transcript}
+          owners={transcriptOwners}
+          aiEnabled={isAiEnabled()}
+        />
+      </section>
 
       <form action={saveCampusSession} className="space-y-5 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
         <input type="hidden" name="session_id" value={session.id} />

@@ -23,6 +23,9 @@ export default defineConfig({
         'src/lib/supabase/**',
         // Supabase data-layer query files — require live DB or heavy mocking.
         'src/lib/comms-crm-data.ts',
+        'src/lib/comms-meeting-transcripts.ts',
+        'src/lib/ai/follow-up-tasks-store.ts',
+        'src/lib/ai/org-newsfeed-job.ts',
         'src/lib/comms-digest.ts',
         'src/lib/comms-event-pipeline.ts',
         'src/lib/comms-integration-intents.ts',

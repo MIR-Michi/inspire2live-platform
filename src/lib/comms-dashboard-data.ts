@@ -18,6 +18,19 @@ import {
 import { groupAgendaByMeeting, type AgendaItemRecord, type AgendaMeetingGroup } from '@/lib/comms-agenda'
 import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
 import { loadNewMembers, type NewMemberRecord } from '@/lib/member-onboarding'
+import { loadMeetingTranscriptsByDate, type MeetingTranscriptView } from '@/lib/comms-meeting-transcripts'
+import { isAiEnabled } from '@/lib/ai/feature-flag'
+
+export type OrgNewsItem = {
+  id: string
+  headline: string
+  summary: string | null
+  category: string
+  region: string | null
+  sourceUrl: string
+  sourceName: string | null
+  publishedAt: string | null
+}
 
 export type ChannelKey = 'campus' | 'communications'
 
@@ -72,6 +85,10 @@ export type TeamDashboardData = {
   newMembers: NewMemberRecord[]
   feed: FeedEntry[]
   owners: TeamMemberOption[]
+  transcriptsByDate: Record<string, MeetingTranscriptView>
+  transcriptOwners: { id: string; label: string }[]
+  aiEnabled: boolean
+  newsfeed: OrgNewsItem[]
 }
 
 const CHANNEL_LABELS: Record<ChannelKey, string> = {
@@ -390,7 +407,43 @@ export async function loadCommsTeamDashboardData(
 
   const newMembers = await loadNewMembers(supabase)
 
-  return { channels, events: eventPipeline.events, agendaGroups, agendaItems: agendaOptions, tasks, teamMembers, newMembers, feed, owners }
+  // ── In-meeting transcripts + org news feed ─────────────────────────
+  const [transcriptsMap, newsData] = await Promise.all([
+    loadMeetingTranscriptsByDate(supabase, agendaGroups.map((g) => g.meetingDate)),
+    db
+      .from('news_feed_items')
+      .select('id, headline, summary, category, region, source_url, source_name, published_at, created_at')
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(8),
+  ])
+
+  const newsfeed: OrgNewsItem[] = (((newsData?.data ?? []) as Array<Record<string, unknown>>)).map((row) => ({
+    id: String(row.id),
+    headline: String(row.headline ?? ''),
+    summary: (row.summary as string | null) ?? null,
+    category: String(row.category ?? 'other'),
+    region: (row.region as string | null) ?? null,
+    sourceUrl: String(row.source_url ?? ''),
+    sourceName: (row.source_name as string | null) ?? null,
+    publishedAt: (row.published_at as string | null) ?? (row.created_at as string | null) ?? null,
+  }))
+
+  return {
+    channels,
+    events: eventPipeline.events,
+    agendaGroups,
+    agendaItems: agendaOptions,
+    tasks,
+    teamMembers,
+    newMembers,
+    feed,
+    owners,
+    transcriptsByDate: Object.fromEntries(transcriptsMap),
+    transcriptOwners: teamMembers.map((m) => ({ id: m.id, label: m.label })),
+    aiEnabled: isAiEnabled(),
+    newsfeed,
+  }
 }
 
 /**

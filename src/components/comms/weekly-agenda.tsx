@@ -5,7 +5,11 @@ import Link from 'next/link'
 import { formatMeetingLabel, type AgendaMeetingGroup } from '@/lib/comms-agenda'
 import { AgendaAddForm } from '@/components/comms/agenda-add-form'
 import { AgendaItemList } from '@/components/comms/agenda-item-list'
+import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-panel'
 import type { TaskOwnerOption } from '@/components/comms/task-details-button'
+import type { MeetingTranscriptView } from '@/lib/comms-meeting-transcripts'
+
+type TranscriptOwnerOption = { id: string; label: string }
 
 /**
  * Weekly meeting agenda.
@@ -21,16 +25,24 @@ export function WeeklyAgenda({
   previousLimit,
   showAllHref,
   ownerOptions = [],
+  transcriptsByDate,
+  transcriptOwners = [],
+  aiEnabled = false,
 }: {
   groups: AgendaMeetingGroup[]
   previousLimit?: number
   showAllHref?: string
   ownerOptions?: TaskOwnerOption[]
+  /** When provided, each meeting shows its transcript + AI summary flow. */
+  transcriptsByDate?: Record<string, MeetingTranscriptView | undefined>
+  transcriptOwners?: TranscriptOwnerOption[]
+  aiEnabled?: boolean
 }) {
   const current = groups.find((g) => g.isUpcoming) ?? null
   const previous = groups.filter((g) => !g.isUpcoming)
   const shown = typeof previousLimit === 'number' ? previous.slice(0, previousLimit) : previous
   const hasMore = typeof previousLimit === 'number' && previous.length > previousLimit
+  const transcriptsEnabled = Boolean(transcriptsByDate)
 
   return (
     <div className="space-y-5">
@@ -52,6 +64,16 @@ export function WeeklyAgenda({
               No agenda items yet. Add the first one for this meeting.
             </p>
           )}
+          {transcriptsEnabled && (
+            <div className="mt-3">
+              <MeetingTranscriptPanel
+                context={{ kind: 'weekly', meetingDate: current.meetingDate }}
+                transcript={transcriptsByDate?.[current.meetingDate] ?? null}
+                owners={transcriptOwners}
+                aiEnabled={aiEnabled}
+              />
+            </div>
+          )}
         </div>
       )}
 
@@ -60,7 +82,15 @@ export function WeeklyAgenda({
           <h4 className="px-1 text-xs font-semibold uppercase tracking-wide text-neutral-500">Previous meetings</h4>
           <div className="divide-y divide-neutral-100 overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             {shown.map((group) => (
-              <PreviousMeetingRow key={group.meetingDate} group={group} ownerOptions={ownerOptions} />
+              <PreviousMeetingRow
+                key={group.meetingDate}
+                group={group}
+                ownerOptions={ownerOptions}
+                transcriptsEnabled={transcriptsEnabled}
+                transcript={transcriptsByDate?.[group.meetingDate] ?? null}
+                transcriptOwners={transcriptOwners}
+                aiEnabled={aiEnabled}
+              />
             ))}
           </div>
           {hasMore && showAllHref && (
@@ -77,12 +107,21 @@ export function WeeklyAgenda({
 function PreviousMeetingRow({
   group,
   ownerOptions,
+  transcriptsEnabled = false,
+  transcript = null,
+  transcriptOwners = [],
+  aiEnabled = false,
 }: {
   group: AgendaMeetingGroup
   ownerOptions: TaskOwnerOption[]
+  transcriptsEnabled?: boolean
+  transcript?: MeetingTranscriptView | null
+  transcriptOwners?: TranscriptOwnerOption[]
+  aiEnabled?: boolean
 }) {
   const [open, setOpen] = useState(false)
   const count = group.items.length
+  const hasTranscript = Boolean(transcript)
 
   return (
     <div>
@@ -94,6 +133,9 @@ function PreviousMeetingRow({
       >
         <span className="text-sm font-medium text-neutral-800">{formatMeetingLabel(group.meetingDate)}</span>
         <span className="flex items-center gap-2 text-xs text-neutral-400">
+          {transcriptsEnabled && hasTranscript && (
+            <span className="rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-semibold text-orange-700" title="Has a transcript">📄</span>
+          )}
           {count} item{count === 1 ? '' : 's'}
           <Chevron open={open} />
         </span>
@@ -104,6 +146,14 @@ function PreviousMeetingRow({
             <AgendaItemList items={group.items} ownerOptions={ownerOptions} />
           ) : (
             <p className="py-3 text-center text-xs text-neutral-400">No items recorded for this meeting.</p>
+          )}
+          {transcriptsEnabled && (
+            <MeetingTranscriptPanel
+              context={{ kind: 'weekly', meetingDate: group.meetingDate }}
+              transcript={transcript}
+              owners={transcriptOwners}
+              aiEnabled={aiEnabled}
+            />
           )}
         </div>
       )}
