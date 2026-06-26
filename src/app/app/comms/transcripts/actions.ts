@@ -56,6 +56,7 @@ function revalidateTranscriptSurfaces() {
   revalidatePath('/app/comms/meetings')
   revalidatePath('/app/comms/dashboard')
   revalidatePath('/app/comms/campus-log', 'layout')
+  revalidatePath('/app/comms/campus', 'layout')
 }
 
 async function requireCommsOperator() {
