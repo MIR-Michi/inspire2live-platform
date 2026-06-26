@@ -97,11 +97,22 @@ export async function executeAndRecordRun(userId: string | null): Promise<void> 
     const result = await runOrgNewsfeedJob(admin, { createdBy: userId, force: true })
     if (result.skipped === 'no_config') {
       await finish('error', 'No configuration to run.', null)
+    } else if (result.inserted > 0) {
+      await finish('success', `Added ${result.inserted} new item${result.inserted === 1 ? '' : 's'} (from ${result.generated} found).`, result.inserted)
     } else {
-      const message = result.inserted > 0
-        ? `Added ${result.inserted} new item${result.inserted === 1 ? '' : 's'} (from ${result.generated} found).`
-        : 'Ran successfully — no new items found this time.'
-      await finish('success', message, result.inserted)
+      // No items: explain where it stopped so a dry run is diagnosable.
+      const candidates = result.candidates ?? 0
+      let why: string
+      if (candidates === 0) {
+        why = result.outputWasJson === false
+          ? 'the model did not return structured results (no items).'
+          : 'the web search returned no usable items — try broadening topics/region or removing narrow source restrictions.'
+      } else if ((result.validated ?? 0) === 0) {
+        why = `the model returned ${candidates} item(s) but none had a usable source link.`
+      } else {
+        why = `found ${candidates} item(s), but all were already in the feed (duplicates).`
+      }
+      await finish('success', `No new items added — ${why}`, 0)
     }
   } catch (error) {
     await finish('error', error instanceof Error ? error.message : 'Newsfeed run failed.', null)

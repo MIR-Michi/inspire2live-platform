@@ -32,6 +32,11 @@ export type OrgNewsfeedResult = {
   items: NewsFeedItem[]
   model: string | null
   effort: AiReasoningEffort | null
+  // Diagnostics: how many items the model returned, how many were valid, and
+  // whether the output was non-JSON — so a 0-result run is explainable.
+  candidateCount: number
+  validatedCount: number
+  outputWasJson: boolean
   rawResponse?: unknown
 }
 
@@ -196,11 +201,14 @@ function normalizeItem(value: unknown, blockedSources: string[]): NewsFeedItem |
   }
 }
 
+function itemsArray(value: unknown): unknown[] {
+  const container = value && typeof value === 'object' && 'items' in value ? (value as { items?: unknown }).items : value
+  return Array.isArray(container) ? container : []
+}
+
 /** Validate the raw model output into a clean list of news items. */
 export function validateNewsFeedItems(value: unknown, blockedSources: string[] = []): NewsFeedItem[] {
-  const container = value && typeof value === 'object' && 'items' in value ? (value as { items?: unknown }).items : value
-  if (!Array.isArray(container)) return []
-  return container
+  return itemsArray(value)
     .map((item) => normalizeItem(item, blockedSources))
     .filter((item): item is NewsFeedItem => Boolean(item))
 }
@@ -249,9 +257,12 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
     system: buildNewsfeedSystemPrompt(config, watched),
     cacheSystemPrompt: true,
     tools: [
+      // NB: allowed_domains is a HARD restriction in the web-search tool and
+      // starves results when only a few domains are listed (e.g. google.com).
+      // We keep allowed domains as a SOFT preference in the prompt and only use
+      // blocked_domains as a hard filter here.
       webSearchTool({
         maxUses: 6,
-        allowedDomains: config.allowedSources,
         blockedDomains: config.blockedSources,
       }),
     ],
@@ -272,6 +283,7 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
     ],
   })
 
+  const candidateCount = itemsArray(result.output).length
   const validated = validateNewsFeedItems(result.output, config.blockedSources)
   const deduped = dedupeNewsItems(validated, input.existingUrls).slice(0, maxItems)
 
@@ -279,6 +291,9 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
     items: deduped,
     model: result.config.model,
     effort: result.config.effort,
+    candidateCount,
+    validatedCount: validated.length,
+    outputWasJson: typeof result.output !== 'string',
     rawResponse: result.rawResponse,
   }
 }

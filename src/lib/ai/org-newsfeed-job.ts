@@ -11,6 +11,10 @@ export type OrgNewsfeedJobResult = {
   generated: number
   inserted: number
   skipped: 'disabled' | 'no_config' | null
+  // Diagnostics for explaining a 0-result run.
+  candidates?: number
+  validated?: number
+  outputWasJson?: boolean
   message?: string
 }
 
@@ -152,8 +156,14 @@ export async function runOrgNewsfeedJob(
     createdBy: options?.createdBy ?? null,
   })
 
+  const diagnostics = {
+    candidates: generated.candidateCount,
+    validated: generated.validatedCount,
+    outputWasJson: generated.outputWasJson,
+  }
+
   if (generated.items.length === 0) {
-    return { ok: true, generated: 0, inserted: 0, skipped: null, message: 'No new items found.' }
+    return { ok: true, generated: 0, inserted: 0, skipped: null, ...diagnostics }
   }
 
   const rows = generated.items.map((item) => ({
@@ -177,5 +187,5 @@ export async function runOrgNewsfeedJob(
 
   const inserted = Array.isArray(insertedRows) ? insertedRows.length : rows.length
 
-  return { ok: true, generated: generated.items.length, inserted, skipped: null }
+  return { ok: true, generated: generated.items.length, inserted, skipped: null, ...diagnostics }
 }
