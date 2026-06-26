@@ -244,6 +244,7 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
     effort: input.effort ?? 'medium',
     maxTokens: 6000,
     timeoutMs: NEWSFEED_TIMEOUT_MS,
+    retries: 1,
     createdBy: input.createdBy,
     system: buildNewsfeedSystemPrompt(config, watched),
     cacheSystemPrompt: true,

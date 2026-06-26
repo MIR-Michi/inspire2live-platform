@@ -85,48 +85,51 @@ export function OrgFeedWizard({
   const [watchPeople, setWatchPeople] = useState<string[]>(initialConfig.watchPeople)
 
   const [state, setState] = useState<OrgFeedActionState>(INITIAL_STATE)
-  const [pending, startTransition] = useTransition()
-  const [running, setRunning] = useState(false)
+  // Save and Run are independent so one's busy state never bleeds into the other.
+  const [savePending, startSave] = useTransition()
+  const [runPending, startRun] = useTransition()
   const [elapsed, setElapsed] = useState(0)
+  const busy = savePending || runPending
 
   useEffect(() => {
-    if (!running) return
+    if (!runPending) return
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
     return () => clearInterval(timer)
-  }, [running])
+  }, [runPending])
 
   const allThemes = [...themes, ...customThemes]
   const allTopics = [...topics, ...customTopics]
   const allSources = [...sources, ...customSources]
   const hasFocus = allThemes.length > 0 || allTopics.length > 0 || watchOrganization || watchCrmInternal || watchPeople.length > 0
 
+  const buildPayload = () => ({
+    themes: allThemes,
+    topics: allTopics,
+    allowedSources: allSources,
+    blockedSources: blocked,
+    region,
+    cadence,
+    enabled,
+    watchOrganization,
+    organizationAliases: orgAliases,
+    watchCrmInternal,
+    watchPeople,
+  })
+
   const save = () => {
-    startTransition(async () => {
-      const result = await saveOrgFeedConfig({
-        themes: allThemes,
-        topics: allTopics,
-        allowedSources: allSources,
-        blockedSources: blocked,
-        region,
-        cadence,
-        enabled,
-        watchOrganization,
-        organizationAliases: orgAliases,
-        watchCrmInternal,
-        watchPeople,
-      })
-      setState(result)
-    })
+    setState(INITIAL_STATE)
+    startSave(async () => setState(await saveOrgFeedConfig(buildPayload())))
   }
 
+  // Run now saves the current selections first, then generates — so it always
+  // runs what's on screen (no "did I save?" footgun).
   const runNow = () => {
     setState(INITIAL_STATE)
     setElapsed(0)
-    setRunning(true)
-    startTransition(async () => {
-      const result = await runNewsfeedNow()
-      setRunning(false)
-      setState(result)
+    startRun(async () => {
+      const saved = await saveOrgFeedConfig(buildPayload())
+      if (!saved.ok) { setState(saved); return }
+      setState(await runNewsfeedNow())
     })
   }
 
@@ -314,17 +317,17 @@ export function OrgFeedWizard({
             )}
 
             <div className="flex flex-wrap items-center gap-3 border-t border-neutral-100 pt-4">
-              <button type="button" onClick={runNow} disabled={pending || !aiEnabled} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50" title={aiEnabled ? 'Save first, then run the web-search job now' : 'AI features are disabled'}>
-                {running ? `Running… ${elapsed}s` : 'Run now'}
+              <button type="button" onClick={runNow} disabled={busy || !aiEnabled} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50" title={aiEnabled ? 'Saves your current setup, then runs the web-search job' : 'AI features are disabled'}>
+                {runPending ? `Running… ${elapsed}s` : 'Save & run now'}
               </button>
               <span className="text-xs text-neutral-500">
                 {itemCount} item{itemCount === 1 ? '' : 's'} in the feed
                 {lastUpdated ? ` · updated ${new Date(lastUpdated).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
               </span>
             </div>
-            {running && (
+            {runPending && (
               <p className="text-xs text-neutral-500">
-                Searching the web and compiling cited items — this usually takes 1–3 minutes. Save your config first; keep this tab open while it runs.
+                Saved. Searching the web and compiling cited items — this usually takes 1–3 minutes. Keep this tab open while it runs.
               </p>
             )}
           </Section>
@@ -345,8 +348,8 @@ export function OrgFeedWizard({
                 Next →
               </button>
             )}
-            <button type="button" onClick={save} disabled={pending} className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-400">
-              {pending ? 'Saving…' : isConfigured ? 'Save changes' : 'Save configuration'}
+            <button type="button" onClick={save} disabled={busy} className="rounded-lg bg-neutral-900 px-4 py-2 text-sm font-semibold text-white transition hover:bg-neutral-800 disabled:bg-neutral-400">
+              {savePending ? 'Saving…' : isConfigured ? 'Save changes' : 'Save configuration'}
             </button>
           </div>
         </div>
