@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
 
-import { sanitizeStructuredSchema } from '@/lib/ai/client'
+import { buildOutputFormat, sanitizeStructuredSchema } from '@/lib/ai/client'
 import { NEWS_FEED_JSON_SCHEMA } from '@/lib/ai/org-newsfeed'
 import { MEETING_SUMMARY_JSON_SCHEMA } from '@/lib/ai/meeting-summary'
 
@@ -85,5 +85,30 @@ describe('sanitizeStructuredSchema', () => {
       collectKeys(sanitizeStructuredSchema(schema), keys)
       for (const bad of UNSUPPORTED) expect(keys.has(bad)).toBe(false)
     }
+  })
+})
+
+describe('buildOutputFormat', () => {
+  it('sends only type + schema (drops name/description the provider rejects)', () => {
+    const format = buildOutputFormat({
+      type: 'json_schema',
+      name: 'org_news_feed',
+      description: 'A list of news items.',
+      schema: { type: 'object', properties: { items: { type: 'array', maxItems: 5 } } },
+    })
+    expect(Object.keys(format).sort()).toEqual(['schema', 'type'])
+    expect('name' in format).toBe(false)
+    expect('description' in format).toBe(false)
+    expect(format.type).toBe('json_schema')
+  })
+
+  it('sanitizes the schema it forwards', () => {
+    const format = buildOutputFormat({
+      type: 'json_schema',
+      name: 'x',
+      schema: { type: 'object', properties: { items: { type: 'array', maxItems: 5 } } },
+    })
+    const items = (format.schema.properties as Record<string, Record<string, unknown>>).items
+    expect('maxItems' in items).toBe(false)
   })
 })
