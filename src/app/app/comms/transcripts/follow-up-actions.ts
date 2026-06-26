@@ -34,6 +34,14 @@ function isoDateOrNull(value: FormDataEntryValue | null): string | null {
   return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null
 }
 
+function revalidateFollowUpSurfaces() {
+  revalidatePath(TRANSCRIPTS_PATH)
+  revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/dashboard')
+  revalidatePath('/app/comms/campus', 'layout')
+  revalidatePath('/app/comms/campus-log', 'layout')
+}
+
 async function requireCommsOperator() {
   const supabase = (await createClient()) as AppSupabaseClient
   const {
@@ -92,7 +100,7 @@ export async function regenerateFollowUpTasks(
     if (!summaryId) return { ok: false, error: 'Summary is required.' }
 
     const count = await generateFollowUpProposals(supabase, { summaryId, createdBy: user.id })
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateFollowUpSurfaces()
     return { ok: true, message: count > 0 ? `${count} follow-up task${count === 1 ? '' : 's'} proposed.` : 'No action items to propose as tasks.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not regenerate follow-up tasks.' }
@@ -112,7 +120,7 @@ export async function rejectFollowUpTask(
     const { error } = await db.from('meeting_followup_tasks').update({ status: 'rejected' }).eq('id', proposalId)
     if (error) throw new Error(error.message)
 
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateFollowUpSurfaces()
     return { ok: true, message: 'Proposed task rejected.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not reject the proposed task.' }
@@ -194,9 +202,7 @@ export async function commitFollowUpTask(
       })
     }
 
-    revalidatePath(TRANSCRIPTS_PATH)
-    revalidatePath('/app/comms/dashboard')
-    revalidatePath('/app/dashboard')
+    revalidateFollowUpSurfaces()
     return { ok: true, message: 'Task created and the owner notified.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not commit the proposed task.' }
