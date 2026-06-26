@@ -12,6 +12,7 @@ import {
   type TranscriptFormat,
 } from '@/lib/ai/transcript-extract'
 import { detectSpeakers, summarizeMeeting } from '@/lib/ai/meeting-summary'
+import { generateFollowUpProposals } from '@/lib/ai/follow-up-tasks-store'
 import type { Database } from '@/types/database'
 
 export interface TranscriptActionState {
@@ -182,23 +183,40 @@ export async function runMeetingSummary(
       .eq('transcript_id', transcriptId)
       .eq('status', 'pending')
 
-    const { error: insertError } = await db.from('meeting_summaries').insert({
-      transcript_id: transcriptId,
-      tldr: summary.tldr,
-      decisions: summary.decisions,
-      action_items: summary.actionItems,
-      publication_blurb: summary.publicationBlurb,
-      chunked: summary.chunked,
-      model: summary.model,
-      effort: summary.effort,
-      raw_response: summary.rawResponse ?? {},
-      status: 'pending',
-      created_by: user.id,
-    })
+    const { data: inserted, error: insertError } = await db
+      .from('meeting_summaries')
+      .insert({
+        transcript_id: transcriptId,
+        tldr: summary.tldr,
+        decisions: summary.decisions,
+        action_items: summary.actionItems,
+        publication_blurb: summary.publicationBlurb,
+        chunked: summary.chunked,
+        model: summary.model,
+        effort: summary.effort,
+        raw_response: summary.rawResponse ?? {},
+        status: 'pending',
+        created_by: user.id,
+      })
+      .select('id')
+      .single()
     if (insertError) throw new Error(insertError.message)
 
+    // Same transcript run (S14-T14): map the action items into reviewable
+    // follow-up task proposals. Never let proposal generation fail the summary.
+    let proposalCount = 0
+    if (inserted?.id) {
+      try {
+        proposalCount = await generateFollowUpProposals(supabase, { summaryId: String(inserted.id), createdBy: user.id })
+      } catch (proposalError) {
+        console.error('[transcripts] follow-up proposal generation failed', proposalError)
+      }
+    }
+
     revalidatePath(TRANSCRIPTS_PATH)
-    return { ok: true, message: summary.chunked ? 'Summary generated (long transcript, map-reduced).' : 'Summary generated for review.' }
+    const base = summary.chunked ? 'Summary generated (long transcript, map-reduced).' : 'Summary generated for review.'
+    const tail = proposalCount > 0 ? ` ${proposalCount} follow-up task${proposalCount === 1 ? '' : 's'} proposed.` : ''
+    return { ok: true, message: `${base}${tail}` }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not summarize the meeting.' }
   }

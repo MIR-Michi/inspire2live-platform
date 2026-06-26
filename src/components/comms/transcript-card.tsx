@@ -9,6 +9,7 @@ import {
   saveMeetingSummary,
   type TranscriptActionState,
 } from '@/app/app/comms/transcripts/actions'
+import { FollowUpTasksPanel, type FollowUpProposal } from '@/components/comms/follow-up-tasks-panel'
 
 type Option = { id: string; label: string }
 
@@ -34,6 +35,7 @@ export type TranscriptCardData = {
   characterCount: number
   preview: string
   summary: TranscriptSummary | null
+  followUpProposals: FollowUpProposal[]
 }
 
 const INITIAL_STATE: TranscriptActionState = { ok: false }
@@ -46,11 +48,13 @@ export function TranscriptCard({
   transcript,
   campusSessions,
   agendaItems,
+  owners,
   aiEnabled,
 }: {
   transcript: TranscriptCardData
   campusSessions: Option[]
   agendaItems: Option[]
+  owners: Option[]
   aiEnabled: boolean
 }) {
   const [state, setState] = useState<TranscriptActionState>(INITIAL_STATE)
@@ -246,6 +250,15 @@ export function TranscriptCard({
             {pending ? 'Summarizing…' : 'Summarize meeting'}
           </button>
         </div>
+      )}
+
+      {summary && (
+        <FollowUpTasksPanel
+          proposals={transcript.followUpProposals}
+          owners={owners}
+          summaryId={summary.id}
+          aiEnabled={aiEnabled}
+        />
       )}
 
       {(state.error || state.message) && (

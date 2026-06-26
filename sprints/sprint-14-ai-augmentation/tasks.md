@@ -34,8 +34,8 @@ Theme: Claude-powered comms intelligence. Status values: `Not Started` · `In Pr
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S14-T14 | `proposeFollowUpTasks()` — map transcript action items to draft `comms_tasks` (title, proposed owner, due date) linked to the session/agenda item; owner matched against comms team members | TBD | Not Started | Same transcript run as T12 |
-| S14-T15 | Review-and-commit UI: edit/accept/reject proposed tasks; on commit, create `comms_tasks` (unified task system, ADR-0008) and notify owners | TBD | Not Started | Human-in-the-loop before any task is real |
+| S14-T14 | `proposeFollowUpTasks()` — map transcript action items to draft `comms_tasks` (title, proposed owner, due date) linked to the session/agenda item; owner matched against comms team members | Opus 4.8 | Completed | Added `src/lib/ai/follow-up-tasks.ts` (deterministic map of the T12 action items: owner matched by name/email/first-name, ISO due-date parse, de-dupe) + `follow-up-tasks-store.ts`; generated in the same run as T12 and persisted as pending `meeting_followup_tasks` (`00079`) |
+| S14-T15 | Review-and-commit UI: edit/accept/reject proposed tasks; on commit, create `comms_tasks` (unified task system, ADR-0008) and notify owners | Opus 4.8 | Completed | Added `follow-up-actions.ts` + `FollowUpTasksPanel` in the transcript workspace; edit title/owner/due, reject, or commit → creates a `comms_tasks` row (session/agenda linked) and notifies the owner via `task_assigned`; nothing is created until a human commits |
 
 ## Capability 4 — Organization news feed (admin-configured)
 
