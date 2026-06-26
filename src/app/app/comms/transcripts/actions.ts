@@ -45,6 +45,19 @@ function nullableId(value: FormDataEntryValue | null): string | null {
   return text && text !== 'none' ? text : null
 }
 
+function isoDateOrNull(value: FormDataEntryValue | null): string | null {
+  const text = asText(value)
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text : null
+}
+
+// Transcripts are surfaced inside meetings now, so refresh those surfaces too.
+function revalidateTranscriptSurfaces() {
+  revalidatePath(TRANSCRIPTS_PATH)
+  revalidatePath('/app/comms/meetings')
+  revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/comms/campus-log', 'layout')
+}
+
 async function requireCommsOperator() {
   const supabase = (await createClient()) as AppSupabaseClient
   const {
@@ -115,6 +128,7 @@ export async function uploadTranscript(
     const title = asText(formData.get('title')) || file.name.replace(/\.[^.]+$/, '')
     const campusSessionId = nullableId(formData.get('campus_session_id'))
     const agendaItemId = nullableId(formData.get('agenda_item_id'))
+    const meetingDate = isoDateOrNull(formData.get('meeting_date'))
 
     const storagePath = `${user.id}/${Date.now()}-${file.name.replace(/[^\w.-]+/g, '_')}`
     const { error: uploadError } = await supabase.storage
@@ -131,6 +145,7 @@ export async function uploadTranscript(
       storage_path: storagePath,
       campus_session_id: campusSessionId,
       agenda_item_id: agendaItemId,
+      meeting_date: meetingDate,
       uploaded_by: user.id,
     })
     if (insertError) {
@@ -139,7 +154,7 @@ export async function uploadTranscript(
       throw new Error(insertError.message)
     }
 
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateTranscriptSurfaces()
     return { ok: true, message: 'Transcript uploaded and text extracted.' }
   } catch (error) {
     if (error instanceof TranscriptExtractionError) return { ok: false, error: error.message }
@@ -213,7 +228,7 @@ export async function runMeetingSummary(
       }
     }
 
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateTranscriptSurfaces()
     const base = summary.chunked ? 'Summary generated (long transcript, map-reduced).' : 'Summary generated for review.'
     const tail = proposalCount > 0 ? ` ${proposalCount} follow-up task${proposalCount === 1 ? '' : 's'} proposed.` : ''
     return { ok: true, message: `${base}${tail}` }
@@ -300,7 +315,7 @@ export async function saveMeetingSummary(
       if (agendaError) throw new Error(agendaError.message)
     }
 
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateTranscriptSurfaces()
     const target = campusSessionId ? 'campus session' : agendaItemId ? 'weekly meeting' : 'transcript record (standalone)'
     return { ok: true, message: `Summary saved to the ${target}.` }
   } catch (error) {
@@ -321,7 +336,7 @@ export async function discardMeetingSummary(
     const { error } = await db.from('meeting_summaries').update({ status: 'discarded' }).eq('id', summaryId)
     if (error) throw new Error(error.message)
 
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateTranscriptSurfaces()
     return { ok: true, message: 'Summary discarded.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not discard the summary.' }
@@ -358,7 +373,7 @@ export async function deleteRawTranscript(
       .eq('id', transcriptId)
     if (updateError) throw new Error(updateError.message)
 
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateTranscriptSurfaces()
     return { ok: true, message: 'Raw transcript file deleted. The extracted summary is retained.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not delete the raw transcript.' }
@@ -394,7 +409,7 @@ export async function deleteTranscript(
       .eq('id', transcriptId)
     if (deleteError) throw new Error(deleteError.message)
 
-    revalidatePath(TRANSCRIPTS_PATH)
+    revalidateTranscriptSurfaces()
     return { ok: true, message: 'Transcript and its summaries deleted.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not delete the transcript.' }

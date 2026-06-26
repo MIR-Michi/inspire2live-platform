@@ -7,6 +7,7 @@ import { TeamFeed } from '@/components/comms/team-feed'
 import { WeeklyAgenda } from '@/components/comms/weekly-agenda'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
 import { NewMembersSection } from '@/components/comms/new-members-section'
+import { OrgNewsfeedCard } from '@/components/comms/org-newsfeed-card'
 
 function formatShortDate(value: string | null) {
   if (!value) return 'No date'
@@ -14,7 +15,7 @@ function formatShortDate(value: string | null) {
 }
 
 export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboardData; canApprove?: boolean }) {
-  const { channels, events, agendaGroups, agendaItems, teamMembers, newMembers, feed, owners } = data
+  const { channels, events, agendaGroups, agendaItems, teamMembers, newMembers, feed, owners, transcriptsByDate, transcriptOwners, aiEnabled, newsfeed } = data
 
   return (
     <div className="space-y-4">
@@ -25,7 +26,20 @@ export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboar
       <TileGroup groupId="comms-team-dashboard" className="space-y-6">
         {/* ── Bi-weekly meeting agenda ── */}
         <CollapsibleCard key="comms-team-agenda" title="Bi-weekly meeting" storageKey="comms-team-agenda" defaultCollapsed>
-          <WeeklyAgenda groups={agendaGroups} previousLimit={5} showAllHref="/app/comms/meetings" ownerOptions={teamMembers} />
+          <WeeklyAgenda
+            groups={agendaGroups}
+            previousLimit={5}
+            showAllHref="/app/comms/meetings"
+            ownerOptions={teamMembers}
+            transcriptsByDate={transcriptsByDate}
+            transcriptOwners={transcriptOwners}
+            aiEnabled={aiEnabled}
+          />
+        </CollapsibleCard>
+
+        {/* ── Organization news feed ── */}
+        <CollapsibleCard key="comms-team-newsfeed" title="Field Newsfeed" storageKey="comms-team-newsfeed" defaultCollapsed>
+          <OrgNewsfeedCard items={newsfeed} isAdmin={canApprove} aiEnabled={aiEnabled} />
         </CollapsibleCard>
 
         {/* ── New members ── */}
