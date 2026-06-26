@@ -15,6 +15,7 @@ export type OrgNewsfeedJobResult = {
   candidates?: number
   validated?: number
   outputWasJson?: boolean
+  groupErrors?: number
   message?: string
 }
 
@@ -160,6 +161,7 @@ export async function runOrgNewsfeedJob(
     candidates: generated.candidateCount,
     validated: generated.validatedCount,
     outputWasJson: generated.outputWasJson,
+    groupErrors: generated.groupErrors,
   }
 
   if (generated.items.length === 0) {
@@ -176,6 +178,7 @@ export async function runOrgNewsfeedJob(
     relevance: item.relevance,
     published_at: item.publishedAt,
     mention_of: item.mentionOf,
+    topic: item.topic,
     created_by: options?.createdBy ?? null,
   }))
 

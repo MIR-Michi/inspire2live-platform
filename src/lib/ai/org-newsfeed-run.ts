@@ -111,7 +111,8 @@ export async function executeAndRecordRun(userId: string | null): Promise<void> 
     if (result.skipped === 'no_config') {
       await finish('error', 'No configuration to run.', null)
     } else if (result.inserted > 0) {
-      await finish('success', `Added ${result.inserted} new item${result.inserted === 1 ? '' : 's'} (from ${result.generated} found).`, result.inserted)
+      const note = result.groupErrors ? ` (${result.groupErrors} category search${result.groupErrors === 1 ? '' : 'es'} timed out)` : ''
+      await finish('success', `Added ${result.inserted} new item${result.inserted === 1 ? '' : 's'} (from ${result.generated} found)${note}.`, result.inserted)
     } else {
       // No items: explain where it stopped so a dry run is diagnosable.
       const candidates = result.candidates ?? 0

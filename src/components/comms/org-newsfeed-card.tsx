@@ -1,5 +1,6 @@
 'use client'
 
+import { useMemo, useState } from 'react'
 import Link from 'next/link'
 import { useOrgNewsfeedRun } from '@/components/comms/use-org-newsfeed-run'
 import type { OrgNewsItem } from '@/lib/comms-dashboard-data'
@@ -34,6 +35,16 @@ export function OrgNewsfeedCard({
 }) {
   const { running, starting, busy, elapsed, message, status, start } = useOrgNewsfeedRun(initialRunStatus)
 
+  const topics = useMemo(() => {
+    const seen: string[] = []
+    for (const item of items) {
+      if (item.topic && !seen.includes(item.topic)) seen.push(item.topic)
+    }
+    return seen
+  }, [items])
+  const [activeTopic, setActiveTopic] = useState<string | null>(null)
+  const visibleItems = activeTopic ? items.filter((item) => item.topic === activeTopic) : items
+
   return (
     <div className="space-y-3">
       {isAdmin && (
@@ -67,8 +78,19 @@ export function OrgNewsfeedCard({
         <p className={`text-xs ${status === 'error' ? 'text-red-700' : 'text-emerald-700'}`}>{message}</p>
       )}
 
+      {topics.length > 0 && (
+        <div className="flex flex-wrap gap-1.5">
+          <FilterChip active={activeTopic === null} onClick={() => setActiveTopic(null)}>All ({items.length})</FilterChip>
+          {topics.map((topic) => (
+            <FilterChip key={topic} active={activeTopic === topic} onClick={() => setActiveTopic(topic)}>
+              {topic} ({items.filter((i) => i.topic === topic).length})
+            </FilterChip>
+          ))}
+        </div>
+      )}
+
       <div className="space-y-2">
-        {items.map((item) => {
+        {visibleItems.map((item) => {
           const meta = CATEGORY_META[item.category] ?? CATEGORY_META.other
           return (
             <div key={item.id} className="rounded-xl border border-neutral-200 bg-white p-3.5 shadow-sm">
@@ -84,6 +106,7 @@ export function OrgNewsfeedCard({
               </div>
               {item.summary && <p className="mt-1.5 line-clamp-2 text-xs text-neutral-500">{item.summary}</p>}
               <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-neutral-400">
+                {item.topic && <span className="rounded-full bg-neutral-100 px-2 py-0.5 font-medium text-neutral-600">{item.topic}</span>}
                 {item.mentionOf && <span className="rounded-full bg-pink-50 px-2 py-0.5 font-medium text-pink-700">Mentions {item.mentionOf}</span>}
                 {item.sourceName && <span>{item.sourceName}</span>}
                 {item.region && (<><span>·</span><span>{item.region}</span></>)}
@@ -107,5 +130,17 @@ export function OrgNewsfeedCard({
         )}
       </div>
     </div>
+  )
+}
+
+function FilterChip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition ${active ? 'border-neutral-900 bg-neutral-900 text-white' : 'border-neutral-300 bg-white text-neutral-600 hover:border-neutral-400'}`}
+    >
+      {children}
+    </button>
   )
 }

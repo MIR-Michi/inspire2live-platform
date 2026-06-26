@@ -7,11 +7,6 @@ import type { OrgFeedConfig } from './org-feed-config'
 // Per the model-per-workload policy: the news feed is a web-search aggregation
 // job, best served by a fast balanced model, not the heavy reasoning default.
 const NEWSFEED_MODEL: AiModelId = 'claude-sonnet-4-6'
-// Web search + compilation is slow, but must finish AND record a result inside
-// the 300s serverless cap. Keep a generous buffer below 300s so the timeout
-// fires (and is recorded as an error) instead of the whole function being
-// killed mid-run with the status stuck on "running".
-const NEWSFEED_TIMEOUT_MS = 230_000
 
 export type NewsFeedItem = {
   headline: string
@@ -23,6 +18,8 @@ export type NewsFeedItem = {
   relevance: number
   publishedAt: string | null
   mentionOf: string | null
+  /** The configured topic/theme/mention group this item was found for. */
+  topic: string | null
 }
 
 export type WatchedEntities = {
@@ -39,8 +36,13 @@ export type OrgNewsfeedResult = {
   candidateCount: number
   validatedCount: number
   outputWasJson: boolean
+  groupCount: number
+  groupErrors: number
   rawResponse?: unknown
 }
+
+export type SearchGroupKind = 'topic' | 'theme' | 'mention'
+export type SearchGroup = { key: string; label: string; kind: SearchGroupKind; query: string }
 
 export type GenerateOrgNewsfeedInput = {
   config: OrgFeedConfig
@@ -88,51 +90,59 @@ export const NEWS_FEED_JSON_SCHEMA = {
 const ORG_PROFILE = `Inspire2Live is an international patient-driven cancer organization. Its mission is to turn cancer into a curable or chronically manageable disease, working through patient advocates, World Campus collaborations, research initiatives, and global partnerships.`
 
 /**
- * The stable, cacheable system prefix: org profile + the admin's feed config.
- * Reused verbatim across every call in a job so it can be prompt-cached.
+ * The stable, cacheable system prefix shared across every per-group search in a
+ * run (org profile, region, source preferences, rules). The specific
+ * topic/theme/mention to search for is supplied per group in the user message,
+ * so this prefix is identical across calls and gets prompt-cached.
  */
-export function buildNewsfeedSystemPrompt(config: OrgFeedConfig, watched?: WatchedEntities): string {
-  const organizations = watched?.organizations ?? []
-  const allPeople = watched?.people ?? []
-  // Keep the watched surface small: a long list invites the model to keep
-  // searching (and time out). Prioritise the org + a handful of named people.
-  const people = allPeople.slice(0, 8)
-  const extraPeople = allPeople.length - people.length
-  const hasMentions = organizations.length > 0 || people.length > 0
-
+export function buildNewsfeedSystemPrompt(config: OrgFeedConfig): string {
   const lines: Array<string | null> = [
-    'You assemble an organization-wide news feed for the Inspire2Live communications team.',
+    'You find recent, citation-backed items for the Inspire2Live communications team news feed.',
     ORG_PROFILE,
     '',
-    'Monitoring configuration (treat as the editorial brief):',
-    `- Topics: ${config.topics.length > 0 ? config.topics.join(', ') : '(none specified)'}`,
-    `- Themes: ${config.themes.length > 0 ? config.themes.join(', ') : '(none specified)'}`,
-    `- Region focus: ${config.region ?? 'global'}`,
-    config.allowedSources.length > 0 ? `- Prefer these source domains: ${config.allowedSources.join(', ')}` : null,
-    config.blockedSources.length > 0 ? `- Never use these source domains: ${config.blockedSources.join(', ')}` : null,
+    `Region focus: ${config.region ?? 'global'}.`,
+    config.allowedSources.length > 0 ? `Prefer these source domains (not exclusive): ${config.allowedSources.join(', ')}.` : null,
+    config.blockedSources.length > 0 ? `Never use these source domains: ${config.blockedSources.join(', ')}.` : null,
+    '',
+    'Rules (each request is small and bounded — do not over-search):',
+    '- Use the web_search tool to find real, recent items. Never invent a story or a URL.',
+    '- Every item MUST include a working sourceUrl copied from a real search result (mandatory citation).',
+    '- Use at most 2 searches, then return ONLY schema-valid JSON — nothing else.',
+    '- Keep headlines factual; summaries are 1-2 neutral sentences. Tailor relevance 0-100.',
+    '- Prefer reputable sources; exclude blocked domains. Set mentionOf to null unless the request is about a specific watched entity.',
   ]
+  return lines.filter((line) => line !== null).join('\n')
+}
 
-  if (hasMentions) {
-    lines.push('')
-    lines.push('Mention monitoring (also surface recent PUBLIC mentions of these entities — news, articles, press, blogs, and public social-media posts):')
-    if (organizations.length > 0) lines.push(`- Organizations: ${organizations.join(', ')}`)
-    if (people.length > 0) lines.push(`- People: ${people.join(', ')}${extraPeople > 0 ? ` (and ${extraPeople} more)` : ''}`)
-    lines.push('For a mention item, set category to "mention" and mentionOf to the exact watched entity it is about. Only public information — never private accounts or personal data.')
+/**
+ * Split the editorial brief into small, focused search groups — one per topic,
+ * one per theme, and one for mentions — each run as its own bounded search.
+ * Bounded by `max` so a big config can't spawn an unbounded number of calls.
+ */
+export function buildSearchGroups(config: OrgFeedConfig, watched?: WatchedEntities, max = 6): SearchGroup[] {
+  const groups: SearchGroup[] = []
+
+  const organizations = watched?.organizations ?? []
+  const people = (watched?.people ?? []).slice(0, 8)
+  if (organizations.length > 0 || people.length > 0) {
+    const names = [...organizations, ...people]
+    groups.push({
+      key: 'mentions',
+      label: 'Mentions',
+      kind: 'mention',
+      query: `recent PUBLIC mentions (news, articles, press, public social posts) of: ${names.join(', ')}`,
+    })
   }
 
-  lines.push('')
-  lines.push('Rules — work within a strict budget and prioritise; this is not an exhaustive crawl:')
-  lines.push('- You may run AT MOST 3 web searches. Spend them on the highest-priority topics/themes (and the org mention) first. Do not search for every topic or person.')
-  lines.push('- Return 5–8 of the most relevant, recent items. Quality over quantity — fewer is fine. Stop as soon as you have a good set; do not keep searching for marginal items.')
-  lines.push('- Use the web_search tool to find real items. Never invent a story or a URL.')
-  lines.push('- Every item MUST include a working sourceUrl copied from a real search result (mandatory citation).')
-  lines.push('- Tailor relevance (0-100) to how directly the item serves the topics, themes, mission, and watched entities.')
-  lines.push('- Prefer reputable sources; exclude blocked domains entirely.')
-  lines.push('- Keep headlines factual; summaries are 1-2 neutral sentences.')
-  lines.push('- Set mentionOf to null for general topical news that is not about a watched entity.')
-  lines.push('- As soon as you have your set, return ONLY the schema-valid JSON and nothing else.')
+  for (const topic of config.topics) {
+    groups.push({ key: `topic:${topic.toLowerCase()}`, label: topic, kind: 'topic', query: `recent cancer / patient-advocacy news about "${topic}"` })
+  }
+  for (const theme of config.themes) {
+    groups.push({ key: `theme:${theme.toLowerCase()}`, label: theme, kind: 'theme', query: `recent developments relevant to the theme "${theme}"` })
+  }
 
-  return lines.filter((line) => line !== null).join('\n')
+  // Mentions first (prioritised), then topics, then themes — capped.
+  return groups.slice(0, max)
 }
 
 function asString(value: unknown): string {
@@ -206,6 +216,7 @@ function normalizeItem(value: unknown, blockedSources: string[]): NewsFeedItem |
     relevance: clampRelevance(raw.relevance),
     publishedAt: nullableString(raw.publishedAt, 40),
     mentionOf: nullableString(raw.mentionOf, 160),
+    topic: null,
   }
 }
 
@@ -237,75 +248,113 @@ export function dedupeNewsItems(items: NewsFeedItem[], existingUrls: string[] = 
   return out
 }
 
+// Per-group tuning. Each group is a small, fast, bounded search; they run with
+// limited concurrency so the whole fan-out completes inside the 300s function.
+const GROUP_TIMEOUT_MS = 75_000
+const GROUP_ITEMS = 4
+const GROUP_CONCURRENCY = 3
+const TOTAL_ITEM_CAP = 24
+
+type GroupResult = { items: NewsFeedItem[]; candidates: number; validated: number; outputWasJson: boolean; error: boolean }
+
+async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length)
+  let cursor = 0
+  async function worker() {
+    while (cursor < items.length) {
+      const index = cursor++
+      results[index] = await fn(items[index])
+    }
+  }
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, () => worker()))
+  return results
+}
+
+/** Run one focused search group and tag its items with the group label. */
+async function generateGroup(group: SearchGroup, config: OrgFeedConfig, system: string, existingHeadlines: string[], createdBy: string | null): Promise<GroupResult> {
+  const existingContext = wrapExternalData(
+    'newsfeed.existing',
+    JSON.stringify({ existingHeadlines: existingHeadlines.slice(0, 40), note: 'Do not repeat these.' })
+  )
+  try {
+    const result = await runAiMessage<unknown>({
+      feature: 'org_newsfeed_group',
+      model: NEWSFEED_MODEL,
+      effort: 'low',
+      maxTokens: 2500,
+      timeoutMs: GROUP_TIMEOUT_MS,
+      retries: 0,
+      createdBy,
+      system,
+      cacheSystemPrompt: true,
+      tools: [webSearchTool({ maxUses: 2, blockedDomains: config.blockedSources })],
+      structuredFormat: {
+        type: 'json_schema',
+        name: 'org_news_feed',
+        description: 'Recent, citation-backed news items for one topic.',
+        schema: NEWS_FEED_JSON_SCHEMA as unknown as Record<string, unknown>,
+      },
+      messages: [
+        {
+          role: 'user',
+          content: [
+            `Find up to ${GROUP_ITEMS} recent, high-relevance items: ${group.query}.` +
+              (group.kind === 'mention' ? ' Set category to "mention" and mentionOf to the matched entity for each.' : '') +
+              ' Use at most 2 searches, then return the JSON. Fewer well-cited items is fine.',
+            existingContext,
+          ].join('\n\n'),
+        },
+      ],
+    })
+    const candidates = itemsArray(result.output).length
+    const validated = validateNewsFeedItems(result.output, config.blockedSources)
+    const items = validated.map((item) => ({ ...item, topic: group.label }))
+    return { items, candidates, validated: validated.length, outputWasJson: typeof result.output !== 'string', error: false }
+  } catch (error) {
+    console.error(`[newsfeed] group "${group.label}" failed`, error)
+    return { items: [], candidates: 0, validated: 0, outputWasJson: true, error: true }
+  }
+}
+
 /**
- * Assemble an org-wide news feed via web search + structured output, driven by
- * the admin's feed config. Citations are mandatory and stored as source_url.
+ * Assemble an org-wide news feed by fanning out into small, focused per-group
+ * searches (one per topic/theme + one for mentions), then consolidating and
+ * deduplicating. Each group is bounded and resilient — one slow/failed group
+ * does not sink the others. Citations are mandatory and stored as source_url.
  */
 export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Promise<OrgNewsfeedResult> {
   const { config, watched } = input
-  const maxItems = input.maxItems ?? 8
-  const hasMentions = (watched?.organizations.length ?? 0) > 0 || (watched?.people.length ?? 0) > 0
+  const groups = buildSearchGroups(config, watched)
+  const system = buildNewsfeedSystemPrompt(config)
+  const existingHeadlines = input.existingHeadlines ?? []
 
-  const existingContext = wrapExternalData(
-    'newsfeed.existing',
-    JSON.stringify({
-      existingHeadlines: (input.existingHeadlines ?? []).slice(0, 60),
-      note: 'Do not repeat items already covered by these headlines or their URLs.',
-    })
+  const groupResults = await mapWithConcurrency(groups, GROUP_CONCURRENCY, (group) =>
+    generateGroup(group, config, system, existingHeadlines, input.createdBy ?? null)
   )
 
-  const result = await runAiMessage<unknown>({
-    feature: 'org_newsfeed',
-    model: input.model ?? NEWSFEED_MODEL,
-    // Minimal reasoning: this is "search + list", not a reasoning problem.
-    // Heavier effort makes the model think/search at length and time out.
-    effort: input.effort ?? 'low',
-    maxTokens: 4000,
-    timeoutMs: NEWSFEED_TIMEOUT_MS,
-    // No retries: a retry after a ~230s timeout would blow past the 300s
-    // function limit and leave the run stuck. Fail fast and record it instead.
-    retries: 0,
-    createdBy: input.createdBy,
-    system: buildNewsfeedSystemPrompt(config, watched),
-    cacheSystemPrompt: true,
-    tools: [
-      // NB: allowed_domains is a HARD restriction in the web-search tool and
-      // starves results when only a few domains are listed (e.g. google.com).
-      // We keep allowed domains as a SOFT preference in the prompt and only use
-      // blocked_domains as a hard filter here.
-      webSearchTool({
-        maxUses: 3,
-        blockedDomains: config.blockedSources,
-      }),
-    ],
-    structuredFormat: {
-      type: 'json_schema',
-      name: 'org_news_feed',
-      description: 'A list of recent, citation-backed news items for the organization feed.',
-      schema: NEWS_FEED_JSON_SCHEMA as unknown as Record<string, unknown>,
-    },
-    messages: [
-      {
-        role: 'user',
-        content: [
-          `Find ${Math.min(maxItems, 8)} recent, high-relevance items for the brief${hasMentions ? ' (a mix of topical news and a few public mentions of the watched org/people)' : ''}. Use at most 3 web searches, prioritise the most important topics first, then return the JSON. Do not try to cover everything — a focused, well-cited set of 5–8 is the goal. Each item needs a real sourceUrl.`,
-          existingContext,
-        ].join('\n\n'),
-      },
-    ],
-  })
+  let candidateCount = 0
+  let validatedCount = 0
+  let outputWasJson = true
+  let groupErrors = 0
+  const allItems: NewsFeedItem[] = []
+  for (const result of groupResults) {
+    candidateCount += result.candidates
+    validatedCount += result.validated
+    if (!result.outputWasJson) outputWasJson = false
+    if (result.error) groupErrors += 1
+    allItems.push(...result.items)
+  }
 
-  const candidateCount = itemsArray(result.output).length
-  const validated = validateNewsFeedItems(result.output, config.blockedSources)
-  const deduped = dedupeNewsItems(validated, input.existingUrls).slice(0, maxItems)
+  const deduped = dedupeNewsItems(allItems, input.existingUrls).slice(0, input.maxItems ?? TOTAL_ITEM_CAP)
 
   return {
     items: deduped,
-    model: result.config.model,
-    effort: result.config.effort,
+    model: NEWSFEED_MODEL,
+    effort: 'low',
     candidateCount,
-    validatedCount: validated.length,
-    outputWasJson: typeof result.output !== 'string',
-    rawResponse: result.rawResponse,
+    validatedCount,
+    outputWasJson,
+    groupCount: groups.length,
+    groupErrors,
   }
 }

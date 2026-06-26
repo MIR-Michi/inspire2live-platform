@@ -9,6 +9,7 @@ vi.mock('@/lib/ai/client', () => ({
 
 import {
   buildNewsfeedSystemPrompt,
+  buildSearchGroups,
   dedupeNewsItems,
   normalizeUrl,
   validateNewsFeedItems,
@@ -17,7 +18,7 @@ import {
 import { DEFAULT_ORG_FEED_CONFIG } from '@/lib/ai/org-feed-config'
 
 describe('buildNewsfeedSystemPrompt', () => {
-  it('embeds the configured topics, themes, region, and source rules', () => {
+  it('is a stable, cacheable prefix: region + source rules + citation rule, no per-topic content', () => {
     const prompt = buildNewsfeedSystemPrompt({
       ...DEFAULT_ORG_FEED_CONFIG,
       topics: ['precision oncology'],
@@ -26,28 +27,41 @@ describe('buildNewsfeedSystemPrompt', () => {
       allowedSources: ['nature.com'],
       blockedSources: ['tabloid.com'],
     })
-    expect(prompt).toContain('precision oncology')
-    expect(prompt).toContain('patient advocacy')
     expect(prompt).toContain('Europe')
     expect(prompt).toContain('nature.com')
     expect(prompt).toContain('tabloid.com')
     expect(prompt).toContain('mandatory citation')
+    // Topic/theme specifics live in the per-group user message, not the prefix.
+    expect(prompt).not.toContain('precision oncology')
+    expect(prompt).not.toContain('patient advocacy')
+  })
+})
+
+describe('buildSearchGroups', () => {
+  it('creates a group per topic and theme, plus a mentions group, capped', () => {
+    const groups = buildSearchGroups(
+      { ...DEFAULT_ORG_FEED_CONFIG, topics: ['precision oncology', 'clinical trials'], themes: ['patient advocacy'] },
+      { organizations: ['Inspire2Live'], people: ['Peter Kapitein'] }
+    )
+    const labels = groups.map((g) => g.label)
+    expect(labels).toContain('Mentions')
+    expect(labels).toContain('precision oncology')
+    expect(labels).toContain('clinical trials')
+    expect(labels).toContain('patient advocacy')
+    // Mentions group is first (prioritised) and carries the watched names.
+    expect(groups[0].kind).toBe('mention')
+    expect(groups[0].query).toContain('Inspire2Live')
+    expect(groups[0].query).toContain('Peter Kapitein')
   })
 
-  it('adds a mention-monitoring section for watched entities', () => {
-    const prompt = buildNewsfeedSystemPrompt(DEFAULT_ORG_FEED_CONFIG, {
-      organizations: ['Inspire2Live'],
-      people: ['Peter Kapitein'],
-    })
-    expect(prompt).toContain('Mention monitoring')
-    expect(prompt).toContain('Inspire2Live')
-    expect(prompt).toContain('Peter Kapitein')
-    expect(prompt).toContain('mentionOf')
-  })
-
-  it('omits the mention section when nothing is watched', () => {
-    const prompt = buildNewsfeedSystemPrompt(DEFAULT_ORG_FEED_CONFIG)
-    expect(prompt).not.toContain('Mention monitoring')
+  it('omits the mentions group when nothing is watched, and respects the cap', () => {
+    const groups = buildSearchGroups(
+      { ...DEFAULT_ORG_FEED_CONFIG, topics: ['a', 'b', 'c'], themes: ['d', 'e', 'f', 'g'] },
+      undefined,
+      4
+    )
+    expect(groups).toHaveLength(4)
+    expect(groups.some((g) => g.kind === 'mention')).toBe(false)
   })
 })
 
@@ -103,6 +117,7 @@ describe('dedupeNewsItems', () => {
     relevance: 50,
     publishedAt: null,
     mentionOf: null,
+    topic: null,
   })
 
   it('drops items already stored and repeats within the batch', () => {
