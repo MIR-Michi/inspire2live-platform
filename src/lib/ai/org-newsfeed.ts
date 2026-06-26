@@ -160,6 +160,23 @@ function clampRelevance(value: unknown): number {
   return Math.max(0, Math.min(100, Math.round(n)))
 }
 
+/**
+ * Coerce a model-provided published date into a valid ISO timestamp, or null.
+ * The model often returns partial/loose values ("2025", "2025-06", "June 2025")
+ * that a Postgres timestamptz column rejects. Date.parse handles those (a bare
+ * year becomes Jan 1), and anything unparseable or implausible becomes null.
+ */
+export function toIsoTimestamp(value: unknown): string | null {
+  const text = asString(value)
+  if (!text) return null
+  const ms = Date.parse(text)
+  if (Number.isNaN(ms)) return null
+  const date = new Date(ms)
+  const year = date.getUTCFullYear()
+  if (year < 1990 || year > 2100) return null
+  return date.toISOString()
+}
+
 function isHttpUrl(value: string): boolean {
   try {
     const url = new URL(value)
@@ -214,7 +231,7 @@ function normalizeItem(value: unknown, blockedSources: string[]): NewsFeedItem |
     sourceUrl: sourceUrl.slice(0, 1000),
     sourceName: nullableString(raw.sourceName, 160) ?? host,
     relevance: clampRelevance(raw.relevance),
-    publishedAt: nullableString(raw.publishedAt, 40),
+    publishedAt: toIsoTimestamp(raw.publishedAt),
     mentionOf: nullableString(raw.mentionOf, 160),
     topic: null,
   }

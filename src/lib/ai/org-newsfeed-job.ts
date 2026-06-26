@@ -183,12 +183,25 @@ export async function runOrgNewsfeedJob(
   }))
 
   // Ignore conflicts on source_url so re-runs never duplicate a story.
-  const { data: insertedRows, error: insertError } = await db
-    .from('news_feed_items')
-    .upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
-  if (insertError) throw new Error(insertError.message)
+  const batch = await db.from('news_feed_items').upsert(rows, { onConflict: 'source_url', ignoreDuplicates: true })
 
-  const inserted = Array.isArray(insertedRows) ? insertedRows.length : rows.length
+  let inserted: number
+  if (!batch.error) {
+    inserted = Array.isArray(batch.data) ? batch.data.length : rows.length
+  } else {
+    // One malformed row would otherwise fail the whole batch and lose every
+    // result — fall back to inserting row-by-row, skipping the bad ones.
+    console.error('[newsfeed] batch insert failed, retrying per-row', batch.error.message)
+    inserted = 0
+    for (const row of rows) {
+      const single = await db.from('news_feed_items').upsert([row], { onConflict: 'source_url', ignoreDuplicates: true })
+      if (single.error) {
+        console.error('[newsfeed] skipped a row', single.error.message)
+        continue
+      }
+      inserted += Array.isArray(single.data) ? single.data.length : 1
+    }
+  }
 
   return { ok: true, generated: generated.items.length, inserted, skipped: null, ...diagnostics }
 }

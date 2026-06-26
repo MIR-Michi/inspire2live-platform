@@ -12,6 +12,7 @@ import {
   buildSearchGroups,
   dedupeNewsItems,
   normalizeUrl,
+  toIsoTimestamp,
   validateNewsFeedItems,
   type NewsFeedItem,
 } from '@/lib/ai/org-newsfeed'
@@ -62,6 +63,18 @@ describe('buildSearchGroups', () => {
     )
     expect(groups).toHaveLength(4)
     expect(groups.some((g) => g.kind === 'mention')).toBe(false)
+  })
+})
+
+describe('toIsoTimestamp', () => {
+  it('coerces partial/loose dates the model returns into valid ISO (or null)', () => {
+    expect(toIsoTimestamp('2025')).toBe('2025-01-01T00:00:00.000Z')
+    expect(toIsoTimestamp('2025-06-15')).toBe('2025-06-15T00:00:00.000Z')
+    expect(toIsoTimestamp('2025-06-15T10:30:00Z')).toBe('2025-06-15T10:30:00.000Z')
+    expect(toIsoTimestamp('not a date')).toBeNull()
+    expect(toIsoTimestamp('')).toBeNull()
+    expect(toIsoTimestamp(null)).toBeNull()
+    expect(toIsoTimestamp('1700')).toBeNull() // implausible year
   })
 })
 
