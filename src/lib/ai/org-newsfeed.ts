@@ -94,8 +94,9 @@ const ORG_PROFILE = `Inspire2Live is an international patient-driven cancer orga
 export function buildNewsfeedSystemPrompt(config: OrgFeedConfig, watched?: WatchedEntities): string {
   const organizations = watched?.organizations ?? []
   const allPeople = watched?.people ?? []
-  // Cap the list so a large CRM team doesn't bloat the prompt or slow the run.
-  const people = allPeople.slice(0, 25)
+  // Keep the watched surface small: a long list invites the model to keep
+  // searching (and time out). Prioritise the org + a handful of named people.
+  const people = allPeople.slice(0, 8)
   const extraPeople = allPeople.length - people.length
   const hasMentions = organizations.length > 0 || people.length > 0
 
@@ -120,14 +121,16 @@ export function buildNewsfeedSystemPrompt(config: OrgFeedConfig, watched?: Watch
   }
 
   lines.push('')
-  lines.push('Rules:')
-  lines.push('- Use the web_search tool to find recent, real items. Never invent a story or a URL.')
+  lines.push('Rules — work within a strict budget and prioritise; this is not an exhaustive crawl:')
+  lines.push('- You may run AT MOST 3 web searches. Spend them on the highest-priority topics/themes (and the org mention) first. Do not search for every topic or person.')
+  lines.push('- Return 5–8 of the most relevant, recent items. Quality over quantity — fewer is fine. Stop as soon as you have a good set; do not keep searching for marginal items.')
+  lines.push('- Use the web_search tool to find real items. Never invent a story or a URL.')
   lines.push('- Every item MUST include a working sourceUrl copied from a real search result (mandatory citation).')
   lines.push('- Tailor relevance (0-100) to how directly the item serves the topics, themes, mission, and watched entities.')
-  lines.push('- Prefer reputable sources. Exclude blocked domains entirely.')
+  lines.push('- Prefer reputable sources; exclude blocked domains entirely.')
   lines.push('- Keep headlines factual; summaries are 1-2 neutral sentences.')
   lines.push('- Set mentionOf to null for general topical news that is not about a watched entity.')
-  lines.push('- Return only schema-valid JSON.')
+  lines.push('- As soon as you have your set, return ONLY the schema-valid JSON and nothing else.')
 
   return lines.filter((line) => line !== null).join('\n')
 }
@@ -240,7 +243,7 @@ export function dedupeNewsItems(items: NewsFeedItem[], existingUrls: string[] = 
  */
 export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Promise<OrgNewsfeedResult> {
   const { config, watched } = input
-  const maxItems = input.maxItems ?? 12
+  const maxItems = input.maxItems ?? 8
   const hasMentions = (watched?.organizations.length ?? 0) > 0 || (watched?.people.length ?? 0) > 0
 
   const existingContext = wrapExternalData(
@@ -254,8 +257,10 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
   const result = await runAiMessage<unknown>({
     feature: 'org_newsfeed',
     model: input.model ?? NEWSFEED_MODEL,
-    effort: input.effort ?? 'medium',
-    maxTokens: 6000,
+    // Minimal reasoning: this is "search + list", not a reasoning problem.
+    // Heavier effort makes the model think/search at length and time out.
+    effort: input.effort ?? 'low',
+    maxTokens: 4000,
     timeoutMs: NEWSFEED_TIMEOUT_MS,
     // No retries: a retry after a ~230s timeout would blow past the 300s
     // function limit and leave the run stuck. Fail fast and record it instead.
@@ -269,7 +274,7 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
       // We keep allowed domains as a SOFT preference in the prompt and only use
       // blocked_domains as a hard filter here.
       webSearchTool({
-        maxUses: 4,
+        maxUses: 3,
         blockedDomains: config.blockedSources,
       }),
     ],
@@ -283,7 +288,7 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
       {
         role: 'user',
         content: [
-          `Find up to ${maxItems} recent items that match the monitoring brief — a mix of topical news${hasMentions ? ' and recent public mentions of the watched organizations and people' : ''}. Search the web, then return the structured JSON. Each item needs a real sourceUrl.`,
+          `Find ${Math.min(maxItems, 8)} recent, high-relevance items for the brief${hasMentions ? ' (a mix of topical news and a few public mentions of the watched org/people)' : ''}. Use at most 3 web searches, prioritise the most important topics first, then return the JSON. Do not try to cover everything — a focused, well-cited set of 5–8 is the goal. Each item needs a real sourceUrl.`,
           existingContext,
         ].join('\n\n'),
       },
