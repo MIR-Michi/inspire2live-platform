@@ -3,6 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { DEFAULT_ORG_FEED_CONFIG } from '@/lib/ai/org-feed-config'
+import { getRunStatus } from '@/lib/ai/org-newsfeed-run'
 import { OrgFeedWizard } from '@/components/admin/org-feed-wizard'
 
 type OrgFeedConfigRow = {
@@ -44,9 +45,10 @@ export default async function AdminOrgFeedPage() {
     }
   }
 
-  const [{ data: config }, { count }] = await Promise.all([
+  const [{ data: config }, { count }, runStatus] = await Promise.all([
     admin.from('org_feed_config').select('topics, themes, allowed_sources, blocked_sources, region, cadence, enabled, watch_organization, organization_aliases, watch_crm_internal, watch_people, updated_at').eq('singleton', true).maybeSingle(),
     admin.from('news_feed_items').select('id', { count: 'exact', head: true }),
+    getRunStatus(createAdminClient()).catch(() => null),
   ])
 
   const initialConfig = {
@@ -89,6 +91,7 @@ export default async function AdminOrgFeedPage() {
         itemCount={count ?? 0}
         lastUpdated={config?.updated_at ?? null}
         aiEnabled={isAiEnabled()}
+        initialRunStatus={runStatus}
       />
     </div>
   )

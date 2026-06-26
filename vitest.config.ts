@@ -26,6 +26,7 @@ export default defineConfig({
         'src/lib/comms-meeting-transcripts.ts',
         'src/lib/ai/follow-up-tasks-store.ts',
         'src/lib/ai/org-newsfeed-job.ts',
+        'src/lib/ai/org-newsfeed-run.ts',
         'src/lib/comms-digest.ts',
         'src/lib/comms-event-pipeline.ts',
         'src/lib/comms-integration-intents.ts',

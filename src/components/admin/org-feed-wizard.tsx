@@ -1,12 +1,12 @@
 'use client'
 
-import { useEffect, useMemo, useState, useTransition } from 'react'
+import { useMemo, useState, useTransition } from 'react'
 import {
   saveOrgFeedConfig,
-  runNewsfeedNow,
   type OrgFeedActionState,
 } from '@/app/app/admin/org-feed/actions'
-import { normalizeDomain } from '@/lib/ai/org-feed-config'
+import { useOrgNewsfeedRun } from '@/components/comms/use-org-newsfeed-run'
+import { normalizeDomain, type OrgNewsfeedRunStatus } from '@/lib/ai/org-feed-config'
 import {
   ALL_SUGGESTED_SOURCES,
   ALL_SUGGESTED_THEMES,
@@ -50,12 +50,14 @@ export function OrgFeedWizard({
   itemCount,
   lastUpdated,
   aiEnabled,
+  initialRunStatus,
 }: {
   initialConfig: InitialConfig
   isConfigured: boolean
   itemCount: number
   lastUpdated: string | null
   aiEnabled: boolean
+  initialRunStatus: OrgNewsfeedRunStatus | null
 }) {
   // Reconcile stored values against the catalog so existing configs (incl. ones
   // made with the old free-text form) round-trip into checkboxes + custom chips.
@@ -85,17 +87,10 @@ export function OrgFeedWizard({
   const [watchPeople, setWatchPeople] = useState<string[]>(initialConfig.watchPeople)
 
   const [state, setState] = useState<OrgFeedActionState>(INITIAL_STATE)
-  // Save and Run are independent so one's busy state never bleeds into the other.
   const [savePending, startSave] = useTransition()
-  const [runPending, startRun] = useTransition()
-  const [elapsed, setElapsed] = useState(0)
-  const busy = savePending || runPending
-
-  useEffect(() => {
-    if (!runPending) return
-    const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
-    return () => clearInterval(timer)
-  }, [runPending])
+  // Generation runs in the background; the hook polls until it finishes.
+  const run = useOrgNewsfeedRun(initialRunStatus)
+  const busy = savePending || run.busy
 
   const allThemes = [...themes, ...customThemes]
   const allTopics = [...topics, ...customTopics]
@@ -121,15 +116,14 @@ export function OrgFeedWizard({
     startSave(async () => setState(await saveOrgFeedConfig(buildPayload())))
   }
 
-  // Run now saves the current selections first, then generates — so it always
-  // runs what's on screen (no "did I save?" footgun).
+  // "Save & run": persist the on-screen selections, then kick off the
+  // background run. The hook polls until it finishes and refreshes the data.
   const runNow = () => {
     setState(INITIAL_STATE)
-    setElapsed(0)
-    startRun(async () => {
+    run.start(async () => {
       const saved = await saveOrgFeedConfig(buildPayload())
-      if (!saved.ok) { setState(saved); return }
-      setState(await runNewsfeedNow())
+      if (!saved.ok) { setState(saved); return false }
+      return true
     })
   }
 
@@ -317,18 +311,21 @@ export function OrgFeedWizard({
             )}
 
             <div className="flex flex-wrap items-center gap-3 border-t border-neutral-100 pt-4">
-              <button type="button" onClick={runNow} disabled={busy || !aiEnabled} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50" title={aiEnabled ? 'Saves your current setup, then runs the web-search job' : 'AI features are disabled'}>
-                {runPending ? `Running… ${elapsed}s` : 'Save & run now'}
+              <button type="button" onClick={runNow} disabled={busy || !aiEnabled} className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50 disabled:opacity-50" title={aiEnabled ? 'Saves your current setup, then runs the web-search job in the background' : 'AI features are disabled'}>
+                {run.starting ? 'Starting…' : run.running ? `Generating… ${run.elapsed}s` : 'Save & run now'}
               </button>
               <span className="text-xs text-neutral-500">
                 {itemCount} item{itemCount === 1 ? '' : 's'} in the feed
                 {lastUpdated ? ` · updated ${new Date(lastUpdated).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}` : ''}
               </span>
             </div>
-            {runPending && (
+            {run.running && (
               <p className="text-xs text-neutral-500">
-                Saved. Searching the web and compiling cited items — this usually takes 1–3 minutes. Keep this tab open while it runs.
+                Saved. Generating in the background — searching the web and compiling cited items (usually 1–3 minutes). You can leave this page; items appear when it finishes.
               </p>
+            )}
+            {!run.busy && run.message && (
+              <p className={`text-xs ${run.status === 'error' ? 'text-red-700' : 'text-emerald-700'}`}>{run.message}</p>
             )}
           </Section>
         )}

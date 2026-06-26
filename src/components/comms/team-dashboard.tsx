@@ -8,13 +8,14 @@ import { WeeklyAgenda } from '@/components/comms/weekly-agenda'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
 import { NewMembersSection } from '@/components/comms/new-members-section'
 import { OrgNewsfeedCard } from '@/components/comms/org-newsfeed-card'
+import type { OrgNewsfeedRunStatus } from '@/lib/ai/org-feed-config'
 
 function formatShortDate(value: string | null) {
   if (!value) return 'No date'
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
 }
 
-export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboardData; canApprove?: boolean }) {
+export function TeamDashboard({ data, canApprove = false, newsfeedRunStatus = null }: { data: TeamDashboardData; canApprove?: boolean; newsfeedRunStatus?: OrgNewsfeedRunStatus | null }) {
   const { channels, events, agendaGroups, agendaItems, teamMembers, newMembers, feed, owners, transcriptsByDate, transcriptOwners, aiEnabled, newsfeed } = data
 
   return (
@@ -39,7 +40,7 @@ export function TeamDashboard({ data, canApprove = false }: { data: TeamDashboar
 
         {/* ── Organization news feed ── */}
         <CollapsibleCard key="comms-team-newsfeed" title="Field Newsfeed" storageKey="comms-team-newsfeed" defaultCollapsed>
-          <OrgNewsfeedCard items={newsfeed} isAdmin={canApprove} aiEnabled={aiEnabled} />
+          <OrgNewsfeedCard items={newsfeed} isAdmin={canApprove} aiEnabled={aiEnabled} initialRunStatus={newsfeedRunStatus} />
         </CollapsibleCard>
 
         {/* ── New members ── */}

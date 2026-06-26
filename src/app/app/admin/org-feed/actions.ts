@@ -3,9 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
-import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { validateOrgFeedConfig } from '@/lib/ai/org-feed-config'
-import { runOrgNewsfeedJob } from '@/lib/ai/org-newsfeed-job'
 
 export interface OrgFeedActionState {
   ok: boolean
@@ -90,27 +88,5 @@ export async function saveOrgFeedConfig(input: OrgFeedConfigInput): Promise<OrgF
     return { ok: true, message: 'Feed configuration saved.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not save the configuration.' }
-  }
-}
-
-export async function runNewsfeedNow(): Promise<OrgFeedActionState> {
-  try {
-    const user = await requirePlatformAdmin()
-    if (!user) return { ok: false, error: 'Only a Platform Admin can run the feed.' }
-    if (!isAiEnabled()) return { ok: false, error: 'AI features are disabled for this environment.' }
-
-    const result = await runOrgNewsfeedJob(createAdminClient(), { createdBy: user.id, force: true })
-    revalidatePath('/app/admin/org-feed')
-    revalidatePath('/app/comms/dashboard')
-    revalidatePath('/app/dashboard')
-    if (result.skipped === 'no_config') return { ok: false, error: 'Save a config before running.' }
-    return {
-      ok: true,
-      message: result.inserted > 0
-        ? `Added ${result.inserted} new item${result.inserted === 1 ? '' : 's'} (from ${result.generated} found).`
-        : 'Ran successfully — no new items found this time.',
-    }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message.slice(0, 200) : 'Run failed.' }
   }
 }
