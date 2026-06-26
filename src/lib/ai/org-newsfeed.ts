@@ -114,35 +114,45 @@ export function buildNewsfeedSystemPrompt(config: OrgFeedConfig): string {
   return lines.filter((line) => line !== null).join('\n')
 }
 
-/**
- * Split the editorial brief into small, focused search groups — one per topic,
- * one per theme, and one for mentions — each run as its own bounded search.
- * Bounded by `max` so a big config can't spawn an unbounded number of calls.
- */
-export function buildSearchGroups(config: OrgFeedConfig, watched?: WatchedEntities, max = 6): SearchGroup[] {
-  const groups: SearchGroup[] = []
+// Mention monitoring fans out across several groups so many tracked names get
+// real coverage (a single group with a long name list dilutes the search).
+const MENTION_BATCH = 5
+const MAX_MENTION_GROUPS = 4
 
-  const organizations = watched?.organizations ?? []
-  const people = (watched?.people ?? []).slice(0, 8)
-  if (organizations.length > 0 || people.length > 0) {
-    const names = [...organizations, ...people]
-    groups.push({
-      key: 'mentions',
+/**
+ * Split the editorial brief into small, focused search groups: one per topic,
+ * one per theme, and several mention groups (the org + tracked people batched).
+ * Bounded by `max` so a big config can't spawn an unbounded number of calls;
+ * mentions are prioritised so they're never dropped.
+ */
+export function buildSearchGroups(config: OrgFeedConfig, watched?: WatchedEntities, max = 8): SearchGroup[] {
+  const mentionGroups: SearchGroup[] = []
+  const mentionNames = [...(watched?.organizations ?? []), ...(watched?.people ?? [])]
+  for (let i = 0; i < mentionNames.length && mentionGroups.length < MAX_MENTION_GROUPS; i += MENTION_BATCH) {
+    const batch = mentionNames.slice(i, i + MENTION_BATCH)
+    mentionGroups.push({
+      key: `mentions:${i}`,
       label: 'Mentions',
       kind: 'mention',
-      query: `recent PUBLIC mentions (news, articles, press, public social posts) of: ${names.join(', ')}`,
+      query: batch.join('; '),
     })
   }
 
-  for (const topic of config.topics) {
-    groups.push({ key: `topic:${topic.toLowerCase()}`, label: topic, kind: 'topic', query: `recent cancer / patient-advocacy news about "${topic}"` })
-  }
-  for (const theme of config.themes) {
-    groups.push({ key: `theme:${theme.toLowerCase()}`, label: theme, kind: 'theme', query: `recent developments relevant to the theme "${theme}"` })
-  }
+  const topicGroups: SearchGroup[] = config.topics.map((topic) => ({
+    key: `topic:${topic.toLowerCase()}`,
+    label: topic,
+    kind: 'topic',
+    query: `recent cancer / patient-advocacy news about "${topic}"`,
+  }))
+  const themeGroups: SearchGroup[] = config.themes.map((theme) => ({
+    key: `theme:${theme.toLowerCase()}`,
+    label: theme,
+    kind: 'theme',
+    query: `recent developments relevant to the theme "${theme}"`,
+  }))
 
   // Mentions first (prioritised), then topics, then themes — capped.
-  return groups.slice(0, max)
+  return [...mentionGroups, ...topicGroups, ...themeGroups].slice(0, max)
 }
 
 function asString(value: unknown): string {
@@ -267,10 +277,11 @@ export function dedupeNewsItems(items: NewsFeedItem[], existingUrls: string[] = 
 
 // Per-group tuning. Each group is a small, fast, bounded search; they run with
 // limited concurrency so the whole fan-out completes inside the 300s function.
-const GROUP_TIMEOUT_MS = 75_000
+const GROUP_TIMEOUT_MS = 60_000
 const GROUP_ITEMS = 4
-const GROUP_CONCURRENCY = 3
-const TOTAL_ITEM_CAP = 24
+const MENTION_GROUP_ITEMS = 8
+const GROUP_CONCURRENCY = 4
+const TOTAL_ITEM_CAP = 40
 
 type GroupResult = { items: NewsFeedItem[]; candidates: number; validated: number; outputWasJson: boolean; error: boolean }
 
@@ -287,6 +298,25 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
   return results
 }
 
+function buildTopicInstruction(query: string): string {
+  return `Find up to ${GROUP_ITEMS} recent, high-relevance items: ${query}. Use at most 2 searches, then return the JSON. Fewer well-cited items is fine.`
+}
+
+/**
+ * Mention monitoring is deliberately broad: any public reference to the name —
+ * across news, articles, press AND social media (LinkedIn, X/Twitter, etc.) —
+ * including posts ABOUT the person, posts that TAG/quote/interview them, panels,
+ * awards, and announcements. More results is fine; they get filtered later.
+ */
+function buildMentionInstruction(names: string): string {
+  return [
+    `Search for ANY recent public mention of these people/organizations: ${names}.`,
+    'Look across news, articles, press releases, blogs, AND social media — LinkedIn, X/Twitter, YouTube, etc. Include posts ABOUT them, posts where they are TAGGED, quoted, or interviewed, panel/conference appearances, awards, and announcements.',
+    'Match the name even when no email or affiliation is given — a name match is enough. Cast a wide net: return up to ' + MENTION_GROUP_ITEMS + ' items, err toward including rather than excluding (low-relevance is OK, it will be filtered later).',
+    'For each item set category to "mention" and mentionOf to the exact matched name. Use at most 2 searches, then return the JSON.',
+  ].join(' ')
+}
+
 /** Run one focused search group and tag its items with the group label. */
 async function generateGroup(group: SearchGroup, config: OrgFeedConfig, system: string, existingHeadlines: string[], createdBy: string | null): Promise<GroupResult> {
   const existingContext = wrapExternalData(
@@ -298,7 +328,7 @@ async function generateGroup(group: SearchGroup, config: OrgFeedConfig, system: 
       feature: 'org_newsfeed_group',
       model: NEWSFEED_MODEL,
       effort: 'low',
-      maxTokens: 2500,
+      maxTokens: group.kind === 'mention' ? 3500 : 2500,
       timeoutMs: GROUP_TIMEOUT_MS,
       retries: 0,
       createdBy,
@@ -314,12 +344,7 @@ async function generateGroup(group: SearchGroup, config: OrgFeedConfig, system: 
       messages: [
         {
           role: 'user',
-          content: [
-            `Find up to ${GROUP_ITEMS} recent, high-relevance items: ${group.query}.` +
-              (group.kind === 'mention' ? ' Set category to "mention" and mentionOf to the matched entity for each.' : '') +
-              ' Use at most 2 searches, then return the JSON. Fewer well-cited items is fine.',
-            existingContext,
-          ].join('\n\n'),
+          content: [group.kind === 'mention' ? buildMentionInstruction(group.query) : buildTopicInstruction(group.query), existingContext].join('\n\n'),
         },
       ],
     })

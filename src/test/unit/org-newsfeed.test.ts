@@ -39,7 +39,7 @@ describe('buildNewsfeedSystemPrompt', () => {
 })
 
 describe('buildSearchGroups', () => {
-  it('creates a group per topic and theme, plus a mentions group, capped', () => {
+  it('creates a group per topic and theme, plus mention groups, capped', () => {
     const groups = buildSearchGroups(
       { ...DEFAULT_ORG_FEED_CONFIG, topics: ['precision oncology', 'clinical trials'], themes: ['patient advocacy'] },
       { organizations: ['Inspire2Live'], people: ['Peter Kapitein'] }
@@ -55,7 +55,16 @@ describe('buildSearchGroups', () => {
     expect(groups[0].query).toContain('Peter Kapitein')
   })
 
-  it('omits the mentions group when nothing is watched, and respects the cap', () => {
+  it('batches many watched names into multiple mention groups', () => {
+    const people = Array.from({ length: 12 }, (_, i) => `Person ${i + 1}`)
+    const groups = buildSearchGroups({ ...DEFAULT_ORG_FEED_CONFIG, topics: [], themes: [] }, { organizations: ['Inspire2Live'], people })
+    const mentionGroups = groups.filter((g) => g.kind === 'mention')
+    // 13 names / 5 per batch -> 3 groups (within the mention-group cap).
+    expect(mentionGroups.length).toBe(3)
+    expect(mentionGroups[0].query).toContain('Inspire2Live')
+  })
+
+  it('omits mention groups when nothing is watched, and respects the cap', () => {
     const groups = buildSearchGroups(
       { ...DEFAULT_ORG_FEED_CONFIG, topics: ['a', 'b', 'c'], themes: ['d', 'e', 'f', 'g'] },
       undefined,

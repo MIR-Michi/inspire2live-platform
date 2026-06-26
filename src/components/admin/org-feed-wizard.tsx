@@ -208,8 +208,8 @@ export function OrgFeedWizard({
             <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-neutral-200 p-3">
               <input type="checkbox" checked={watchCrmInternal} onChange={(e) => setWatchCrmInternal(e.target.checked)} className="mt-0.5 h-4 w-4 rounded border-neutral-300" />
               <span>
-                <span className="text-sm font-semibold text-neutral-900">Include the Inspire2Live team from the CRM</span>
-                <span className="block text-xs text-neutral-500">Everyone with an <code>@inspire2live.org</code> email in the platform/CRM is added to mention monitoring — resolved automatically on each run.</span>
+                <span className="text-sm font-semibold text-neutral-900">Include the team &amp; CRM people</span>
+                <span className="block text-xs text-neutral-500">Monitors the comms team / admins and your CRM contacts <strong>by name</strong> (no email needed) — resolved automatically each run, most-recently-updated first.</span>
               </span>
             </label>
 
@@ -228,7 +228,7 @@ export function OrgFeedWizard({
             </div>
 
             <p className="rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs text-neutral-500">
-              Mentions use public information only (news, articles, public social posts) and always carry a source link. Tracking individuals should follow your privacy policy.
+              Mentions cast a wide net across news, articles, and public social media (LinkedIn, X, …) — including posts about or tagging a person. Public information only; always with a source link. Tracking individuals should follow your privacy policy.
             </p>
           </Section>
         )}
