@@ -6,9 +6,11 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { runOrgNewsfeedJob } from './org-newsfeed-job'
 import type { OrgNewsfeedRunStatus } from './org-feed-config'
 
-// A run is considered stale (crashed/abandoned) after this long, so a new one
-// can start instead of being blocked forever by a 'running' flag.
-const STALE_RUN_MS = 8 * 60 * 1000
+// A run is considered stale once it has been 'running' longer than the
+// serverless function could possibly live (300s cap + buffer). Past this the
+// background job was killed without recording a result, so we surface it as a
+// timeout and allow a new run.
+const STALE_RUN_MS = 330 * 1000
 
 type StatusRow = {
   last_run_status: string | null
@@ -44,7 +46,18 @@ export async function getRunStatus(supabase: SupabaseClient<Database>): Promise<
   const db = supabase as unknown as LooseDb
   const { data } = await db.from('org_feed_config').select(STATUS_COLUMNS).eq('singleton', true).maybeSingle()
   if (!data) return null
-  return rowToStatus(data)
+  const status = rowToStatus(data)
+
+  // A run still 'running' past the function's max lifetime was killed before it
+  // could record a result — surface it as a timeout so the UI stops polling.
+  if (status.status === 'running' && status.startedAt) {
+    const age = Date.now() - new Date(status.startedAt).getTime()
+    if (age > STALE_RUN_MS) {
+      return { ...status, status: 'error', message: 'The previous run was interrupted before finishing (it took too long). Try running it again.' }
+    }
+  }
+
+  return status
 }
 
 /**

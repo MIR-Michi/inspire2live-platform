@@ -7,9 +7,11 @@ import type { OrgFeedConfig } from './org-feed-config'
 // Per the model-per-workload policy: the news feed is a web-search aggregation
 // job, best served by a fast balanced model, not the heavy reasoning default.
 const NEWSFEED_MODEL: AiModelId = 'claude-sonnet-4-6'
-// Web search + compilation is slow; allow well beyond the 60s wrapper default
-// (but under the 300s serverless cap).
-const NEWSFEED_TIMEOUT_MS = 280_000
+// Web search + compilation is slow, but must finish AND record a result inside
+// the 300s serverless cap. Keep a generous buffer below 300s so the timeout
+// fires (and is recorded as an error) instead of the whole function being
+// killed mid-run with the status stuck on "running".
+const NEWSFEED_TIMEOUT_MS = 230_000
 
 export type NewsFeedItem = {
   headline: string
@@ -91,7 +93,10 @@ const ORG_PROFILE = `Inspire2Live is an international patient-driven cancer orga
  */
 export function buildNewsfeedSystemPrompt(config: OrgFeedConfig, watched?: WatchedEntities): string {
   const organizations = watched?.organizations ?? []
-  const people = watched?.people ?? []
+  const allPeople = watched?.people ?? []
+  // Cap the list so a large CRM team doesn't bloat the prompt or slow the run.
+  const people = allPeople.slice(0, 25)
+  const extraPeople = allPeople.length - people.length
   const hasMentions = organizations.length > 0 || people.length > 0
 
   const lines: Array<string | null> = [
@@ -110,7 +115,7 @@ export function buildNewsfeedSystemPrompt(config: OrgFeedConfig, watched?: Watch
     lines.push('')
     lines.push('Mention monitoring (also surface recent PUBLIC mentions of these entities — news, articles, press, blogs, and public social-media posts):')
     if (organizations.length > 0) lines.push(`- Organizations: ${organizations.join(', ')}`)
-    if (people.length > 0) lines.push(`- People: ${people.join(', ')}`)
+    if (people.length > 0) lines.push(`- People: ${people.join(', ')}${extraPeople > 0 ? ` (and ${extraPeople} more)` : ''}`)
     lines.push('For a mention item, set category to "mention" and mentionOf to the exact watched entity it is about. Only public information — never private accounts or personal data.')
   }
 
@@ -252,7 +257,9 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
     effort: input.effort ?? 'medium',
     maxTokens: 6000,
     timeoutMs: NEWSFEED_TIMEOUT_MS,
-    retries: 1,
+    // No retries: a retry after a ~230s timeout would blow past the 300s
+    // function limit and leave the run stuck. Fail fast and record it instead.
+    retries: 0,
     createdBy: input.createdBy,
     system: buildNewsfeedSystemPrompt(config, watched),
     cacheSystemPrompt: true,
@@ -262,7 +269,7 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
       // We keep allowed domains as a SOFT preference in the prompt and only use
       // blocked_domains as a hard filter here.
       webSearchTool({
-        maxUses: 6,
+        maxUses: 4,
         blockedDomains: config.blockedSources,
       }),
     ],
