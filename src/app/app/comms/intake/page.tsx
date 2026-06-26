@@ -21,6 +21,22 @@ type IntakeReason = {
   effect: 'type' | 'confidence' | 'founder_signal'
 }
 
+type IntakeAiSuggestion = {
+  id: string
+  source: 'ai' | 'deterministic_fallback' | 'batch'
+  content_type: string
+  summary: string
+  entities: Array<{ name: string; type: string; value?: string | null }>
+  suggested_channel: string | null
+  suggested_action: string
+  founder_signal: boolean
+  confidence: string
+  rationale: string | null
+  model: string | null
+  effort: string | null
+  created_at: string
+}
+
 type IntakeQueueItem = {
   id: string
   capture_method: string
@@ -39,6 +55,7 @@ type IntakeQueueItem = {
   captured_at: string
   is_peter_kapitein: boolean
   dismissed_reason: string | null
+  ai_suggestion?: IntakeAiSuggestion | null
 }
 
 function isMissingSchemaField(message: string | null | undefined) {
@@ -48,6 +65,25 @@ function isMissingSchemaField(message: string | null | undefined) {
     message.includes('schema cache') ||
     message.includes('Could not find the table')
   )
+}
+
+function normalizeAiSuggestion(row: Partial<IntakeAiSuggestion> | null | undefined): IntakeAiSuggestion | null {
+  if (!row?.id) return null
+  return {
+    id: row.id,
+    source: row.source ?? 'ai',
+    content_type: row.content_type ?? 'noise',
+    summary: row.summary ?? '',
+    entities: Array.isArray(row.entities) ? row.entities : [],
+    suggested_channel: row.suggested_channel ?? null,
+    suggested_action: row.suggested_action ?? 'mark_reviewed',
+    founder_signal: Boolean(row.founder_signal),
+    confidence: row.confidence ?? 'medium',
+    rationale: row.rationale ?? null,
+    model: row.model ?? null,
+    effort: row.effort ?? null,
+    created_at: row.created_at ?? new Date(0).toISOString(),
+  }
 }
 
 function normalizeIntakeItems(
@@ -66,7 +102,8 @@ function normalizeIntakeItems(
         | 'captured_at'
         | 'is_peter_kapitein'
       >
-  >
+  >,
+  suggestionsByItem = new Map<string, IntakeAiSuggestion>()
 ): IntakeQueueItem[] {
   return rows.map((item) => ({
     id: item.id,
@@ -86,6 +123,7 @@ function normalizeIntakeItems(
     captured_at: item.captured_at,
     is_peter_kapitein: item.is_peter_kapitein ?? false,
     dismissed_reason: item.dismissed_reason ?? null,
+    ai_suggestion: suggestionsByItem.get(item.id) ?? null,
   }))
 }
 
@@ -131,10 +169,44 @@ export default async function CommsIntakePage({
     throw new Error(intakeResult.error.message)
   }
 
+  const itemIds = (intakeRows ?? []).map((item) => item.id)
+  const suggestionsByItem = new Map<string, IntakeAiSuggestion>()
+
+  if (itemIds.length > 0) {
+    const suggestionQuery = (supabase as unknown as {
+      from: (table: 'intake_ai_suggestions') => {
+        select: (columns: string) => {
+          in: (column: string, values: string[]) => {
+            eq: (column: string, value: string) => {
+              order: (column: string, options: { ascending: boolean }) => Promise<{ data: Array<IntakeAiSuggestion & { intake_item_id: string }> | null; error: { message: string } | null }>
+            }
+          }
+        }
+      }
+    })
+      .from('intake_ai_suggestions')
+      .select('id, intake_item_id, source, content_type, summary, entities, suggested_channel, suggested_action, founder_signal, confidence, rationale, model, effort, created_at')
+      .in('intake_item_id', itemIds)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+
+    const suggestionResult = await suggestionQuery
+    if (suggestionResult.error && !isMissingSchemaField(suggestionResult.error.message)) {
+      throw new Error(suggestionResult.error.message)
+    }
+
+    for (const row of suggestionResult.data ?? []) {
+      if (!suggestionsByItem.has(row.intake_item_id)) {
+        const suggestion = normalizeAiSuggestion(row)
+        if (suggestion) suggestionsByItem.set(row.intake_item_id, suggestion)
+      }
+    }
+  }
+
   const recoveryRequests =
     recoveryResult.error && isMissingSchemaField(recoveryResult.error.message) ? [] : (recoveryResult.data ?? [])
 
-  const items = normalizeIntakeItems(intakeRows ?? []).filter((item) => matchesIntakeFilter(item, filter))
+  const items = normalizeIntakeItems(intakeRows ?? [], suggestionsByItem).filter((item) => matchesIntakeFilter(item, filter))
 
   const unreviewedCount = normalizeIntakeItems(intakeRows ?? []).filter((item) => item.status === 'unreviewed').length
 

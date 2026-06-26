@@ -3,6 +3,7 @@
 import Link from 'next/link'
 import { useActionState, useMemo, useState, useTransition, type FormEvent } from 'react'
 import { FounderBadge } from '@/components/comms/founder-badge'
+import { IntakeAiSuggestionPanel } from '@/components/comms/intake-ai-suggestion-panel'
 import { ActionModal } from '@/components/ui/action-modal'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
@@ -29,6 +30,22 @@ import {
   type RouteDestination,
 } from '@/lib/comms-workflow'
 
+type IntakeAiSuggestion = {
+  id: string
+  source: 'ai' | 'deterministic_fallback' | 'batch'
+  content_type: string
+  summary: string
+  entities: Array<{ name: string; type: string; value?: string | null }>
+  suggested_channel: string | null
+  suggested_action: string
+  founder_signal: boolean
+  confidence: string
+  rationale: string | null
+  model: string | null
+  effort: string | null
+  created_at: string
+}
+
 type IntakeItem = {
   id: string
   capture_method: string
@@ -52,6 +69,7 @@ type IntakeItem = {
   captured_at: string
   is_peter_kapitein: boolean
   dismissed_reason: string | null
+  ai_suggestion?: IntakeAiSuggestion | null
 }
 
 type InitiativeOption = {
@@ -364,7 +382,7 @@ function RouteModal({
               disabled={pending}
               className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-orange-300"
             >
-              {pending ? 'Routing…' : 'Confirm route'}
+              {pending ? 'Routing...' : 'Confirm route'}
             </button>
           </div>
         </form>
@@ -469,7 +487,7 @@ function ClassificationModal({ item }: { item: IntakeItem }) {
               disabled={replayPending}
               className="rounded-xl border border-blue-200 px-4 py-2 text-sm font-medium text-blue-700 disabled:opacity-60"
             >
-              {replayPending ? 'Replaying…' : 'Replay classifier'}
+              {replayPending ? 'Replaying...' : 'Replay classifier'}
             </button>
             <button
               type="button"
@@ -483,7 +501,7 @@ function ClassificationModal({ item }: { item: IntakeItem }) {
               disabled={pending}
               className="rounded-xl bg-neutral-900 px-4 py-2 text-sm font-semibold text-white disabled:bg-neutral-400"
             >
-              {pending ? 'Saving…' : 'Save correction'}
+              {pending ? 'Saving...' : 'Save correction'}
             </button>
           </div>
         </form>
@@ -553,7 +571,7 @@ function DismissModal({ item }: { item: IntakeItem }) {
               disabled={pending}
               className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white disabled:bg-red-300"
             >
-              {pending ? 'Archiving…' : 'Dismiss item'}
+              {pending ? 'Archiving...' : 'Dismiss item'}
             </button>
           </div>
         </form>
@@ -580,7 +598,7 @@ function ReviewButton({ item }: { item: IntakeItem }) {
       disabled={pending}
       className="rounded-lg border border-emerald-200 px-3 py-1.5 text-xs font-semibold text-emerald-700 transition hover:bg-emerald-50 disabled:opacity-60"
     >
-      {pending ? 'Reviewing…' : 'Mark reviewed'}
+      {pending ? 'Reviewing...' : 'Mark reviewed'}
     </button>
   )
 }
@@ -602,7 +620,7 @@ function DeleteButton({ item }: { item: IntakeItem }) {
       disabled={pending}
       className="rounded-lg border border-red-200 px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-60"
     >
-      {pending ? 'Deleting…' : 'Delete'}
+      {pending ? 'Deleting...' : 'Delete'}
     </button>
   )
 }
@@ -617,7 +635,7 @@ function DigestButton() {
         disabled={pending}
         className="rounded-xl border border-neutral-200 bg-white px-4 py-2 text-sm font-semibold text-neutral-800 transition hover:bg-neutral-50 disabled:bg-neutral-100"
       >
-        {pending ? 'Sending digest…' : 'Daily digest'}
+        {pending ? 'Sending digest...' : 'Daily digest'}
       </button>
       {(state.error || state.message) && (
         <p className={`text-xs ${state.ok ? 'text-emerald-700' : 'text-red-700'}`}>
@@ -730,6 +748,8 @@ function IntakeItemCard({
           </ul>
         </div>
       )}
+
+      <IntakeAiSuggestionPanel itemId={item.id} suggestion={item.ai_suggestion} />
 
       <footer className="flex flex-wrap items-center gap-2">
         <ReviewButton item={item} />
