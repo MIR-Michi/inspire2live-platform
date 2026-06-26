@@ -38,9 +38,7 @@ jobs:
         run: node scripts/validate-vercel-json.mjs
 
       - name: Install dependencies
-        # Temporary Sprint 14 PR safety valve while pnpm-lock.yaml is regenerated.
-        # Restore --frozen-lockfile before merging to main.
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Lint
         run: pnpm lint
@@ -82,9 +80,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        # Temporary Sprint 14 PR safety valve while pnpm-lock.yaml is regenerated.
-        # Restore --frozen-lockfile before merging to main.
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       - name: Run unit tests with coverage
         run: pnpm test:coverage
@@ -122,9 +118,7 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        # Temporary Sprint 14 PR safety valve while pnpm-lock.yaml is regenerated.
-        # Restore --frozen-lockfile before merging to main.
-        run: pnpm install --no-frozen-lockfile
+        run: pnpm install --frozen-lockfile
 
       # Restore the build from the quality job — skip expensive rebuild
       - name: Download build artifact
