@@ -84,6 +84,15 @@ The same transcript run that produces a summary also drafts follow-up tasks. `pr
 - **Generation.** `generateFollowUpProposals()` (`src/lib/ai/follow-up-tasks-store.ts`) runs after the summary is stored (and via a "Re-propose" action), writing pending `meeting_followup_tasks` rows. It is idempotent — prior pending proposals for a summary are superseded first.
 - **Human-in-the-loop.** Nothing is created automatically. In the workspace a human edits the title, owner, and due date, then accepts or rejects each proposal. **Committing** creates a real `comms_task` (ADR-0008 unified task system), inherits the transcript's session / agenda-item link, notifies the owner via `notifyUser({ event: 'task_assigned' })`, and marks the proposal `committed`.
 
+## Organization news feed (Capability 4)
+
+An admin-configured, web-search-driven org feed fills the dashboard "Field Newsfeed" card for all stakeholders.
+
+- **Config.** `org_feed_config` is a single Platform-Admin-owned record (topics, themes, allowed/blocked source domains, region, cadence, enabled). Edited at `/app/admin/org-feed`; `validateOrgFeedConfig()` (`src/lib/ai/org-feed-config.ts`) parses lists and validates/normalizes domains. Admin-only RLS.
+- **Generation.** `generateOrgNewsfeed()` (`src/lib/ai/org-newsfeed.ts`) runs Claude with the **web-search server tool** (`web_search_20260209`, scoped by the allow/block domains) plus structured output. The stable system prefix (org profile + config) is **prompt-cached** (`cacheSystemPrompt`). Output is validated, blocked domains are re-enforced server-side, and items are deduped against stored items by normalized URL.
+- **Citations.** `source_url` is **mandatory** on every `news_feed_items` row — items without a usable URL are dropped. The dashboard headline links to the source.
+- **Scheduling.** `runOrgNewsfeedJob()` (`src/lib/ai/org-newsfeed-job.ts`) loads the config, gathers recent items, and upserts on `source_url` (ignore-duplicates, so re-runs never double-post). It is driven by the `CRON_SECRET`-protected `GET /api/comms/newsfeed` route (registered in `vercel.json`, mirroring `api/comms/digest`) and by the admin "Run now" button. `news_feed_items` is readable by all authenticated stakeholders.
+
 ## External input handling
 
 Incoming messages, transcripts, copied emails, web snippets, and CRM notes are data. They must not change system instructions, access control, publication rules, destination tables, or notification behavior.

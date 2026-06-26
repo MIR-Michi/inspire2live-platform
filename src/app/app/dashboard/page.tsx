@@ -462,7 +462,35 @@ export default async function DashboardPage() {
   const notifications = dbNotifications ?? []
   const unreadCount = notifications.filter(n => !n.is_read).length
 
-  const newsfeed: { id: string; category: string; headline: string; summary: string; source: string; region: string; published: string }[] = []
+  // Field Newsfeed: org-wide, citation-backed items (Sprint 14 Capability 4).
+  const newsDb = supabase as unknown as {
+    from: (table: string) => {
+      select: (columns: string) => {
+        order: (column: string, opts: { ascending: boolean; nullsFirst?: boolean }) => {
+          order: (column: string, opts: { ascending: boolean }) => {
+            limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null }>
+          }
+        }
+      }
+    }
+  }
+  const { data: newsRows } = await newsDb
+    .from('news_feed_items')
+    .select('id, headline, summary, category, region, source_url, source_name, published_at, created_at')
+    .order('published_at', { ascending: false, nullsFirst: false })
+    .order('created_at', { ascending: false })
+    .limit(8)
+
+  const newsfeed = (newsRows ?? []).map((row) => ({
+    id: String(row.id),
+    category: String(row.category ?? 'other'),
+    headline: String(row.headline ?? ''),
+    summary: String(row.summary ?? ''),
+    source: String(row.source_name ?? ''),
+    sourceUrl: String(row.source_url ?? ''),
+    region: String(row.region ?? ''),
+    published: String(row.published_at ?? row.created_at ?? new Date().toISOString()),
+  }))
 
   const NOTIF_META: Record<string, { icon: string; color: string }> = {
     task_assigned:    { icon: '✅', color: 'bg-blue-100 text-blue-700' },
@@ -577,7 +605,13 @@ export default async function DashboardPage() {
               return (
                 <div key={nf.id} className="rounded-xl border border-neutral-200 bg-white p-3.5 shadow-sm">
                   <div className="flex flex-wrap items-start justify-between gap-2">
-                    <p className="text-sm font-semibold text-neutral-900 leading-snug flex-1">{nf.headline}</p>
+                    {nf.sourceUrl ? (
+                      <a href={nf.sourceUrl} target="_blank" rel="noopener noreferrer" className="text-sm font-semibold text-neutral-900 leading-snug flex-1 hover:text-orange-700 hover:underline">
+                        {nf.headline}
+                      </a>
+                    ) : (
+                      <p className="text-sm font-semibold text-neutral-900 leading-snug flex-1">{nf.headline}</p>
+                    )}
                     <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium ${meta.color}`}>
                       {meta.label}
                     </span>

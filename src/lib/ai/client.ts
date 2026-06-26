@@ -49,11 +49,24 @@ export type RunAiMessageInput = {
   maxTokens?: number
   temperature?: number
   structuredFormat?: AiStructuredFormat
+  /** Server tools (e.g. web search). Passed through to the provider verbatim. */
+  tools?: Array<Record<string, unknown>>
+  /** Wrap the system prompt in an ephemeral cache_control block (prompt caching). */
+  cacheSystemPrompt?: boolean
   timeoutMs?: number
   retries?: number
   createdBy?: string | null
   requireFeatureFlag?: boolean
   apiKeyOverride?: string
+}
+
+/** Standard Anthropic web-search server tool definition. */
+export function webSearchTool(params?: { maxUses?: number; allowedDomains?: string[]; blockedDomains?: string[] }): Record<string, unknown> {
+  const tool: Record<string, unknown> = { type: 'web_search_20260209', name: 'web_search' }
+  if (params?.maxUses) tool.max_uses = params.maxUses
+  if (params?.allowedDomains && params.allowedDomains.length > 0) tool.allowed_domains = params.allowedDomains
+  if (params?.blockedDomains && params.blockedDomains.length > 0) tool.blocked_domains = params.blockedDomains
+  return tool
 }
 
 export type AiUsage = {
@@ -235,8 +248,13 @@ function buildMessageRequest(input: RunAiMessageInput, config: AiConfig): Record
   }
   const outputConfig: Record<string, unknown> = {}
 
-  if (input.system) request.system = input.system
+  if (input.system) {
+    request.system = input.cacheSystemPrompt
+      ? [{ type: 'text', text: input.system, cache_control: { type: 'ephemeral' } }]
+      : input.system
+  }
   if (typeof input.temperature === 'number') request.temperature = input.temperature
+  if (input.tools && input.tools.length > 0) request.tools = input.tools
   if (config.effort !== 'none') {
     request.thinking = { type: 'adaptive' }
     outputConfig.effort = config.effort

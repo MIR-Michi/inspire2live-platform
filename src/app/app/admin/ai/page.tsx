@@ -65,12 +65,20 @@ export default async function AdminAiSettingsPage({
             Org-wide Claude configuration for Sprint 14 AI augmentation.
           </p>
         </div>
-        <a
-          href="/app/admin/users"
-          className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
-        >
-          ← User Management
-        </a>
+        <div className="flex items-center gap-2">
+          <a
+            href="/app/admin/org-feed"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            Org News Feed →
+          </a>
+          <a
+            href="/app/admin/users"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
+          >
+            ← User Management
+          </a>
+        </div>
       </div>
 
       <StatusBanner params={params} />
