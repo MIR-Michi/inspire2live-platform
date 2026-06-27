@@ -5,6 +5,10 @@ import { loadConferencesData } from '@/lib/comms-conferences'
 import { getConferenceRunStatus, type ConferenceRunStatus } from '@/lib/ai/conference-run'
 import { ConferencesShell } from '@/components/comms/conferences/conferences-shell'
 
+// This page depends on the current Supabase session and shared run status.
+// Keep it request-time rendered so Vercel/Next never try to pre-render it.
+export const dynamic = 'force-dynamic'
+
 // Detail enrichment runs as a server action invoked from this route; give it
 // room beyond the default so a single web-search enrichment can finish.
 export const maxDuration = 120
