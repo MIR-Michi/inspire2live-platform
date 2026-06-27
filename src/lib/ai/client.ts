@@ -243,7 +243,7 @@ export async function testAiConnection(params?: {
   }
 }
 
-function buildMessageRequest(input: RunAiMessageInput, config: AiConfig): Record<string, unknown> {
+export function buildMessageRequest(input: RunAiMessageInput, config: AiConfig): Record<string, unknown> {
   const request: Record<string, unknown> = {
     model: config.model,
     max_tokens: input.maxTokens ?? 1024,
@@ -256,11 +256,16 @@ function buildMessageRequest(input: RunAiMessageInput, config: AiConfig): Record
       ? [{ type: 'text', text: input.system, cache_control: { type: 'ephemeral' } }]
       : input.system
   }
-  if (typeof input.temperature === 'number') request.temperature = input.temperature
   if (input.tools && input.tools.length > 0) request.tools = input.tools
   if (config.effort !== 'none') {
     request.thinking = { type: 'adaptive' }
     outputConfig.effort = config.effort
+    // Anthropic rejects thinking/adaptive requests with any explicit
+    // temperature other than 1. Preserve caller temperature only for
+    // non-thinking models; for thinking calls, normalize it to the valid value.
+    if (typeof input.temperature === 'number') request.temperature = 1
+  } else if (typeof input.temperature === 'number') {
+    request.temperature = input.temperature
   }
   if (input.structuredFormat) outputConfig.format = buildOutputFormat(input.structuredFormat)
   if (Object.keys(outputConfig).length > 0) request.output_config = outputConfig
