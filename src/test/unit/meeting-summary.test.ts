@@ -1,8 +1,13 @@
-import { describe, expect, it, vi } from 'vitest'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('server-only', () => ({}))
-vi.mock('@/lib/ai/client', () => ({
+
+const mocks = vi.hoisted(() => ({
   runAiMessage: vi.fn(),
+}))
+
+vi.mock('@/lib/ai/client', () => ({
+  runAiMessage: mocks.runAiMessage,
   wrapExternalData: (label: string, value: string) => [`[external-data:${label}:start]`, value, `[external-data:${label}:end]`].join('\n'),
 }))
 
@@ -10,8 +15,34 @@ import {
   chunkTranscript,
   detectSpeakers,
   validateMeetingSummary,
+  summarizeMeeting,
   MAX_CHUNK_CHARS,
 } from '@/lib/ai/meeting-summary'
+
+const validSummary = {
+  tldr: 'Campus meeting summary.',
+  decisions: [{ decision: 'Publish the campus update.', owner: 'Alice', context: null }],
+  actionItems: [{ title: 'Prepare follow-up tasks', owner: 'Bob', dueDate: null, notes: null }],
+  publicationBlurb: 'Inspire2Live World Campus discussed progress and next steps.',
+  speakers: ['Alice', 'Bob'],
+}
+
+beforeEach(() => {
+  mocks.runAiMessage.mockReset()
+  mocks.runAiMessage.mockResolvedValue({
+    output: validSummary,
+    rawResponse: { id: 'msg_test' },
+    config: { model: 'claude-sonnet-4-6', effort: 'low', source: 'database' },
+    usage: {
+      inputTokens: 10,
+      outputTokens: 20,
+      cacheCreationInputTokens: 0,
+      cacheReadInputTokens: 0,
+      estimatedCostUsd: 0.001,
+      latencyMs: 25,
+    },
+  })
+})
 
 describe('detectSpeakers', () => {
   it('collects unique Name: prefixed speakers in order', () => {
@@ -84,5 +115,35 @@ describe('validateMeetingSummary', () => {
   it('coerces missing arrays to empty', () => {
     const result = validateMeetingSummary({ tldr: 'Short meeting.', publicationBlurb: 'Blurb.' })
     expect(result).toMatchObject({ decisions: [], actionItems: [], speakers: [] })
+  })
+})
+
+describe('summarizeMeeting', () => {
+  it('defers model and effort to configured AI settings by default', async () => {
+    await summarizeMeeting({
+      title: 'World Campus',
+      transcript: 'Alice: We should publish the campus update.\nBob: I will prepare follow-up tasks.',
+    })
+
+    expect(mocks.runAiMessage).toHaveBeenCalledWith(expect.objectContaining({
+      feature: 'meeting_summary',
+      model: undefined,
+      effort: undefined,
+      temperature: 0,
+    }))
+  })
+
+  it('passes explicit model and effort overrides when provided', async () => {
+    await summarizeMeeting({
+      title: 'World Campus',
+      transcript: 'Alice: We should publish the campus update.\nBob: I will prepare follow-up tasks.',
+      model: 'claude-haiku-4-5',
+      effort: 'none',
+    })
+
+    expect(mocks.runAiMessage).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-haiku-4-5',
+      effort: 'none',
+    }))
   })
 })
