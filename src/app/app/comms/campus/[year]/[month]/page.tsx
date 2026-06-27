@@ -70,7 +70,7 @@ const FILTERS = ['All', 'Articles', 'Media', 'LinkedIn', 'Sessions', 'Members', 
 
 function sourceLinkFor(item: { source_url?: string | null; raw_content: string }) {
   if (item.source_url) return item.source_url
-  return item.raw_content.match(/https?:\/\/[^\s)]+/i)?.[0] ?? null
+  return (item.raw_content ?? '').match(/https?:\/\/[^\s)]+/i)?.[0] ?? null
 }
 
 function parseDecisionItem(value: string) {
@@ -96,13 +96,33 @@ function matchesFilter(item: { content_type: string; raw_content: string; source
   return true
 }
 
-export default async function CampusMonthPage({
-  params,
-  searchParams,
-}: {
+type CampusMonthPageProps = {
   params: Promise<{ year: string; month: string }>
   searchParams?: Promise<{ filter?: string }>
-}) {
+}
+
+export default async function CampusMonthPage(props: CampusMonthPageProps) {
+  // Render inside a guard so a single bad row / failed query degrades to a
+  // visible message instead of 500-ing the whole route (and showing the
+  // generic "unexpected response from the server" boundary).
+  try {
+    return await CampusMonthView(props)
+  } catch (error) {
+    console.error('[campus month page] render failed', error)
+    const message = error instanceof Error ? error.message : String(error)
+    return (
+      <div className="mx-auto max-w-2xl py-12">
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-6">
+          <h1 className="text-lg font-semibold text-amber-900">This month&apos;s campus workspace couldn&apos;t load</h1>
+          <p className="mt-1 text-sm text-amber-800">Other pages are unaffected. Technical detail:</p>
+          <p className="mt-3 break-words rounded-lg border border-amber-200 bg-white px-3 py-2 font-mono text-xs text-amber-900">{message.slice(0, 400)}</p>
+        </div>
+      </div>
+    )
+  }
+}
+
+async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
   const { year, month } = await params
   const selectedFilter = filterKey((await searchParams)?.filter)
   const { start, end } = monthBounds(year, month)
@@ -222,7 +242,7 @@ export default async function CampusMonthPage({
                       <p className="text-xs font-medium text-neutral-500">{item.sender_name} - {formatDate(item.captured_at)}</p>
                     </div>
                     <div className="px-4 py-3">
-                      <p className="text-sm font-semibold text-neutral-950">{item.raw_content.slice(0, 90)}</p>
+                      <p className="text-sm font-semibold text-neutral-950">{(item.raw_content ?? '').slice(0, 90)}</p>
                       <p className="mt-1 line-clamp-3 text-sm leading-5 text-neutral-600">{item.raw_content}</p>
                       <div className="mt-3 flex flex-wrap gap-2">
                         {item.status === 'unreviewed' && (
@@ -238,7 +258,7 @@ export default async function CampusMonthPage({
                           <form action={addAgendaItem}>
                             <input type="hidden" name="campus_session_id" value={primarySession.id} />
                             <input type="hidden" name="meeting_date" value={primarySession.session_date} />
-                            <input type="hidden" name="title" value={item.raw_content.slice(0, 160)} />
+                            <input type="hidden" name="title" value={(item.raw_content ?? '').slice(0, 160)} />
                             <button type="submit" className="rounded-lg bg-blue-900 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-800">
                               + Agenda
                             </button>
@@ -312,7 +332,7 @@ export default async function CampusMonthPage({
               <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
                 {incomingItems.slice(0, 5).map((item) => (
                   <li key={item.id} className="px-4 py-3 text-sm leading-5 text-neutral-700">
-                    {item.sender_name} shared {typeLabel(item.content_type)} - {item.raw_content.slice(0, 88)}
+                    {item.sender_name} shared {typeLabel(item.content_type)} - {(item.raw_content ?? '').slice(0, 88)}
                   </li>
                 ))}
                 {(members ?? []).slice(0, 3).map((member) => (
