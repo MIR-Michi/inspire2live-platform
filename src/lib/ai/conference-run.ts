@@ -5,11 +5,9 @@ import type { Database } from '@/types/database'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { runConferenceDiscoveryJob } from './conference-discovery-job'
 
-// A run is considered stale once it has been 'running' longer than the
-// serverless function could possibly live (300s cap + buffer). Past this the
-// background job was killed without recording a result, so we surface it as a
-// timeout and allow a new run.
-const STALE_RUN_MS = 330 * 1000
+// The AI sweep is hard-capped below this. If the serverless task is interrupted
+// before it can write a final state, the next status read self-heals the row.
+const STALE_RUN_MS = 180 * 1000
 
 export type ConferenceRunState = 'idle' | 'running' | 'success' | 'error'
 
@@ -50,6 +48,14 @@ type LooseDb = {
   }
 }
 
+async function updateConferenceRunStatus(
+  db: LooseDb,
+  payload: Record<string, unknown>
+): Promise<void> {
+  const { error } = await db.from('conference_discovery_status').update(payload).eq('singleton', true)
+  if (error) throw new Error(error.message)
+}
+
 /** Read the current discovery run status (caller ensures access). */
 export async function getConferenceRunStatus(supabase: SupabaseClient<Database>): Promise<ConferenceRunStatus> {
   const db = supabase as unknown as LooseDb
@@ -59,7 +65,14 @@ export async function getConferenceRunStatus(supabase: SupabaseClient<Database>)
   if (status.status === 'running' && status.startedAt) {
     const age = Date.now() - new Date(status.startedAt).getTime()
     if (age > STALE_RUN_MS) {
-      return { ...status, status: 'error', message: 'The previous discovery run was interrupted before finishing (it took too long). Try again.' }
+      const message = 'The previous discovery run was interrupted before finishing. No results were saved from that run; please try again.'
+      await updateConferenceRunStatus(db, {
+        last_run_status: 'error',
+        last_run_finished_at: new Date().toISOString(),
+        last_run_message: message,
+        last_run_inserted: null,
+      })
+      return { ...status, status: 'error', message, finishedAt: new Date().toISOString() }
     }
   }
 
@@ -86,11 +99,13 @@ export async function markConferenceRunStarted(): Promise<{ started: boolean; re
     if (age < STALE_RUN_MS) return { started: false, reason: 'already_running' }
   }
 
-  const { error: updateError } = await db
-    .from('conference_discovery_status')
-    .update({ last_run_status: 'running', last_run_started_at: new Date().toISOString(), last_run_message: null })
-    .eq('singleton', true)
-  if (updateError) throw new Error(updateError.message)
+  await updateConferenceRunStatus(db, {
+    last_run_status: 'running',
+    last_run_started_at: new Date().toISOString(),
+    last_run_finished_at: null,
+    last_run_message: 'Initializing conference discovery.',
+    last_run_inserted: null,
+  })
 
   return { started: true }
 }
@@ -103,36 +118,38 @@ export async function executeAndRecordConferenceRun(userId: string | null): Prom
   const admin = createAdminClient()
   const db = admin as unknown as LooseDb
 
+  const progress = async (message: string) => {
+    await updateConferenceRunStatus(db, { last_run_message: message.slice(0, 600) })
+  }
+
   const finish = async (status: 'success' | 'error', message: string, inserted: number | null) => {
-    await db
-      .from('conference_discovery_status')
-      .update({
-        last_run_status: status,
-        last_run_finished_at: new Date().toISOString(),
-        last_run_message: message.slice(0, 300),
-        last_run_inserted: inserted,
-      })
-      .eq('singleton', true)
+    await updateConferenceRunStatus(db, {
+      last_run_status: status,
+      last_run_finished_at: new Date().toISOString(),
+      last_run_message: message.slice(0, 600),
+      last_run_inserted: inserted,
+    })
   }
 
   try {
-    const result = await runConferenceDiscoveryJob(admin, { createdBy: userId })
+    const result = await runConferenceDiscoveryJob(admin, { createdBy: userId, onProgress: progress })
     if (result.inserted > 0) {
       const note = result.groupErrors ? ` (${result.groupErrors} region search${result.groupErrors === 1 ? '' : 'es'} timed out)` : ''
-      await finish('success', `Added ${result.inserted} new conference${result.inserted === 1 ? '' : 's'} (from ${result.discovered} found)${note}.`, result.inserted)
+      await finish('success', `Added ${result.inserted} new conference${result.inserted === 1 ? '' : 's'} from ${result.discovered} validated result${result.discovered === 1 ? '' : 's'}${note}.`, result.inserted)
     } else {
       const candidates = result.candidates ?? 0
+      const validated = result.validated ?? 0
       let why: string
       if (candidates === 0) {
         why = result.outputWasJson === false
-          ? 'the model did not return structured results.'
-          : 'the web search returned no usable upcoming conferences — try again later.'
-      } else if ((result.validated ?? 0) === 0) {
-        why = `the model returned ${candidates} result(s) but none had a valid future date.`
+          ? 'the model did not return structured JSON.'
+          : 'the web search returned no usable upcoming conferences.'
+      } else if (validated === 0) {
+        why = `the model returned ${candidates} candidate result${candidates === 1 ? '' : 's'}, but none had a valid future date and official URL.`
       } else {
-        why = `found ${candidates} result(s), but all were already in the list.`
+        why = `${validated} validated result${validated === 1 ? ' was' : 's were'} already in the list.`
       }
-      await finish('success', `No new conferences added — ${why}`, 0)
+      await finish('success', `No new conferences added: ${why}`, 0)
     }
   } catch (error) {
     await finish('error', error instanceof Error ? error.message : 'Conference discovery run failed.', null)
