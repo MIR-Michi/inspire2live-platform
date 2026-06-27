@@ -1,26 +1,33 @@
 'use client'
 
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { getConferenceStatus, startConferenceRun } from '@/app/app/comms/conferences/run-actions'
 import type { ConferenceRunStatus, ConferenceRunState } from '@/lib/ai/conference-run'
 
 const POLL_MS = 4000
+const LONG_WAIT_SECONDS = 180
 
-/**
- * Drives conference discovery from the client. It supports both deterministic
- * action completion and polling when another run is already in progress.
- */
+function progressMessage(elapsed: number, providerMessage: string | null): string | null {
+  if (providerMessage) return providerMessage
+  if (elapsed < 5) return 'Starting discovery and checking AI configuration.'
+  if (elapsed < 30) return 'Preparing regional oncology conference searches.'
+  if (elapsed < 90) return 'Waiting for AI web-search results and structured conference data.'
+  if (elapsed < LONG_WAIT_SECONDS) return 'Validating dates, official URLs, and duplicate conference names.'
+  return 'This is taking longer than expected. The backend will stop the run and show a real error if no result arrives.'
+}
+
 export function useConferenceRun(initial: ConferenceRunStatus | null) {
   const router = useRouter()
   const [status, setStatus] = useState<ConferenceRunState>(initial?.status ?? 'idle')
-  const [message, setMessage] = useState<string | null>(initial?.status === 'running' ? null : initial?.message ?? null)
+  const [message, setMessage] = useState<string | null>(initial?.status === 'running' ? initial.message : initial?.message ?? null)
   const [starting, setStarting] = useState(false)
   const [elapsed, setElapsed] = useState(0)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   const running = status === 'running'
   const busy = starting || running
+  const progress = useMemo(() => progressMessage(elapsed, message), [elapsed, message])
 
   const stopPoll = useCallback(() => {
     if (pollRef.current) {
@@ -29,17 +36,24 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
     }
   }, [])
 
+  const pollOnce = useCallback(async () => {
+    const next = await getConferenceStatus()
+    if (!next) return
+    setMessage(next.message)
+    setStatus(next.status)
+    if (next.status !== 'running') {
+      stopPoll()
+      router.refresh()
+    }
+  }, [router, stopPoll])
+
   const poll = useCallback(() => {
     stopPoll()
-    pollRef.current = setInterval(async () => {
-      const next = await getConferenceStatus()
-      if (!next || next.status === 'running') return
-      stopPoll()
-      setStatus(next.status)
-      setMessage(next.message)
-      router.refresh()
+    void pollOnce()
+    pollRef.current = setInterval(() => {
+      void pollOnce()
     }, POLL_MS)
-  }, [router, stopPoll])
+  }, [pollOnce, stopPoll])
 
   useEffect(() => {
     if (initial?.status === 'running') poll()
@@ -73,5 +87,5 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
     }
   }, [poll, router])
 
-  return { status, running, starting, busy, elapsed, message, start }
+  return { status, running, starting, busy, elapsed, message: progress, start }
 }

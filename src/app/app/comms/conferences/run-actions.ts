@@ -1,5 +1,6 @@
 'use server'
 
+import { after } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
@@ -17,11 +18,6 @@ export type StartConferenceRunResult = {
   message?: string
 }
 
-/**
- * Kick off a background conference-discovery run and return immediately. The
- * web-search sweep runs after the response via after(), and the UI polls
- * getConferenceRunStatus() until it completes. Comms-team / admin only.
- */
 export async function startConferenceRun(): Promise<StartConferenceRunResult> {
   const supabase = await createClient()
   const auth = await supabase.auth.getUser()
@@ -37,12 +33,14 @@ export async function startConferenceRun(): Promise<StartConferenceRunResult> {
     return { ok: true, status: 'running', message: 'A discovery run is already in progress.' }
   }
 
-  await executeAndRecordConferenceRun(user.id)
-  const finalStatus = await getConferenceRunStatus(createAdminClient())
-  return { ok: true, status: finalStatus.status, message: finalStatus.message ?? undefined }
+  const userId = user.id
+  after(async () => {
+    await executeAndRecordConferenceRun(userId)
+  })
+
+  return { ok: true, status: 'running', message: 'Discovery started. Preparing regional searches.' }
 }
 
-/** Read the latest discovery run status. Comms-team / admin read. */
 export async function getConferenceStatus(): Promise<ConferenceRunStatus | null> {
   const supabase = await createClient()
   const auth = await supabase.auth.getUser()
