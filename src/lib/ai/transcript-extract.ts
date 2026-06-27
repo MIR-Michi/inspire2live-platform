@@ -78,7 +78,7 @@ function extractCues(raw: string, format: 'vtt' | 'srt'): string {
   return normalizeWhitespace(out.join('\n'))
 }
 
-// ── Minimal docx (ZIP) text extraction ──────────────────────
+// -- Minimal docx (ZIP) text extraction ----------------------
 // A .docx is a ZIP archive; the document body lives in word/document.xml.
 // We locate that entry via the ZIP central directory, inflate it, and strip
 // the WordprocessingML markup down to paragraph-separated plain text. This
@@ -87,7 +87,7 @@ function extractCues(raw: string, format: 'vtt' | 'srt'): string {
 const EOCD_SIGNATURE = 0x06054b50
 const CENTRAL_DIR_SIGNATURE = 0x02014b50
 
-type ZipEntry = { name: string; compressionMethod: number; localHeaderOffset: number }
+type ZipEntry = { name: string; compressionMethod: number; compressedSize: number; localHeaderOffset: number }
 
 function findEndOfCentralDirectory(buffer: Buffer): number {
   // EOCD is at the end; scan backwards (comment field is usually empty).
@@ -109,12 +109,13 @@ function readCentralDirectory(buffer: Buffer): ZipEntry[] {
   for (let i = 0; i < entryCount; i++) {
     if (buffer.readUInt32LE(offset) !== CENTRAL_DIR_SIGNATURE) break
     const compressionMethod = buffer.readUInt16LE(offset + 10)
+    const compressedSize = buffer.readUInt32LE(offset + 20)
     const nameLength = buffer.readUInt16LE(offset + 28)
     const extraLength = buffer.readUInt16LE(offset + 30)
     const commentLength = buffer.readUInt16LE(offset + 32)
     const localHeaderOffset = buffer.readUInt32LE(offset + 42)
     const name = buffer.toString('utf8', offset + 46, offset + 46 + nameLength)
-    entries.push({ name, compressionMethod, localHeaderOffset })
+    entries.push({ name, compressionMethod, compressedSize, localHeaderOffset })
     offset += 46 + nameLength + extraLength + commentLength
   }
 
@@ -126,11 +127,14 @@ function readZipEntry(buffer: Buffer, entry: ZipEntry): Buffer {
   if (buffer.readUInt32LE(o) !== 0x04034b50) {
     throw new TranscriptExtractionError('Corrupt .docx file (bad local file header).')
   }
-  const compressedSize = buffer.readUInt32LE(o + 18)
   const nameLength = buffer.readUInt16LE(o + 26)
   const extraLength = buffer.readUInt16LE(o + 28)
   const dataStart = o + 30 + nameLength + extraLength
-  const data = buffer.subarray(dataStart, dataStart + compressedSize)
+  const dataEnd = dataStart + entry.compressedSize
+  if (dataEnd > buffer.length) {
+    throw new TranscriptExtractionError('Corrupt .docx file (entry data exceeds archive size).')
+  }
+  const data = buffer.subarray(dataStart, dataEnd)
 
   if (entry.compressionMethod === 0) return Buffer.from(data) // stored
   if (entry.compressionMethod === 8) return inflateRawSync(data) // deflate
