@@ -4,7 +4,10 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { DEFAULT_ORG_FEED_CONFIG, normalizeCadence, type OrgFeedConfig } from './org-feed-config'
 import { generateOrgNewsfeed, type WatchedEntities } from './org-newsfeed'
-import { INTERNAL_EMAIL_DOMAIN } from '@/lib/comms-crm'
+import { canAccessCommsWorkspace } from '@/lib/comms-access'
+
+// Cap on how many tracked names we monitor per run (batched into mention groups).
+const MAX_TRACKED_PEOPLE = 24
 
 export type OrgNewsfeedJobResult = {
   ok: boolean
@@ -50,32 +53,42 @@ function rowToConfig(row: OrgFeedConfigRow | null): OrgFeedConfig {
   }
 }
 
-/** Names of people with an @inspire2live.org email in the CRM / platform. */
-async function resolveCrmInternalNames(supabase: SupabaseClient<Database>): Promise<string[]> {
+/**
+ * Names to monitor for mentions when "include the CRM team" is on. Broadened
+ * to track people by NAME, not by email domain: every CRM contact (regardless
+ * of whether it has an email) plus the comms team / admins (regardless of email
+ * domain — so an admin on a personal address is still monitored). Capped.
+ */
+async function resolveTrackedPeople(supabase: SupabaseClient<Database>): Promise<string[]> {
   const reader = supabase as unknown as {
     from: (table: string) => {
       select: (columns: string) => {
-        ilike: (column: string, pattern: string) => { limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null }> }
+        order: (column: string, opts: { ascending: boolean }) => { limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null }> }
+        limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null }>
       }
     }
   }
-  const pattern = `%@${INTERNAL_EMAIL_DOMAIN}`
 
   const [contacts, profiles] = await Promise.all([
-    reader.from('comms_crm_contacts').select('full_name, normalized_email').ilike('normalized_email', pattern).limit(300),
-    reader.from('profiles').select('name, email').ilike('email', pattern).limit(300),
+    reader.from('comms_crm_contacts').select('full_name, updated_at').order('updated_at', { ascending: false }).limit(200),
+    reader.from('profiles').select('name, role').limit(500),
   ])
 
   const names = new Map<string, string>()
-  for (const row of contacts.data ?? []) {
-    const name = typeof row.full_name === 'string' ? row.full_name.trim() : ''
-    if (name) names.set(name.toLowerCase(), name)
-  }
+  // Internal team / admins first (by name), so people like the admin are kept.
   for (const row of profiles.data ?? []) {
     const name = typeof row.name === 'string' ? row.name.trim() : ''
-    if (name) names.set(name.toLowerCase(), name)
+    if (name && canAccessCommsWorkspace(typeof row.role === 'string' ? row.role : null)) {
+      names.set(name.toLowerCase(), name)
+    }
   }
-  return [...names.values()].slice(0, 100)
+  // Then the broader CRM contacts (most-recently-updated first).
+  for (const row of contacts.data ?? []) {
+    const name = typeof row.full_name === 'string' ? row.full_name.trim() : ''
+    if (name && !names.has(name.toLowerCase())) names.set(name.toLowerCase(), name)
+  }
+
+  return [...names.values()].slice(0, MAX_TRACKED_PEOPLE)
 }
 
 /** Build the watched org + people list from config (+ CRM-internal if enabled). */
@@ -88,7 +101,7 @@ async function resolveWatchedEntities(supabase: SupabaseClient<Database>, config
     if (name) people.set(name.toLowerCase(), name)
   }
   if (config.watchCrmInternal) {
-    for (const name of await resolveCrmInternalNames(supabase)) {
+    for (const name of await resolveTrackedPeople(supabase)) {
       if (!people.has(name.toLowerCase())) people.set(name.toLowerCase(), name)
     }
   }
