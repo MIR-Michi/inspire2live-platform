@@ -1,8 +1,5 @@
-import { isI2LOwnedEvent } from '@/lib/comms-events'
 import { createClient } from '@/lib/supabase/server'
 import { type EventStage } from '@/lib/comms-workflow'
-
-export type EventScopeFilter = 'all' | 'i2l' | 'networking' | 'past'
 
 const EVENT_PIPELINE_SELECT =
   'id, name, event_type, start_date, end_date, location_city, location_country, organiser, owner_id, stage, is_annual_congress, is_i2l_organised, attendance_kind, presentation_summary, presentation_asset_url, event_image_url, event_website_url, push_to_group_calendar, initiative_ids, i2l_representatives, output_report_drafted, output_linkedin_published, output_newsletter_mentioned, output_media_stored'
@@ -11,11 +8,9 @@ const EVENT_PIPELINE_FALLBACK_SELECT =
 
 export async function loadCommsEventPipelineData({
   stageFilter = 'all',
-  scopeFilter = 'all',
   eventTypeFilter = 'all',
 }: {
   stageFilter?: 'all' | EventStage
-  scopeFilter?: EventScopeFilter
   eventTypeFilter?: string
 } = {}) {
   const supabase = await createClient()
@@ -75,18 +70,7 @@ export async function loadCommsEventPipelineData({
   }>)
     .filter((event) => stageFilter === 'all' || event.stage === stageFilter)
     .filter((event) => eventTypeFilter === 'all' || event.event_type === eventTypeFilter)
-    .filter((event) => {
-      const effectiveOwned = isI2LOwnedEvent({
-        eventType: event.event_type,
-        isI2lOrganised: event.is_i2l_organised,
-        isAnnualCongress: event.is_annual_congress,
-      })
-      if (scopeFilter === 'i2l') return effectiveOwned
-      if (scopeFilter === 'networking') return !effectiveOwned
-      if (scopeFilter === 'past') return new Date(event.end_date ?? event.start_date) < new Date()
-      return true
-    })
-    .sort((a, b) => Number(b.is_annual_congress) - Number(a.is_annual_congress))
+    .sort((a, b) => new Date(b.start_date).getTime() - new Date(a.start_date).getTime())
     .map((event) => ({
       ...event,
       initiativeLabels: (event.initiative_ids ?? []).map((id) => initiativeMap.get(id)).filter(Boolean) as string[],
