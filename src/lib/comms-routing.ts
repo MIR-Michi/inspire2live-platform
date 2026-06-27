@@ -56,6 +56,7 @@ export type ParsedEventDraft = {
   locationCity: string
   locationCountry: string
   notes: string
+  isAnnualCongress: boolean
 }
 
 export function normalizeSignalText(input: string) {
@@ -207,6 +208,7 @@ export function buildEventDraftFromIntake(input: IntakeLike): ParsedEventDraft {
     locationCity: extractEventLocation(input.raw_content),
     locationCountry: extractCountryFromText(input.raw_content),
     notes: input.raw_content,
+    isAnnualCongress: false,
   }
 }
 
