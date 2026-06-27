@@ -47,8 +47,13 @@ export default function AppError({ error, reset }: { error: Error & { digest?: s
           This is usually temporary — often a new version was just deployed. Reloading fixes it in most cases.
         </p>
 
-        {error.digest && (
-          <p className="mt-3 font-mono text-[11px] text-neutral-400">Ref: {error.digest}</p>
+        {(error.message || error.digest) && (
+          <div className="mt-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-left">
+            {error.message && (
+              <p className="break-words font-mono text-[11px] text-neutral-600">{error.message.slice(0, 300)}</p>
+            )}
+            {error.digest && <p className="mt-1 font-mono text-[11px] text-neutral-400">Ref: {error.digest}</p>}
+          </div>
         )}
 
         <div className="mt-5 flex items-center justify-center gap-3">

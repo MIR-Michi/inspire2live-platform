@@ -49,8 +49,12 @@ function lastWednesdayOf(year: string, month: string) {
   return dateOnly(date)
 }
 
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(new Date(value))
+function formatDate(value: string | null | undefined) {
+  if (!value) return ''
+  const date = new Date(value)
+  // Intl.format throws "Invalid time value" on a bad date — guard against it.
+  if (Number.isNaN(date.getTime())) return ''
+  return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(date)
 }
 
 function typeLabel(value: string) {
