@@ -15,7 +15,7 @@ import {
   type ConferenceDetail,
   type ConferenceFormat,
   type ConferenceRegion,
-} from '@/lib/ai/conferences'
+} from '@/lib/conference-types'
 
 // The pipeline stages a shortlisted conference moves through. A conference with
 // no tracking row is "discovered" (it only shows in the Upcoming tab).
