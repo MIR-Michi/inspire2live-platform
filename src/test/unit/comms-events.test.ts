@@ -1,33 +1,40 @@
 import { describe, expect, it } from 'vitest'
 import {
+  EVENT_TYPE_OPTIONS,
   getDefaultAttendanceKind,
   getEventSetupContent,
   isI2LOwnedEvent,
+  normalizeEventType,
   requiresOwnerAssignment,
   supportsAttendanceSetup,
 } from '@/lib/comms-events'
 
 describe('communications event setup rules', () => {
+  it('only exposes conferences and podcasts as event types', () => {
+    expect(EVENT_TYPE_OPTIONS.map((option) => option.value)).toEqual(['conference', 'podcast'])
+    expect(normalizeEventType('conference')).toBe('conference')
+    expect(normalizeEventType('podcast')).toBe('podcast')
+    expect(normalizeEventType('workshop')).toBe('conference')
+    expect(normalizeEventType('congress')).toBe('conference')
+  })
+
   it('treats podcasts as I2L-owned events with a required owner', () => {
     expect(
       isI2LOwnedEvent({
         eventType: 'podcast',
         isI2lOrganised: false,
-        isAnnualCongress: false,
       })
     ).toBe(true)
     expect(
       requiresOwnerAssignment({
         eventType: 'podcast',
         isI2lOrganised: false,
-        isAnnualCongress: false,
       })
     ).toBe(true)
     expect(
       supportsAttendanceSetup({
         eventType: 'podcast',
         isI2lOrganised: false,
-        isAnnualCongress: false,
       })
     ).toBe(false)
   })
@@ -37,30 +44,26 @@ describe('communications event setup rules', () => {
       requiresOwnerAssignment({
         eventType: 'conference',
         isI2lOrganised: false,
-        isAnnualCongress: false,
       })
     ).toBe(false)
     expect(
       supportsAttendanceSetup({
         eventType: 'conference',
         isI2lOrganised: false,
-        isAnnualCongress: false,
       })
     ).toBe(true)
     expect(
       getDefaultAttendanceKind({
         eventType: 'conference',
         isI2lOrganised: false,
-        isAnnualCongress: false,
       })
     ).toBe('visitor')
   })
 
-  it('uses owner-focused wording for I2L-owned event setups', () => {
+  it('uses owner-focused wording for I2L-owned conference setups', () => {
     const setup = getEventSetupContent({
-      eventType: 'workshop',
+      eventType: 'conference',
       isI2lOrganised: true,
-      isAnnualCongress: false,
     })
 
     expect(setup.ownerLabel).toBe('Responsible owner')
