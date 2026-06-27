@@ -126,25 +126,31 @@ export async function loadMeetingTranscriptsByDate(
   const result = new Map<string, MeetingTranscriptView>()
   if (meetingDates.length === 0) return result
 
-  const db = supabase as unknown as { from: (table: string) => LooseSelect }
-  const { data: transcriptData } = await db
-    .from('meeting_transcripts')
-    .select(TRANSCRIPT_COLUMNS)
-    .in('meeting_date', meetingDates)
-    .order('created_at', { ascending: false })
+  try {
+    const db = supabase as unknown as { from: (table: string) => LooseSelect }
+    const { data: transcriptData } = await db
+      .from('meeting_transcripts')
+      .select(TRANSCRIPT_COLUMNS)
+      .in('meeting_date', meetingDates)
+      .order('created_at', { ascending: false })
 
-  const transcripts = (transcriptData ?? []) as Array<Record<string, unknown>>
-  // One (latest) transcript per meeting date.
-  const latestByDate = new Map<string, Record<string, unknown>>()
-  for (const row of transcripts) {
-    const date = row.meeting_date ? String(row.meeting_date) : null
-    if (!date || latestByDate.has(date)) continue
-    latestByDate.set(date, row)
-  }
+    const transcripts = (transcriptData ?? []) as Array<Record<string, unknown>>
+    // One (latest) transcript per meeting date.
+    const latestByDate = new Map<string, Record<string, unknown>>()
+    for (const row of transcripts) {
+      const date = row.meeting_date ? String(row.meeting_date) : null
+      if (!date || latestByDate.has(date)) continue
+      latestByDate.set(date, row)
+    }
 
-  const { summaries, proposals } = await loadSummariesAndProposals(supabase, [...latestByDate.values()].map((r) => String(r.id)))
-  for (const [date, row] of latestByDate) {
-    result.set(date, buildView(row, summaries, proposals))
+    const { summaries, proposals } = await loadSummariesAndProposals(supabase, [...latestByDate.values()].map((r) => String(r.id)))
+    for (const [date, row] of latestByDate) {
+      result.set(date, buildView(row, summaries, proposals))
+    }
+  } catch (error) {
+    // The transcript subsystem is an enhancement — never let it crash the host
+    // page (meetings / dashboard). Degrade to "no transcripts".
+    console.error('[transcripts] loadMeetingTranscriptsByDate failed', error)
   }
   return result
 }
@@ -154,17 +160,22 @@ export async function loadCampusSessionTranscript(
   supabase: SupabaseClient,
   campusSessionId: string
 ): Promise<MeetingTranscriptView | null> {
-  const db = supabase as unknown as { from: (table: string) => LooseSelect }
-  const { data: transcriptData } = await db
-    .from('meeting_transcripts')
-    .select(TRANSCRIPT_COLUMNS)
-    .eq('campus_session_id', campusSessionId)
-    .order('created_at', { ascending: false })
+  try {
+    const db = supabase as unknown as { from: (table: string) => LooseSelect }
+    const { data: transcriptData } = await db
+      .from('meeting_transcripts')
+      .select(TRANSCRIPT_COLUMNS)
+      .eq('campus_session_id', campusSessionId)
+      .order('created_at', { ascending: false })
 
-  const transcripts = (transcriptData ?? []) as Array<Record<string, unknown>>
-  if (transcripts.length === 0) return null
+    const transcripts = (transcriptData ?? []) as Array<Record<string, unknown>>
+    if (transcripts.length === 0) return null
 
-  const latest = transcripts[0]
-  const { summaries, proposals } = await loadSummariesAndProposals(supabase, [String(latest.id)])
-  return buildView(latest, summaries, proposals)
+    const latest = transcripts[0]
+    const { summaries, proposals } = await loadSummariesAndProposals(supabase, [String(latest.id)])
+    return buildView(latest, summaries, proposals)
+  } catch (error) {
+    console.error('[transcripts] loadCampusSessionTranscript failed', error)
+    return null
+  }
 }
