@@ -81,6 +81,7 @@ export type NavIcon =
   | 'initiatives'
   | 'board'
   | 'congress'
+  | 'conferences'
   | 'podcast'
   | 'events'
   | 'network'

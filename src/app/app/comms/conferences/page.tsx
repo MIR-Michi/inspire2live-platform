@@ -1,37 +1,30 @@
-import { EventsPipelineShell } from '@/components/comms/events-pipeline-shell'
-import { loadCommsEventPipelineData } from '@/lib/comms-event-pipeline'
-import { type EventStage } from '@/lib/comms-workflow'
+import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
+import { isAiEnabled } from '@/lib/ai/feature-flag'
+import { loadConferencesData } from '@/lib/comms-conferences'
+import { getConferenceRunStatus, type ConferenceRunStatus } from '@/lib/ai/conference-run'
+import { ConferencesShell } from '@/components/comms/conferences/conferences-shell'
 
-const VALID_STAGES = new Set<EventStage>(['announced', 'attending', 'in_progress', 'post_event', 'archived'])
+// This page depends on the current Supabase session and shared run status.
+// Keep it request-time rendered so Vercel/Next never try to pre-render it.
+export const dynamic = 'force-dynamic'
 
-export default async function CommsConferencesPage({
-  searchParams,
-}: {
-  searchParams?: Promise<{ stage?: string }>
-}) {
-  const params = (await searchParams) ?? {}
-  const stageFilter =
-    params.stage && VALID_STAGES.has(params.stage as EventStage) ? (params.stage as EventStage) : 'all'
-  const { events, initiatives, people } = await loadCommsEventPipelineData({
-    stageFilter,
-    eventTypeFilter: 'conference',
-  })
+// Detail enrichment runs as a server action invoked from this route; give it
+// room beyond the default so a single web-search enrichment can finish.
+export const maxDuration = 120
 
-  return (
-    <EventsPipelineShell
-      events={events}
-      stageFilter={stageFilter}
-      eventTypeFilter="conference"
-      eventTypes={['conference']}
-      initiatives={initiatives}
-      people={people}
-      title="Conferences"
-      eyebrow="External and I2L conference work"
-      description="Track conference attendance, presentations, owned conference activities, outputs, and follow-up."
-      recordLabel="conferences"
-      basePath="/app/comms/conferences"
-      detailBasePath="/app/comms/events"
-      showEventTypeFilters={false}
-    />
-  )
+export default async function ConferencesPage() {
+  const supabase = await createClient()
+
+  const data = await loadConferencesData(supabase)
+
+  // org-wide singleton run status, readable by the comms team.
+  let status: ConferenceRunStatus | null = null
+  try {
+    status = await getConferenceRunStatus(createAdminClient())
+  } catch (error) {
+    console.error('[conferences page] run status load failed', error)
+  }
+
+  return <ConferencesShell data={data} initialStatus={status} aiEnabled={isAiEnabled()} />
 }

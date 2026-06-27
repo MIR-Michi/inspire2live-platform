@@ -1,0 +1,550 @@
+'use client'
+
+import { useCallback, useMemo, useState, useTransition } from 'react'
+import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
+import { useConferenceRun } from '@/components/comms/use-conference-run'
+import {
+  CONFERENCE_STAGE_LABELS,
+  CONFERENCE_STAGES,
+  filterConferences,
+  partitionConferences,
+  type ConferenceFilters,
+  type ConferenceStage,
+  type ConferenceTab,
+  type ConferencesData,
+  type ConferenceView,
+} from '@/lib/comms-conferences'
+import type { ConferenceRunStatus } from '@/lib/ai/conference-run'
+import type { ConferenceDetail } from '@/lib/ai/conferences'
+import {
+  addConferenceToShortlist,
+  enrichConferenceDetail,
+  removeConferenceFromPipeline,
+  setConferenceStage,
+} from '@/app/app/comms/conferences/actions'
+
+const FORMAT_LABELS: Record<string, string> = { in_person: 'In person', virtual: 'Virtual', hybrid: 'Hybrid' }
+
+const STAGE_TONES: Record<ConferenceStage, StatusTone> = {
+  intended: 'blue',
+  registered: 'violet',
+  ongoing: 'amber',
+  follow_up: 'green',
+  archived: 'neutral',
+}
+
+const TABS: Array<{ key: ConferenceTab; label: string }> = [
+  { key: 'upcoming', label: 'Upcoming' },
+  { key: 'shortlist', label: 'Shortlist' },
+  { key: 'pipeline', label: 'Pipeline' },
+  { key: 'archive', label: 'Archive' },
+]
+
+type DetailState = { status: 'idle' | 'loading' | 'ready' | 'error'; detail?: ConferenceDetail; message?: string }
+
+function formatDateRange(start: string | null, end: string | null): string {
+  const fmt = (value: string, withYear = true) => {
+    const ms = Date.parse(value)
+    if (Number.isNaN(ms)) return ''
+    return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short', ...(withYear ? { year: 'numeric' } : {}) }).format(new Date(ms))
+  }
+  if (!start) return 'Dates to be confirmed'
+  const startFmt = fmt(start, !end || end === start)
+  if (!startFmt) return 'Dates to be confirmed'
+  if (!end || end === start) return startFmt
+  const endFmt = fmt(end)
+  return endFmt ? `${startFmt} – ${endFmt}` : startFmt
+}
+
+export function ConferencesShell({
+  data,
+  initialStatus,
+  aiEnabled,
+}: {
+  data: ConferencesData
+  initialStatus: ConferenceRunStatus | null
+  aiEnabled: boolean
+}) {
+  const [tab, setTab] = useState<ConferenceTab>('upcoming')
+  const [filters, setFilters] = useState<ConferenceFilters>({ region: 'all', focus: 'all', format: 'all', search: '' })
+  const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [details, setDetails] = useState<Record<string, DetailState>>(() => {
+    // Seed from any detail already cached on the row.
+    const seed: Record<string, DetailState> = {}
+    for (const conf of data.conferences) {
+      if (conf.detailStatus === 'ready' && conf.detail) seed[conf.id] = { status: 'ready', detail: conf.detail }
+    }
+    return seed
+  })
+  const [pending, startTransition] = useTransition()
+  const run = useConferenceRun(initialStatus)
+
+  const partitions = useMemo(() => partitionConferences(data.conferences), [data.conferences])
+  const filteredUpcoming = useMemo(() => filterConferences(partitions.upcoming, filters), [partitions.upcoming, filters])
+
+  const visible: ConferenceView[] = tab === 'upcoming' ? filteredUpcoming : partitions[tab]
+  const selected = useMemo(() => data.conferences.find((c) => c.id === selectedId) ?? null, [data.conferences, selectedId])
+
+  const loadDetail = useCallback(
+    async (conf: ConferenceView, refresh = false) => {
+      if (!refresh && (details[conf.id]?.status === 'ready' || details[conf.id]?.status === 'loading')) return
+      setDetails((prev) => ({ ...prev, [conf.id]: { status: 'loading' } }))
+      const result = await enrichConferenceDetail(conf.id, { refresh })
+      setDetails((prev) => ({
+        ...prev,
+        [conf.id]: result.ok
+          ? { status: 'ready', detail: result.detail }
+          : { status: 'error', message: result.message },
+      }))
+    },
+    [details]
+  )
+
+  const handleSelect = useCallback(
+    (conf: ConferenceView) => {
+      setSelectedId(conf.id)
+      if (aiEnabled) void loadDetail(conf)
+    },
+    [aiEnabled, loadDetail]
+  )
+
+  const handleShortlist = (conf: ConferenceView) => {
+    startTransition(async () => {
+      await addConferenceToShortlist(conf.id)
+    })
+  }
+  const handleStage = (conf: ConferenceView, stage: ConferenceStage) => {
+    startTransition(async () => {
+      await setConferenceStage(conf.id, stage)
+    })
+  }
+  const handleRemove = (conf: ConferenceView) => {
+    startTransition(async () => {
+      await removeConferenceFromPipeline(conf.id)
+    })
+  }
+
+  return (
+    <section className="space-y-5">
+      <header className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
+          <h1 className="text-2xl font-semibold text-neutral-900">Oncology conferences</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            AI-discovered upcoming oncology conferences, refreshed monthly. Shortlist the ones worth attending and track them through to follow-up.
+          </p>
+        </div>
+        <RefreshControl run={run} aiEnabled={aiEnabled} />
+      </header>
+
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-1 border-b border-neutral-200">
+        {TABS.map(({ key, label }) => {
+          const count = key === 'upcoming' ? partitions.upcoming.length : partitions[key].length
+          const active = tab === key
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => setTab(key)}
+              className={[
+                'relative -mb-px rounded-t-lg px-4 py-2 text-sm font-semibold transition',
+                active ? 'border border-b-white border-neutral-200 bg-white text-orange-700' : 'text-neutral-500 hover:text-neutral-800',
+              ].join(' ')}
+            >
+              {label}
+              <span className={['ml-2 rounded-full px-1.5 py-0.5 text-[11px]', active ? 'bg-orange-50 text-orange-700' : 'bg-neutral-100 text-neutral-500'].join(' ')}>
+                {count}
+              </span>
+            </button>
+          )
+        })}
+      </div>
+
+      {tab === 'upcoming' && (
+        <FiltersBar data={data} filters={filters} onChange={setFilters} resultCount={filteredUpcoming.length} />
+      )}
+
+      {/* Master-detail */}
+      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="space-y-2">
+          {visible.length === 0 ? (
+            <EmptyState tab={tab} aiEnabled={aiEnabled} run={run} />
+          ) : (
+            <ul className="space-y-2">
+              {visible.map((conf) => (
+                <li key={conf.id}>
+                  <ConferenceListItem conf={conf} active={conf.id === selectedId} onSelect={() => handleSelect(conf)} />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+
+        <div className="lg:sticky lg:top-4 lg:self-start">
+          <ConferenceDetailPane
+            conf={selected}
+            detail={selected ? details[selected.id] : undefined}
+            aiEnabled={aiEnabled}
+            pending={pending}
+            onShortlist={handleShortlist}
+            onStage={handleStage}
+            onRemove={handleRemove}
+            onRetryDetail={(conf) => void loadDetail(conf, true)}
+          />
+        </div>
+      </div>
+    </section>
+  )
+}
+
+function RefreshControl({ run, aiEnabled }: { run: ReturnType<typeof useConferenceRun>; aiEnabled: boolean }) {
+  if (!aiEnabled) {
+    return <p className="text-xs text-neutral-400">AI discovery is disabled for this environment.</p>
+  }
+  return (
+    <div className="flex flex-col items-end gap-1">
+      <button
+        type="button"
+        onClick={() => void run.start()}
+        disabled={run.busy}
+        className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+      >
+        {run.running ? `Discovering… ${run.elapsed}s` : run.starting ? 'Starting…' : 'Refresh list'}
+      </button>
+      {run.running && <p className="text-xs text-neutral-400">Scanning regions — this can take a couple of minutes.</p>}
+      {!run.running && run.message && (
+        <p className={['max-w-xs text-right text-xs', run.status === 'error' ? 'text-red-600' : 'text-neutral-500'].join(' ')}>{run.message}</p>
+      )}
+    </div>
+  )
+}
+
+function FiltersBar({
+  data,
+  filters,
+  onChange,
+  resultCount,
+}: {
+  data: ConferencesData
+  filters: ConferenceFilters
+  onChange: (next: ConferenceFilters) => void
+  resultCount: number
+}) {
+  const set = (patch: Partial<ConferenceFilters>) => onChange({ ...filters, ...patch })
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+      <input
+        type="search"
+        value={filters.search ?? ''}
+        onChange={(e) => set({ search: e.target.value })}
+        placeholder="Search conferences…"
+        className="min-w-[200px] flex-1 rounded-lg border border-neutral-300 px-3 py-1.5 text-sm focus:border-orange-400 focus:outline-none"
+      />
+      <Select
+        label="Region"
+        value={filters.region ?? 'all'}
+        onChange={(v) => set({ region: v })}
+        options={[{ value: 'all', label: 'All regions' }, ...data.regions.map((r) => ({ value: r.value, label: `${r.label} (${r.count})` }))]}
+      />
+      {data.focuses.length > 0 && (
+        <Select
+          label="Focus"
+          value={filters.focus ?? 'all'}
+          onChange={(v) => set({ focus: v })}
+          options={[{ value: 'all', label: 'All focuses' }, ...data.focuses.map((f) => ({ value: f, label: f }))]}
+        />
+      )}
+      <Select
+        label="Format"
+        value={filters.format ?? 'all'}
+        onChange={(v) => set({ format: v })}
+        options={[
+          { value: 'all', label: 'Any format' },
+          { value: 'in_person', label: 'In person' },
+          { value: 'virtual', label: 'Virtual' },
+          { value: 'hybrid', label: 'Hybrid' },
+        ]}
+      />
+      <span className="ml-auto text-xs font-medium text-neutral-400">{resultCount} shown</span>
+    </div>
+  )
+}
+
+function Select({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (value: string) => void
+  options: Array<{ value: string; label: string }>
+}) {
+  return (
+    <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
+      <span className="sr-only">{label}</span>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={label}
+        className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs font-semibold text-neutral-800 focus:border-orange-400 focus:outline-none"
+      >
+        {options.map((opt) => (
+          <option key={opt.value} value={opt.value}>
+            {opt.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  )
+}
+
+function ConferenceListItem({ conf, active, onSelect }: { conf: ConferenceView; active: boolean; onSelect: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={[
+        'w-full rounded-xl border bg-white px-4 py-3 text-left shadow-sm transition hover:border-neutral-300 hover:shadow',
+        active ? 'border-orange-300 ring-1 ring-orange-200' : 'border-neutral-200',
+      ].join(' ')}
+    >
+      <div className="flex flex-wrap items-center gap-1.5">
+        <StatusBadge label={conf.regionLabel} tone="neutral" />
+        {conf.mainFocus && <StatusBadge label={conf.mainFocus} tone="blue" />}
+        {conf.tracking && <StatusBadge label={CONFERENCE_STAGE_LABELS[conf.tracking.stage]} tone={STAGE_TONES[conf.tracking.stage]} />}
+      </div>
+      <p className="mt-1.5 text-[15px] font-semibold leading-snug text-neutral-900">{conf.name}</p>
+      <p className="mt-0.5 text-xs text-neutral-500">
+        {formatDateRange(conf.startDate, conf.endDate)}
+        {conf.location && <> · {conf.location}</>}
+      </p>
+    </button>
+  )
+}
+
+function ConferenceDetailPane({
+  conf,
+  detail,
+  aiEnabled,
+  pending,
+  onShortlist,
+  onStage,
+  onRemove,
+  onRetryDetail,
+}: {
+  conf: ConferenceView | null
+  detail: DetailState | undefined
+  aiEnabled: boolean
+  pending: boolean
+  onShortlist: (conf: ConferenceView) => void
+  onStage: (conf: ConferenceView, stage: ConferenceStage) => void
+  onRemove: (conf: ConferenceView) => void
+  onRetryDetail: (conf: ConferenceView) => void
+}) {
+  if (!conf) {
+    return (
+      <div className="flex h-full min-h-[280px] items-center justify-center rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
+        <p className="text-sm text-neutral-400">Select a conference to see the details.</p>
+      </div>
+    )
+  }
+
+  const d = detail?.detail
+  return (
+    <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+      <div className="space-y-1.5">
+        <div className="flex flex-wrap items-center gap-1.5">
+          <StatusBadge label={conf.regionLabel} tone="neutral" />
+          {conf.mainFocus && <StatusBadge label={conf.mainFocus} tone="blue" />}
+          <StatusBadge label={FORMAT_LABELS[conf.format] ?? conf.format} tone="neutral" />
+          {conf.tracking && <StatusBadge label={CONFERENCE_STAGE_LABELS[conf.tracking.stage]} tone={STAGE_TONES[conf.tracking.stage]} />}
+        </div>
+        <h2 className="text-lg font-semibold leading-snug text-neutral-900">{conf.name}</h2>
+        <p className="text-sm text-neutral-500">
+          {formatDateRange(conf.startDate, conf.endDate)}
+          {conf.location && <> · {conf.location}</>}
+          {conf.organizer && <> · {conf.organizer}</>}
+        </p>
+        {conf.websiteUrl && (
+          <a href={conf.websiteUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-semibold text-orange-700 hover:underline">
+            Official website ↗
+          </a>
+        )}
+      </div>
+
+      {/* Pipeline actions */}
+      <div className="flex flex-wrap items-center gap-2 border-y border-neutral-100 py-3">
+        {!conf.tracking ? (
+          <button
+            type="button"
+            onClick={() => onShortlist(conf)}
+            disabled={pending}
+            className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:opacity-60"
+          >
+            + Add to shortlist
+          </button>
+        ) : (
+          <>
+            <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
+              Stage
+              <select
+                value={conf.tracking.stage}
+                onChange={(e) => onStage(conf, e.target.value as ConferenceStage)}
+                disabled={pending}
+                className="rounded-lg border border-neutral-300 px-2 py-1.5 text-xs font-semibold text-neutral-800 focus:border-orange-400 focus:outline-none"
+              >
+                {CONFERENCE_STAGES.map((stage) => (
+                  <option key={stage} value={stage}>
+                    {CONFERENCE_STAGE_LABELS[stage]}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" onClick={() => onRemove(conf)} disabled={pending} className="text-xs font-semibold text-neutral-400 hover:text-red-600 disabled:opacity-60">
+              Remove
+            </button>
+          </>
+        )}
+      </div>
+
+      {conf.summary && <p className="text-sm leading-relaxed text-neutral-700">{conf.summary}</p>}
+
+      {/* AI-enriched detail */}
+      {!aiEnabled ? null : detail?.status === 'loading' ? (
+        <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
+          <Spinner /> Gathering details…
+        </div>
+      ) : detail?.status === 'error' ? (
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-800">
+          <p>{detail.message ?? 'Could not gather more details.'}</p>
+          <button type="button" onClick={() => onRetryDetail(conf)} className="mt-1 text-xs font-semibold text-amber-900 underline">
+            Try again
+          </button>
+        </div>
+      ) : d ? (
+        <DetailBody detail={d} onRefresh={() => onRetryDetail(conf)} />
+      ) : null}
+    </div>
+  )
+}
+
+function DetailBody({ detail, onRefresh }: { detail: ConferenceDetail; onRefresh: () => void }) {
+  return (
+    <div className="space-y-3 text-sm">
+      {detail.overview && <p className="leading-relaxed text-neutral-700">{detail.overview}</p>}
+
+      {detail.whyRelevant && (
+        <div className="rounded-lg border border-orange-100 bg-orange-50/60 px-3 py-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Why it matters for Inspire2Live</p>
+          <p className="mt-0.5 text-sm text-neutral-700">{detail.whyRelevant}</p>
+        </div>
+      )}
+
+      {detail.facts.length > 0 && (
+        <dl className="grid grid-cols-1 gap-x-4 gap-y-1.5 sm:grid-cols-2">
+          {detail.facts.map((fact, i) => (
+            <div key={`${fact.label}-${i}`} className="flex flex-col">
+              <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{fact.label}</dt>
+              <dd className="text-sm text-neutral-700">{fact.value}</dd>
+            </div>
+          ))}
+        </dl>
+      )}
+
+      {detail.keyTopics.length > 0 && (
+        <Section title="Key topics">
+          <div className="flex flex-wrap gap-1.5">
+            {detail.keyTopics.map((topic) => (
+              <span key={topic} className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 text-xs text-neutral-600">
+                {topic}
+              </span>
+            ))}
+          </div>
+        </Section>
+      )}
+
+      {detail.notableSpeakers.length > 0 && (
+        <Section title="Notable speakers">
+          <p className="text-sm text-neutral-700">{detail.notableSpeakers.join(', ')}</p>
+        </Section>
+      )}
+
+      {detail.audience && <Section title="Audience"><p className="text-sm text-neutral-700">{detail.audience}</p></Section>}
+
+      {(detail.registration || detail.registrationDeadline || detail.fees) && (
+        <Section title="Registration">
+          {detail.registrationDeadline && <p className="text-sm text-neutral-700"><span className="font-semibold">Deadline:</span> {detail.registrationDeadline}</p>}
+          {detail.fees && <p className="text-sm text-neutral-700"><span className="font-semibold">Fees:</span> {detail.fees}</p>}
+          {detail.registration && <p className="text-sm text-neutral-700">{detail.registration}</p>}
+        </Section>
+      )}
+
+      {detail.links.length > 0 && (
+        <Section title="Links">
+          <ul className="space-y-0.5">
+            {detail.links.map((link) => (
+              <li key={link.url}>
+                <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-sm font-medium text-orange-700 hover:underline">
+                  {link.label} ↗
+                </a>
+              </li>
+            ))}
+          </ul>
+        </Section>
+      )}
+
+      <button type="button" onClick={onRefresh} className="text-xs font-semibold text-neutral-400 hover:text-orange-700">
+        ↻ Refresh details
+      </button>
+    </div>
+  )
+}
+
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <div>
+      <p className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{title}</p>
+      {children}
+    </div>
+  )
+}
+
+function Spinner() {
+  return <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-orange-500" aria-hidden="true" />
+}
+
+function EmptyState({ tab, aiEnabled, run }: { tab: ConferenceTab; aiEnabled: boolean; run: ReturnType<typeof useConferenceRun> }) {
+  if (tab === 'upcoming') {
+    return (
+      <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
+        <p className="text-sm font-semibold text-neutral-700">No upcoming conferences yet.</p>
+        <p className="mt-1 text-sm text-neutral-400">
+          {aiEnabled ? 'Run a discovery sweep to find upcoming oncology conferences.' : 'AI discovery is disabled for this environment.'}
+        </p>
+        {aiEnabled && (
+          <button
+            type="button"
+            onClick={() => void run.start()}
+            disabled={run.busy}
+            className="mt-3 inline-flex items-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
+          >
+            {run.running ? `Discovering… ${run.elapsed}s` : 'Discover conferences'}
+          </button>
+        )}
+      </div>
+    )
+  }
+  const messages: Record<Exclude<ConferenceTab, 'upcoming'>, string> = {
+    shortlist: 'Nothing shortlisted yet. Add conferences you intend to visit from the Upcoming tab.',
+    pipeline: 'No conferences in the pipeline. Move a shortlisted conference to Registered to start tracking it.',
+    archive: 'No archived conferences yet.',
+  }
+  return (
+    <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
+      <p className="text-sm text-neutral-400">{messages[tab as Exclude<ConferenceTab, 'upcoming'>]}</p>
+    </div>
+  )
+}
