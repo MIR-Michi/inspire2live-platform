@@ -1,7 +1,7 @@
 import 'server-only'
 
 import { runAiMessage, wrapExternalData } from './client'
-import { DEFAULT_AI_MODEL, type AiModelId, type AiReasoningEffort } from './models'
+import type { AiModelId, AiReasoningEffort } from './models'
 
 export type MeetingDecision = {
   decision: string
@@ -229,8 +229,8 @@ async function summarizeSinglePass(
   const block = wrapExternalData('meeting.transcript', transcriptText)
   const result = await runAiMessage<unknown>({
     feature: 'meeting_summary',
-    model: input.model ?? DEFAULT_AI_MODEL,
-    effort: input.effort ?? 'high',
+    model: input.model,
+    effort: input.effort,
     maxTokens: 8000,
     temperature: 0,
     createdBy: input.createdBy,
@@ -263,8 +263,8 @@ async function summarizeChunk(input: SummarizeMeetingInput, speakers: string[], 
   const block = wrapExternalData('meeting.transcript_segment', chunk)
   const result = await runAiMessage<string>({
     feature: 'meeting_summary_chunk',
-    model: input.model ?? DEFAULT_AI_MODEL,
-    effort: input.effort ?? 'high',
+    model: input.model,
+    effort: input.effort,
     maxTokens: 3000,
     temperature: 0,
     createdBy: input.createdBy,
@@ -289,7 +289,7 @@ async function summarizeChunk(input: SummarizeMeetingInput, speakers: string[], 
 /**
  * Produce a structured, reviewable summary of a meeting transcript.
  *
- * Normal meetings run in a single pass on opus-4-8 with adaptive thinking.
+ * Normal meetings run in a single pass using the configured AI model and effort.
  * Very long transcripts are map-reduced: each segment is summarized to notes,
  * then the notes are reduced into the final structured summary.
  */
