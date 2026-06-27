@@ -44,9 +44,9 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Supabase CLI
-        uses: supabase/setup-cli@v1
+        uses: supabase/setup-cli@v2
         with:
-          version: latest
+          version: 2.84.2
 
       # `supabase start` provisions a local Postgres at the major version pinned
       # in config.toml, runs EVERY migration in supabase/migrations in order, then

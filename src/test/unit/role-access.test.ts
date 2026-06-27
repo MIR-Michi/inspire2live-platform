@@ -59,16 +59,15 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
 
   it('gives Comms its exact curated blueprint — not a permission-expanded menu', () => {
     const sections = getSideNavSections('Comms', spacesFor('Comms'))
-    // Comms shows ONLY its blueprint: comms workspace items + congress + library.
+    // Comms shows ONLY its blueprint: comms workspace items + active event types + library.
     expect(labelsIn('Comms')).toEqual([
       'Dashboard',
       'Planner',
       'Campus',
       'WhatsApp',
       'CRM',
-      'Annual Congress',
+      'Conferences',
       'Podcast',
-      'All events',
       'Library',
     ])
     // Even though Comms *can* access these spaces, they must NOT clutter its menu.
@@ -140,9 +139,9 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
     }
   })
 
-  it('marks Annual Congress as the single accented (priority) nav item', () => {
+  it('does not mark any Comms nav item as priority while Annual Congress is hidden', () => {
     const items = getSideNavSections('Comms', spacesFor('Comms')).flatMap((s) => s.items)
     const priorityItems = items.filter((i) => i.priority)
-    expect(priorityItems.map((i) => i.id)).toEqual(['congress'])
+    expect(priorityItems.map((i) => i.id)).toEqual([])
   })
 })

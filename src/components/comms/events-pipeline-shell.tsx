@@ -36,13 +36,6 @@ type EventCard = {
 
 type Option = { id: string; label: string }
 
-const SCOPE_FILTERS: Array<{ key: 'all' | 'i2l' | 'networking' | 'past'; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'i2l', label: 'I2L own' },
-  { key: 'networking', label: 'Networking' },
-  { key: 'past', label: 'Past' },
-]
-
 const STAGE_FILTERS: Array<{ key: 'all' | EventStage; label: string }> = [
   { key: 'all', label: 'All stages' },
   { key: 'announced', label: 'Announced' },
@@ -83,22 +76,20 @@ function OutputDots({ outputs }: { outputs: Array<{ label: string; done: boolean
 export function EventsPipelineShell({
   events,
   stageFilter,
-  scopeFilter,
   eventTypeFilter,
   eventTypes,
   initiatives,
   people,
   title = 'Events',
   eyebrow,
+  description,
   recordLabel = 'events',
   basePath = '/app/comms/events',
   detailBasePath,
-  showScopeFilters = true,
   showEventTypeFilters = true,
 }: {
   events: EventCard[]
   stageFilter: 'all' | EventStage
-  scopeFilter: 'all' | 'i2l' | 'networking' | 'past'
   eventTypeFilter: string
   eventTypes: string[]
   initiatives: Option[]
@@ -107,24 +98,20 @@ export function EventsPipelineShell({
   eyebrow?: string
   description?: string
   recordLabel?: string
-  /** Base path for the list/filter links (scope, stage, type). */
+  /** Base path for the list/filter links (stage, type). */
   basePath?: string
   /** Base path for opening an individual event. Defaults to `basePath`. */
   detailBasePath?: string
-  showScopeFilters?: boolean
   showEventTypeFilters?: boolean
 }) {
   const resolvedDetailBasePath = detailBasePath ?? basePath
   function buildHref(overrides: {
-    scope?: string
     stage?: string
     event_type?: string
   }) {
     const params = new URLSearchParams()
-    const resolvedScope = overrides.scope !== undefined ? overrides.scope : scopeFilter
     const resolvedStage = overrides.stage !== undefined ? overrides.stage : stageFilter
     const resolvedType = overrides.event_type !== undefined ? overrides.event_type : eventTypeFilter
-    if (resolvedScope !== 'all') params.set('scope', resolvedScope)
     if (resolvedStage !== 'all') params.set('stage', resolvedStage)
     if (resolvedType !== 'all') params.set('event_type', resolvedType)
     return params.size > 0 ? `${basePath}?${params}` : basePath
@@ -143,6 +130,7 @@ export function EventsPipelineShell({
               {events.length} {recordLabel}
             </span>
           </div>
+          {description && <p className="mt-1 max-w-3xl text-sm text-neutral-600">{description}</p>}
         </div>
 
         <details className="relative">
@@ -157,19 +145,7 @@ export function EventsPipelineShell({
       </header>
 
       <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-        {showScopeFilters && (
-          <NavSelect
-            label="Scope"
-            value={scopeFilter}
-            options={SCOPE_FILTERS.map<NavSelectOption>((item) => ({
-              value: item.key,
-              label: item.label,
-              href: buildHref({ scope: item.key, stage: 'all' }),
-            }))}
-          />
-        )}
-
-        {showScopeFilters && showEventTypeFilters && eventTypes.length > 1 && (
+        {showEventTypeFilters && eventTypes.length > 1 && (
           <NavSelect
             label="Type"
             value={eventTypeFilter}
@@ -198,7 +174,7 @@ export function EventsPipelineShell({
       {events.length === 0 && (
         <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
           <p className="text-sm font-semibold text-neutral-700">No events match this filter.</p>
-          <p className="mt-1 text-sm text-neutral-400">Try a different stage or scope.</p>
+          <p className="mt-1 text-sm text-neutral-400">Try a different stage or type.</p>
         </div>
       )}
 
@@ -240,9 +216,6 @@ export function EventsPipelineShell({
                     <StatusBadge label={getEventTypeLabel(event.event_type)} tone="blue" />
                     {effectiveOwned && (
                       <StatusBadge label="I2L own" tone="green" />
-                    )}
-                    {event.is_annual_congress && (
-                      <StatusBadge label="Congress" tone="violet" />
                     )}
                   </div>
 

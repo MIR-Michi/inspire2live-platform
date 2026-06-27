@@ -14,7 +14,6 @@ export default async function CommsPodcastPage({
     params.stage && VALID_STAGES.has(params.stage as EventStage) ? (params.stage as EventStage) : 'all'
   const { events, initiatives, people } = await loadCommsEventPipelineData({
     stageFilter,
-    scopeFilter: 'i2l',
     eventTypeFilter: 'podcast',
   })
 
@@ -22,7 +21,6 @@ export default async function CommsPodcastPage({
     <EventsPipelineShell
       events={events}
       stageFilter={stageFilter}
-      scopeFilter="i2l"
       eventTypeFilter="podcast"
       eventTypes={['podcast']}
       initiatives={initiatives}
@@ -33,7 +31,6 @@ export default async function CommsPodcastPage({
       recordLabel="episodes"
       basePath="/app/comms/podcast"
       detailBasePath="/app/comms/events"
-      showScopeFilters={false}
       showEventTypeFilters={false}
     />
   )
