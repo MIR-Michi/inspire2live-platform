@@ -103,6 +103,8 @@ export type NavItem = {
   minLevel?: AccessLevel
   /** Renders a live counter badge sourced from the matching workspace metric. */
   badge?: 'campus'
+  /** Optional accent treatment supported by the shared sidebar renderer. */
+  priority?: boolean
 }
 
 export type NavSection = {
