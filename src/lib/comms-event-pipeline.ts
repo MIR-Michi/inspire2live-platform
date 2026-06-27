@@ -1,6 +1,8 @@
 import { createClient } from '@/lib/supabase/server'
 import { type EventStage } from '@/lib/comms-workflow'
 
+export type EventScopeFilter = 'all' | 'i2l' | 'networking' | 'past'
+
 const EVENT_PIPELINE_SELECT =
   'id, name, event_type, start_date, end_date, location_city, location_country, organiser, owner_id, stage, is_annual_congress, is_i2l_organised, attendance_kind, presentation_summary, presentation_asset_url, event_image_url, event_website_url, push_to_group_calendar, initiative_ids, i2l_representatives, output_report_drafted, output_linkedin_published, output_newsletter_mentioned, output_media_stored'
 const EVENT_PIPELINE_FALLBACK_SELECT =
@@ -12,6 +14,7 @@ export async function loadCommsEventPipelineData({
 }: {
   stageFilter?: 'all' | EventStage
   eventTypeFilter?: string
+  scopeFilter?: EventScopeFilter
 } = {}) {
   const supabase = await createClient()
   const [{ data: eventsWithOwnership, error: eventsWithOwnershipError }, { data: profiles }, { data: initiatives }] = await Promise.all([
