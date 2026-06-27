@@ -16,32 +16,27 @@ type Option = { id: string; label: string }
 
 export function EventCreateForm({ initiatives, people }: { initiatives: Option[]; people: Option[] }) {
   const [eventType, setEventType] = useState('conference')
-  const [isAnnualCongress, setIsAnnualCongress] = useState(false)
   const [isI2lOrganised, setIsI2lOrganised] = useState(false)
 
   const effectiveI2lOwned = normalizeI2LOwnedFlag({
     eventType,
     isI2lOrganised,
-    isAnnualCongress,
   })
   const setup = useMemo(
     () =>
       getEventSetupContent({
         eventType,
         isI2lOrganised: effectiveI2lOwned,
-        isAnnualCongress,
       }),
-    [eventType, effectiveI2lOwned, isAnnualCongress]
+    [eventType, effectiveI2lOwned]
   )
   const showAttendance = supportsAttendanceSetup({
     eventType,
     isI2lOrganised: effectiveI2lOwned,
-    isAnnualCongress,
   })
   const needsOwner = requiresOwnerAssignment({
     eventType,
     isI2lOrganised: effectiveI2lOwned,
-    isAnnualCongress,
   })
 
   return (
@@ -78,17 +73,6 @@ export function EventCreateForm({ initiatives, people }: { initiatives: Option[]
         <input type="date" name="end_date" className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" />
       </label>
 
-      <label className="flex items-center gap-2 rounded-xl border border-orange-200 bg-orange-50 px-3 py-2 text-sm font-medium text-orange-900">
-        <input
-          type="checkbox"
-          name="is_annual_congress"
-          value="true"
-          checked={isAnnualCongress}
-          onChange={(event) => setIsAnnualCongress(event.target.checked)}
-        />
-        Annual Congress event
-      </label>
-
       {eventType === 'podcast' ? (
         <>
           <input type="hidden" name="is_i2l_organised" value="true" />
@@ -103,10 +87,9 @@ export function EventCreateForm({ initiatives, people }: { initiatives: Option[]
             name="is_i2l_organised"
             value="true"
             checked={effectiveI2lOwned}
-            disabled={isAnnualCongress}
             onChange={(event) => setIsI2lOrganised(event.target.checked)}
           />
-          I2L-organised event
+          I2L-organised conference
         </label>
       )}
 
@@ -173,7 +156,6 @@ export function EventCreateForm({ initiatives, people }: { initiatives: Option[]
           value={getDefaultAttendanceKind({
             eventType,
             isI2lOrganised: effectiveI2lOwned,
-            isAnnualCongress,
           })}
         />
       )}

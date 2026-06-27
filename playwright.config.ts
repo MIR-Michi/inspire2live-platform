@@ -3,6 +3,11 @@ import { defineConfig, devices } from '@playwright/test'
 const playwrightWhatsappWebhookSecret =
   process.env.WHATSAPP_WEBHOOK_SECRET ?? 'playwright-local-whatsapp-secret'
 const useProdServer = process.env.PW_USE_PROD_SERVER === 'true' || !!process.env.CI
+const playwrightServerCommand = process.env.CI
+  ? 'pnpm start'
+  : useProdServer
+    ? 'pnpm build && pnpm start'
+    : 'pnpm dev'
 const playwrightSupabaseUrl = process.env.E2E_SUPABASE_URL ?? 'http://127.0.0.1:54321'
 const playwrightSupabaseAnonKey =
   process.env.E2E_SUPABASE_ANON_KEY ??
@@ -34,9 +39,10 @@ export default defineConfig({
   ],
 
   webServer: {
-    // Production-mode runs are slower, but much more stable for auth and routing checks.
-    // Opt in locally with PW_USE_PROD_SERVER=true.
-    command: useProdServer ? 'pnpm build && pnpm start' : 'pnpm dev',
+    // CI already prepares .next before Playwright starts. Reuse that build so
+    // the webServer startup timeout is only for booting Next, not rebuilding it.
+    // Opt in locally with PW_USE_PROD_SERVER=true to build + start.
+    command: playwrightServerCommand,
     env: {
       ...process.env,
       NEXT_PUBLIC_SUPABASE_URL: playwrightSupabaseUrl,

@@ -14,27 +14,37 @@ function buf(text: string) {
 }
 
 /** Build a minimal valid .docx (ZIP with a single deflated word/document.xml). */
-function buildDocx(documentXml: string): Buffer {
+function buildDocx(documentXml: string, options: { useDataDescriptor?: boolean } = {}): Buffer {
   const name = Buffer.from('word/document.xml', 'utf8')
   const content = Buffer.from(documentXml, 'utf8')
   const compressed = deflateRawSync(content)
+  const generalPurposeFlag = options.useDataDescriptor ? 0x08 : 0
 
   const localHeader = Buffer.alloc(30)
   localHeader.writeUInt32LE(0x04034b50, 0)
   localHeader.writeUInt16LE(20, 4) // version needed
-  localHeader.writeUInt16LE(0, 6) // flags
+  localHeader.writeUInt16LE(generalPurposeFlag, 6)
   localHeader.writeUInt16LE(8, 8) // deflate
   localHeader.writeUInt32LE(0, 14) // crc (ignored by reader)
-  localHeader.writeUInt32LE(compressed.length, 18)
-  localHeader.writeUInt32LE(content.length, 22)
+  localHeader.writeUInt32LE(options.useDataDescriptor ? 0 : compressed.length, 18)
+  localHeader.writeUInt32LE(options.useDataDescriptor ? 0 : content.length, 22)
   localHeader.writeUInt16LE(name.length, 26)
   localHeader.writeUInt16LE(0, 28)
 
-  const localRecord = Buffer.concat([localHeader, name, compressed])
+  const descriptor = Buffer.alloc(options.useDataDescriptor ? 16 : 0)
+  if (options.useDataDescriptor) {
+    descriptor.writeUInt32LE(0x08074b50, 0)
+    descriptor.writeUInt32LE(0, 4) // crc (ignored by reader)
+    descriptor.writeUInt32LE(compressed.length, 8)
+    descriptor.writeUInt32LE(content.length, 12)
+  }
+
+  const localRecord = Buffer.concat([localHeader, name, compressed, descriptor])
 
   const central = Buffer.alloc(46)
   central.writeUInt32LE(0x02014b50, 0)
   central.writeUInt16LE(20, 6)
+  central.writeUInt16LE(generalPurposeFlag, 8)
   central.writeUInt16LE(8, 10) // deflate
   central.writeUInt32LE(compressed.length, 20)
   central.writeUInt32LE(content.length, 24)
@@ -112,6 +122,18 @@ describe('extractTranscriptText', () => {
     expect(result.format).toBe('docx')
     expect(result.text).toContain('Alice: Opening remarks')
     expect(result.text).toContain('Bob: We & the team agreed')
+  })
+
+  it('extracts docx entries that store sizes in a data descriptor', () => {
+    const xml =
+      '<?xml version="1.0"?><w:document><w:body>' +
+      '<w:p><w:r><w:t>Campus lead: Welcome to the World Campus update</w:t></w:r></w:p>' +
+      '<w:p><w:r><w:t>Coordinator: Follow up with the Dutch team</w:t></w:r></w:p>' +
+      '</w:body></w:document>'
+    const result = extractTranscriptText(buildDocx(xml, { useDataDescriptor: true }), 'docx')
+    expect(result.format).toBe('docx')
+    expect(result.text).toContain('Campus lead: Welcome to the World Campus update')
+    expect(result.text).toContain('Coordinator: Follow up with the Dutch team')
   })
 
   it('throws on empty extracted text', () => {

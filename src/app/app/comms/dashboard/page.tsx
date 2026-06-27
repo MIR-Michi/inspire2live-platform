@@ -8,25 +8,19 @@ import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-d
 import { loadCommsTeamDashboardData } from '@/lib/comms-dashboard-data'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getRunStatus } from '@/lib/ai/org-newsfeed-run'
-import type { EventScopeFilter } from '@/lib/comms-event-pipeline'
 
 // The "Refresh now" server action runs the web-search newsfeed job inline.
 export const maxDuration = 300
 
 const VALID_VIEWS = new Set(['personal', 'team'])
-const VALID_SCOPES = new Set<EventScopeFilter>(['all', 'i2l', 'networking', 'past'])
 
 export default async function CommsDashboardPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ view?: string; scope?: string }>
+  searchParams?: Promise<{ view?: string }>
 }) {
   const params = (await searchParams) ?? {}
   const view = VALID_VIEWS.has(params.view ?? '') ? (params.view as 'personal' | 'team') : 'team'
-  const scope =
-    params.scope && VALID_SCOPES.has(params.scope as EventScopeFilter)
-      ? (params.scope as EventScopeFilter)
-      : 'all'
 
   const supabase = await createClient()
   const {
@@ -55,7 +49,7 @@ export default async function CommsDashboardPage({
         <CommsDashboardPanel name={profile?.name} {...(await loadCommsPersonalDashboardData(supabase, user.id))} />
       ) : (
         <TeamDashboard
-          data={await loadCommsTeamDashboardData(supabase, { scopeFilter: scope })}
+          data={await loadCommsTeamDashboardData(supabase)}
           canApprove={profile?.role === 'PlatformAdmin'}
           newsfeedRunStatus={await getRunStatus(createAdminClient()).catch(() => null)}
         />

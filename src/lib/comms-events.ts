@@ -1,11 +1,6 @@
 export const EVENT_TYPE_OPTIONS = [
   { value: 'conference', label: 'Conference' },
-  { value: 'workshop', label: 'Workshop' },
-  { value: 'congress', label: 'Congress' },
-  { value: 'symposium', label: 'Symposium' },
-  { value: 'webinar', label: 'Webinar' },
   { value: 'podcast', label: 'Podcast' },
-  { value: 'other', label: 'Other' },
 ] as const
 
 export type EventType = (typeof EVENT_TYPE_OPTIONS)[number]['value']
@@ -119,7 +114,7 @@ export function isI2LOwnedEvent(input: {
   isI2lOrganised?: boolean | null | undefined
   isAnnualCongress?: boolean | null | undefined
 }) {
-  return Boolean(input.isAnnualCongress || input.isI2lOrganised || isPodcastEventType(input.eventType))
+  return Boolean(input.isI2lOrganised || isPodcastEventType(input.eventType))
 }
 
 export function normalizeI2LOwnedFlag(input: {
@@ -210,16 +205,16 @@ export function getEventSetupContent(input: {
     return {
       mode,
       typeHint:
-        'I2L-owned events use accountable ownership instead of attendee tracking.',
+        'I2L-owned conferences use accountable ownership instead of attendee tracking.',
       ownerLabel: 'Responsible owner',
       ownerHelp: 'Assign the person responsible for delivery, coordination, and follow-up.',
       organiserLabel: 'Lead organiser / hosting team',
       organiserPlaceholder: 'Example: Inspire2Live events team',
-      websiteLabel: 'Event website',
-      websitePlaceholder: 'https://example.org/event',
-      imageLabel: 'Event image link',
+      websiteLabel: 'Conference website',
+      websitePlaceholder: 'https://example.org/conference',
+      imageLabel: 'Conference image link',
       imagePlaceholder: 'Example: invitation image, agenda visual, or SharePoint image URL',
-      summaryLabel: 'Event brief / production summary',
+      summaryLabel: 'Conference brief / production summary',
       summaryPlaceholder:
         'Capture the purpose, audience, runbook highlights, and communication angle.',
       assetLabel: 'Runbook / deck / support asset',
@@ -235,15 +230,15 @@ export function getEventSetupContent(input: {
   return {
     mode,
     typeHint:
-      'External attendance events track how I2L participates and who attends from the team.',
+      'External conferences track how I2L participates and who attends from the team.',
     ownerLabel: null,
     ownerHelp: null,
     organiserLabel: 'External organiser',
     organiserPlaceholder: 'Example: conference host or partner organisation',
-    websiteLabel: 'Event website',
-    websitePlaceholder: 'https://example.org/event',
+    websiteLabel: 'Conference website',
+    websitePlaceholder: 'https://example.org/conference',
     imageLabel: 'Picture upload / image link',
-    imagePlaceholder: 'Example: event photo, invitation image, or SharePoint image URL',
+    imagePlaceholder: 'Example: conference photo, invitation image, or SharePoint image URL',
     summaryLabel: 'Presentation summary',
     summaryPlaceholder: 'Required when attending as presenter.',
     assetLabel: 'Presentation / slide link',

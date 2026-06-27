@@ -68,7 +68,8 @@ export function getRoleBadgeColor(role?: string | null): string {
 // Visibility rule per item: canAccess(spaces[item.space], item.minLevel ?? 'view').
 //
 // Deliberately NOT in the tree (still reachable elsewhere): Profile (top-right
-// account menu), and Tasks / Bureau / Partners (surfaced contextually).
+// account menu), Tasks / Bureau / Partners, and Annual Congress (currently hidden
+// from Communications navigation and surfaced only by direct workspace routes).
 
 /** Icon keys resolved to an SVG in the sidebar. */
 export type NavIcon =
@@ -103,7 +104,7 @@ export type NavItem = {
   minLevel?: AccessLevel
   /** Renders a live counter badge sourced from the matching workspace metric. */
   badge?: 'campus'
-  /** Highlights the item with the accent colour (e.g. the flagship event). */
+  /** Optional accent treatment supported by the shared sidebar renderer. */
   priority?: boolean
 }
 
@@ -133,9 +134,8 @@ export const MASTER_NAV: NavSection[] = [
   {
     label: 'Events',
     items: [
-      { id: 'congress',      label: 'Annual Congress', href: '/app/congress',        space: 'congress', icon: 'congress', priority: true },
-      { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast',   space: 'comms', icon: 'podcast' },
-      { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',    space: 'comms', icon: 'events' },
+      { id: 'comms-conferences', label: 'Conferences', href: '/app/comms/conferences', space: 'comms', icon: 'events' },
+      { id: 'comms-podcast',     label: 'Podcast',     href: '/app/comms/podcast',     space: 'comms', icon: 'podcast' },
     ],
   },
   {
@@ -189,10 +189,8 @@ const COMMS_NAV_SECTIONS: NavSection[] = [
   {
     label: 'Events',
     items: [
-      { id: 'congress',      label: 'Annual Congress', href: '/app/congress',      space: 'congress', icon: 'congress', priority: true },
-      { id: 'comms-conferences', label: 'Conferences',  href: '/app/comms/conferences', space: 'comms', icon: 'conferences' },
-      { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast', space: 'comms', icon: 'podcast' },
-      { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',  space: 'comms', icon: 'events' },
+      { id: 'comms-conferences', label: 'Conferences', href: '/app/comms/conferences', space: 'comms', icon: 'events' },
+      { id: 'comms-podcast',     label: 'Podcast',     href: '/app/comms/podcast',     space: 'comms', icon: 'podcast' },
     ],
   },
   {

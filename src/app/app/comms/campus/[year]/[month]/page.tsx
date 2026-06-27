@@ -7,7 +7,10 @@ import { AgendaAddForm } from '@/components/comms/agenda-add-form'
 import { AgendaItemList } from '@/components/comms/agenda-item-list'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
 import { CampusMeetingChecklist } from '@/components/comms/campus-meeting-checklist'
+import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-panel'
 import { loadCampusMeetingTasks, loadCampusSessionAgenda, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
+import { loadCampusSessionTranscript } from '@/lib/comms-meeting-transcripts'
+import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { createClient } from '@/lib/supabase/server'
 
 async function markReviewedAction(formData: FormData) {
@@ -166,9 +169,16 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
   // Structured agenda for this monthly meeting — same framework as the weekly
   // comms meeting: shared agenda items (owner + drag order + meeting notes) with
   // assignable, linkable tasks. Loaded only when a session exists to attach to.
-  const campusAgenda = primarySession ? await loadCampusSessionAgenda(supabase, primarySession.id) : []
-  const teamMembers = primarySession ? await loadCommsTeamMembers(supabase) : []
-  const meetingTasks = primarySession ? await loadCampusMeetingTasks(supabase, primarySession.id) : []
+  const [campusAgenda, teamMembers, meetingTasks, transcript] = primarySession
+    ? await Promise.all([
+        loadCampusSessionAgenda(supabase, primarySession.id),
+        loadCommsTeamMembers(supabase),
+        loadCampusMeetingTasks(supabase, primarySession.id),
+        loadCampusSessionTranscript(supabase, primarySession.id),
+      ])
+    : [[], [], [], null]
+  const transcriptOwners = teamMembers.map((member) => ({ id: member.id, label: member.label }))
+  const aiEnabled = isAiEnabled()
   const completedMeetingTasks = meetingTasks.filter((task) => task.status === 'completed').length
   const campusAgendaOptions = primarySession
     ? campusAgenda.map((item) => ({ id: item.id, label: item.title, meetingDate: primarySession.session_date }))
@@ -359,6 +369,28 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
                   Standard tasks for every campus meeting. Reassign an owner or update status; each
                   task also appears on its owner&apos;s personal dashboard.
                 </p>
+              </CollapsibleCard>
+            )}
+
+            {primarySession && (
+              <CollapsibleCard
+                title="Meeting transcript & AI summary"
+                storageKey="campus-transcript"
+                bodyClassName="px-0 pb-0"
+                actions={
+                  <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                    {transcript?.summary ? 'Summary ready' : transcript ? 'Transcript uploaded' : 'No transcript'}
+                  </span>
+                }
+              >
+                <div className="border-t border-neutral-200 px-4 py-3">
+                  <MeetingTranscriptPanel
+                    context={{ kind: 'campus', campusSessionId: primarySession.id }}
+                    transcript={transcript}
+                    owners={transcriptOwners}
+                    aiEnabled={aiEnabled}
+                  />
+                </div>
               </CollapsibleCard>
             )}
 

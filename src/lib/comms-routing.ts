@@ -197,29 +197,18 @@ function extractEventLocation(rawContent: string) {
 export function buildEventDraftFromIntake(input: IntakeLike): ParsedEventDraft {
   const name = extractEventNameCandidate(input.raw_content) || input.sender_name
   const startDate = input.captured_at.slice(0, 10)
-  const isAnnualCongress = /annual congress/i.test(input.raw_content) || /annual congress/i.test(name)
   const isPodcast = /podcast|episode|recording session/i.test(`${name} ${input.raw_content}`)
 
   return {
     name,
-    eventType: normalizeEventType(
-      isPodcast
-        ? 'podcast'
-        : /workshop/i.test(name)
-          ? 'workshop'
-          : isAnnualCongress
-            ? 'congress'
-            : /forum|meeting|summit/i.test(name)
-              ? 'symposium'
-              : 'conference'
-    ),
+    eventType: normalizeEventType(isPodcast ? 'podcast' : 'conference'),
     startDate,
     endDate: '',
     organiser: cleanExtractedValue(input.sender_name),
     locationCity: extractEventLocation(input.raw_content),
     locationCountry: extractCountryFromText(input.raw_content),
     notes: input.raw_content,
-    isAnnualCongress,
+    isAnnualCongress: false,
   }
 }
 
