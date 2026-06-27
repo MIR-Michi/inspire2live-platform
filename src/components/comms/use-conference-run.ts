@@ -8,10 +8,8 @@ import type { ConferenceRunStatus, ConferenceRunState } from '@/lib/ai/conferenc
 const POLL_MS = 4000
 
 /**
- * Drives the background conference-discovery run from a client component: kicks
- * it off, polls the singleton status until it finishes, then refreshes the
- * server data so new conferences appear. Resumes polling on mount if a run is
- * already in progress.
+ * Drives conference discovery from the client. It supports both deterministic
+ * action completion and polling when another run is already in progress.
  */
 export function useConferenceRun(initial: ConferenceRunStatus | null) {
   const router = useRouter()
@@ -43,21 +41,20 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
     }, POLL_MS)
   }, [router, stopPoll])
 
-  // Resume polling if a run was already in progress when the page loaded.
   useEffect(() => {
     if (initial?.status === 'running') poll()
     return stopPoll
   }, [initial?.status, poll, stopPoll])
 
-  // Elapsed timer while a run is active.
   useEffect(() => {
-    if (!running) return
+    if (!busy) return
     const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
     return () => clearInterval(timer)
-  }, [running])
+  }, [busy])
 
   const start = useCallback(async () => {
     setStarting(true)
+    setStatus('running')
     setMessage(null)
     setElapsed(0)
     try {
@@ -67,12 +64,14 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
         setMessage(result.message ?? 'Could not start the discovery run.')
         return
       }
-      setStatus('running')
-      poll()
+      setStatus(result.status)
+      setMessage(result.message ?? null)
+      if (result.status === 'running') poll()
+      else router.refresh()
     } finally {
       setStarting(false)
     }
-  }, [poll])
+  }, [poll, router])
 
   return { status, running, starting, busy, elapsed, message, start }
 }
