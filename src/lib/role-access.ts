@@ -80,6 +80,7 @@ export type NavIcon =
   | 'initiatives'
   | 'board'
   | 'congress'
+  | 'conferences'
   | 'podcast'
   | 'events'
   | 'network'
@@ -189,6 +190,7 @@ const COMMS_NAV_SECTIONS: NavSection[] = [
     label: 'Events',
     items: [
       { id: 'congress',      label: 'Annual Congress', href: '/app/congress',      space: 'congress', icon: 'congress', priority: true },
+      { id: 'comms-conferences', label: 'Conferences',  href: '/app/comms/conferences', space: 'comms', icon: 'conferences' },
       { id: 'comms-podcast', label: 'Podcast',         href: '/app/comms/podcast', space: 'comms', icon: 'podcast' },
       { id: 'comms-events',  label: 'All events',      href: '/app/comms/events',  space: 'comms', icon: 'events' },
     ],
