@@ -446,7 +446,7 @@ export async function unlinkEventInitiative(formData: FormData) {
     .eq('id', eventId)
     .maybeSingle()
 
-  if (loadError) throw new Error(error.message)
+  if (loadError) throw new Error(loadError.message)
   if (!event) throw new Error('Event not found.')
 
   const initiativeIds = (event.initiative_ids ?? []).filter((id) => id !== initiativeId)
