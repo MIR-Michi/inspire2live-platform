@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
-import { getConferenceStatus, startConferenceRun } from '@/app/app/comms/conferences/run-actions'
+import { getConferenceStatus } from '@/app/app/comms/conferences/run-actions'
 import type { ConferenceRunStatus, ConferenceRunState } from '@/lib/ai/conference-run'
 
 const POLL_MS = 4000
@@ -69,23 +69,28 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
   const start = useCallback(async () => {
     setStarting(true)
     setStatus('running')
-    setMessage(null)
+    setMessage('Starting discovery request.')
     setElapsed(0)
-    try {
-      const result = await startConferenceRun()
-      if (!result.ok) {
+    poll()
+
+    fetch('/api/comms/conferences', { method: 'POST' })
+      .then(async (response) => {
+        if (response.ok) return
+        const payload = await response.json().catch(() => null) as { error?: string } | null
         setStatus('error')
-        setMessage(result.message ?? 'Could not start the discovery run.')
-        return
-      }
-      setStatus(result.status)
-      setMessage(result.message ?? null)
-      if (result.status === 'running') poll()
-      else router.refresh()
-    } finally {
-      setStarting(false)
-    }
-  }, [poll, router])
+        setMessage(payload?.error ?? 'Could not start the discovery run.')
+        stopPoll()
+      })
+      .catch((error: unknown) => {
+        setStatus('error')
+        setMessage(error instanceof Error ? error.message : 'Could not start the discovery run.')
+        stopPoll()
+      })
+      .finally(() => {
+        setStarting(false)
+        void pollOnce()
+      })
+  }, [poll, pollOnce, stopPoll])
 
   return { status, running, starting, busy, elapsed, message: progress, start }
 }
