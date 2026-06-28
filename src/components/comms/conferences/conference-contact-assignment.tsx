@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useEffect, useState, useTransition } from 'react'
+import { useEffect, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   assignConferenceContact,
@@ -10,9 +10,17 @@ import {
   type ConferenceContactOption,
 } from '@/app/app/comms/conferences/actions'
 
-export function ConferenceContactAssignment({ conferenceId, conferenceName }: { conferenceId: string; conferenceName: string }) {
+export function ConferenceContactAssignment({
+  conferenceId,
+  conferenceName,
+  initialContacts,
+}: {
+  conferenceId: string
+  conferenceName: string
+  initialContacts: AssignedConferenceContact[]
+}) {
   const router = useRouter()
-  const [assigned, setAssigned] = useState<AssignedConferenceContact[]>([])
+  const [assigned, setAssigned] = useState<AssignedConferenceContact[]>(initialContacts)
   const [query, setQuery] = useState('')
   const [options, setOptions] = useState<ConferenceContactOption[]>([])
   const [firstName, setFirstName] = useState('')
@@ -24,19 +32,6 @@ export function ConferenceContactAssignment({ conferenceId, conferenceName }: { 
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
   const showOptions = query.trim().length >= 2 && options.length > 0
-
-  const loadAssigned = useCallback(async () => {
-    const result = await getConferenceContacts(conferenceId)
-    if (!result.ok) {
-      setError(result.message)
-      return
-    }
-    setAssigned(result.contacts)
-  }, [conferenceId])
-
-  useEffect(() => {
-    void loadAssigned()
-  }, [loadAssigned])
 
   useEffect(() => {
     const text = query.trim()
@@ -64,6 +59,15 @@ export function ConferenceContactAssignment({ conferenceId, conferenceName }: { 
       clearTimeout(timer)
     }
   }, [query])
+
+  const loadAssigned = async () => {
+    const result = await getConferenceContacts(conferenceId)
+    if (!result.ok) {
+      setError(result.message)
+      return
+    }
+    setAssigned(result.contacts)
+  }
 
   const updateQuery = (value: string) => {
     setQuery(value)
