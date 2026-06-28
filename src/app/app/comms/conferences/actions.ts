@@ -6,6 +6,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { findTargetedConferences } from '@/lib/ai/conference-targeted-search'
+import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 import {
   enrichConference,
   validateConferences,
@@ -20,6 +21,12 @@ const CONFERENCES_PATH = '/app/comms/conferences'
 
 type ActionResult = { ok: boolean; message?: string }
 
+type DbError = { message: string }
+type Row = Record<string, unknown>
+type RowsResult = Promise<{ data: Row[] | null; error: DbError | null }>
+type RowResult = Promise<{ data: Row | null; error: DbError | null }>
+type WriteResult = Promise<{ error: DbError | null }>
+
 export type DiscoverMoreCriteria = {
   region?: ConferenceRegion | 'all'
   country?: string | null
@@ -33,6 +40,31 @@ export type DiscoverMoreResult =
 export type AddDiscoveredResult =
   | { ok: true; inserted: number; message: string }
   | { ok: false; message: string }
+
+export type ConferenceContactOption = {
+  id: string
+  fullName: string
+  email: string | null
+  whatsappId: string | null
+  meta: string | null
+}
+
+export type AssignedConferenceContact = ConferenceContactOption & {
+  assignmentId: string
+  role: string
+  notificationStatus: string
+  notificationDetail: string | null
+  assignedAt: string
+}
+
+export type AssignConferenceContactInput = {
+  conferenceId: string
+  contactId?: string | null
+  firstName?: string | null
+  lastName?: string | null
+  email?: string | null
+  whatsappId?: string | null
+}
 
 async function requireCommsUser() {
   const supabase = await createClient()
@@ -59,6 +91,26 @@ type LooseDb = {
   }
 }
 
+type ConferenceContactDb = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        maybeSingle: () => RowResult
+        order: (column: string, opts: { ascending: boolean }) => RowsResult
+      }
+      ilike: (column: string, pattern: string) => {
+        order: (column: string, opts: { ascending: boolean }) => { limit: (n: number) => RowsResult }
+      }
+      in: (column: string, values: string[]) => { limit: (n: number) => RowsResult }
+    }
+    insert: (payload: Row | Row[]) => {
+      select: (columns: string) => { maybeSingle: () => RowResult }
+    } & WriteResult
+    upsert: (payload: Row | Row[], options?: { onConflict: string }) => WriteResult
+    update: (payload: Row) => { eq: (column: string, value: string) => WriteResult }
+  }
+}
+
 function conferenceRow(conf: DiscoveredConference, createdBy: string | null): Record<string, unknown> {
   return {
     name: conf.name,
@@ -77,6 +129,95 @@ function conferenceRow(conf: DiscoveredConference, createdBy: string | null): Re
     dedupe_key: conf.dedupeKey,
     created_by: createdBy,
   }
+}
+
+function normalizeContactEmail(value: string | null | undefined): string | null {
+  const email = value?.trim().toLowerCase()
+  return email && email.includes('@') ? email : null
+}
+
+function clean(value: string | null | undefined, max = 160): string | null {
+  const text = value?.trim()
+  return text ? text.slice(0, max) : null
+}
+
+function contactOptionFromRow(row: Row): ConferenceContactOption {
+  const title = clean(String(row.title ?? ''))
+  const organisation = clean(String(row.organisation ?? ''))
+  return {
+    id: String(row.id),
+    fullName: String(row.full_name ?? 'Unnamed contact'),
+    email: clean(String(row.email ?? '')),
+    whatsappId: clean(String(row.whatsapp_id ?? '')),
+    meta: [title, organisation, clean(String(row.email ?? ''))].filter(Boolean).join(' · ') || null,
+  }
+}
+
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
+async function sendConferenceEmail(to: string, subject: string, body: string, linkUrl: string): Promise<{ ok: boolean; detail: string }> {
+  if (!process.env.RESEND_API_KEY) return { ok: false, detail: 'Email not sent: RESEND_API_KEY is not configured.' }
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? 'https://i2l.austriq.com'
+  const actionUrl = `${base}${linkUrl}`
+  const response = await fetch('https://api.resend.com/emails', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      from: process.env.EMAIL_FROM ?? 'Inspire2Live <no-reply@inspire2live.org>',
+      to: [to],
+      subject,
+      html: `<!DOCTYPE html><html lang="en"><body style="font-family:system-ui,sans-serif;color:#111827"><h2>${escapeHtml(subject)}</h2><p>${escapeHtml(body)}</p><p><a href="${escapeHtml(actionUrl)}">Open conference</a></p></body></html>`,
+    }),
+  }).catch(() => null)
+  if (!response?.ok) return { ok: false, detail: `Email not sent: provider returned ${response?.status ?? 'network error'}.` }
+  return { ok: true, detail: 'Email sent.' }
+}
+
+async function notifyConferenceContact(contact: ConferenceContactOption, conferenceName: string, conferenceId: string, sentBy: string) {
+  const subject = `You were added to ${conferenceName}`
+  const body = `You have been added as an Inspire2Live attendee/contact for ${conferenceName}.`
+  const linkUrl = `${CONFERENCES_PATH}?conference=${conferenceId}`
+  const details: string[] = []
+  let emailOk = false
+  let whatsappOk = false
+
+  if (contact.email) {
+    const result = await sendConferenceEmail(contact.email, subject, body, linkUrl)
+    emailOk = result.ok
+    details.push(result.detail)
+  } else {
+    details.push('Email not sent: contact has no email address.')
+  }
+
+  if (contact.whatsappId) {
+    const whatsapp = await sendWhatsAppMessage(contact.whatsappId, body)
+    whatsappOk = whatsapp.ok
+    details.push(whatsapp.ok ? 'WhatsApp sent.' : `WhatsApp not sent: ${whatsapp.error}`)
+    const admin = createAdminClient() as unknown as ConferenceContactDb
+    await admin.from('whatsapp_outbound_messages').insert({
+      recipient_whatsapp_id: contact.whatsappId,
+      body,
+      sent_by: sentBy,
+      graph_message_id: whatsapp.ok ? whatsapp.messageId : null,
+      delivery_status: whatsapp.ok ? 'sent' : 'failed',
+      error_detail: whatsapp.ok ? null : whatsapp.error,
+    })
+  } else {
+    details.push('WhatsApp not sent: contact has no WhatsApp id.')
+  }
+
+  const status = emailOk && whatsappOk ? 'sent' : emailOk || whatsappOk ? 'partial' : 'failed'
+  return { status, detail: details.join(' ') }
 }
 
 /** Add a discovered conference to the visit pipeline at the "intended" stage. */
@@ -242,4 +383,176 @@ export async function addDiscoveredConferences(conferences: DiscoveredConference
     inserted: rows.length,
     message: `Added ${rows.length} conference${rows.length === 1 ? '' : 's'} to the list.`,
   }
+}
+
+export async function searchConferenceContacts(query: string): Promise<{ ok: true; contacts: ConferenceContactOption[] } | { ok: false; message: string }> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const q = query.trim().replace(/[%_]/g, '')
+  if (q.length < 2) return { ok: true, contacts: [] }
+
+  const db = createAdminClient() as unknown as ConferenceContactDb
+  const { data, error } = await db
+    .from('comms_crm_contacts')
+    .select('id, full_name, email, phone, whatsapp_id, title, organisation')
+    .ilike('full_name', `%${q}%`)
+    .order('full_name', { ascending: true })
+    .limit(8)
+
+  if (error) return { ok: false, message: error.message }
+  return { ok: true, contacts: (data ?? []).map(contactOptionFromRow) }
+}
+
+export async function getConferenceContacts(conferenceId: string): Promise<{ ok: true; contacts: AssignedConferenceContact[] } | { ok: false; message: string }> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const db = createAdminClient() as unknown as ConferenceContactDb
+  const assignmentsResult = await db
+    .from('conference_contact_assignments')
+    .select('id, contact_id, role, notification_status, notification_detail, assigned_at')
+    .eq('conference_id', conferenceId)
+    .order('assigned_at', { ascending: false })
+
+  if (assignmentsResult.error) return { ok: false, message: assignmentsResult.error.message }
+
+  const assignments = assignmentsResult.data ?? []
+  const contactIds = Array.from(new Set(assignments.map((row) => String(row.contact_id)).filter(Boolean)))
+  if (contactIds.length === 0) return { ok: true, contacts: [] }
+
+  const contactsResult = await db
+    .from('comms_crm_contacts')
+    .select('id, full_name, email, phone, whatsapp_id, title, organisation')
+    .in('id', contactIds)
+    .limit(100)
+
+  if (contactsResult.error) return { ok: false, message: contactsResult.error.message }
+  const byId = new Map((contactsResult.data ?? []).map((row) => [String(row.id), contactOptionFromRow(row)]))
+
+  return {
+    ok: true,
+    contacts: assignments.flatMap((assignment) => {
+      const contact = byId.get(String(assignment.contact_id))
+      if (!contact) return []
+      return [{
+        ...contact,
+        assignmentId: String(assignment.id),
+        role: String(assignment.role ?? 'attendee'),
+        notificationStatus: String(assignment.notification_status ?? 'queued'),
+        notificationDetail: clean(String(assignment.notification_detail ?? ''), 600),
+        assignedAt: String(assignment.assigned_at),
+      }]
+    }),
+  }
+}
+
+export async function assignConferenceContact(input: AssignConferenceContactInput): Promise<{ ok: true; contact: ConferenceContactOption; message: string } | { ok: false; message: string }> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+  if (!input.conferenceId) return { ok: false, message: 'Conference is required.' }
+
+  const db = createAdminClient() as unknown as ConferenceContactDb
+  const [conferenceResult, trackingResult] = await Promise.all([
+    db.from('conferences').select('id, name').eq('id', input.conferenceId).maybeSingle(),
+    db.from('conference_tracking').select('stage').eq('conference_id', input.conferenceId).maybeSingle(),
+  ])
+
+  if (conferenceResult.error) return { ok: false, message: conferenceResult.error.message }
+  if (!conferenceResult.data) return { ok: false, message: 'Conference not found.' }
+  if (String(trackingResult.data?.stage ?? '') !== 'registered') {
+    return { ok: false, message: 'Contacts can be assigned once the conference is in the Registered stage.' }
+  }
+
+  let contact: ConferenceContactOption | null = null
+  if (input.contactId) {
+    const contactResult = await db
+      .from('comms_crm_contacts')
+      .select('id, full_name, email, phone, whatsapp_id, title, organisation')
+      .eq('id', input.contactId)
+      .maybeSingle()
+    if (contactResult.error) return { ok: false, message: contactResult.error.message }
+    if (!contactResult.data) return { ok: false, message: 'CRM contact not found.' }
+    contact = contactOptionFromRow(contactResult.data)
+  } else {
+    const firstName = clean(input.firstName, 80)
+    const lastName = clean(input.lastName, 80)
+    const email = normalizeContactEmail(input.email)
+    const whatsappId = clean(input.whatsappId, 80)
+    if (!firstName || !lastName || !email) return { ok: false, message: 'First name, last name, and email are required.' }
+
+    const existing = await db
+      .from('comms_crm_contacts')
+      .select('id, full_name, email, phone, whatsapp_id, title, organisation')
+      .eq('normalized_email', email)
+      .maybeSingle()
+    if (existing.error) return { ok: false, message: existing.error.message }
+
+    if (existing.data) {
+      contact = contactOptionFromRow(existing.data)
+    } else {
+      const contactKind = email.endsWith('@inspire2live.org') ? 'internal_contact' : 'external'
+      const created = await db
+        .from('comms_crm_contacts')
+        .insert({
+          segment: contactKind === 'external' ? 'external' : 'internal',
+          source_type: 'manual',
+          full_name: `${firstName} ${lastName}`,
+          contact_kind: contactKind,
+          platform_status: 'none',
+          email,
+          whatsapp_id: whatsappId,
+          preferred_channel: whatsappId ? 'WhatsApp / Email' : 'Email',
+          lifecycle_stage: 'active',
+          consent_status: 'unknown',
+          source_label: 'Conference assignment',
+          tags: ['conference-attendee'],
+          notes: `Created from conference assignment for ${String(conferenceResult.data.name)}.`,
+          created_by: auth.userId,
+          updated_by: auth.userId,
+          updated_at: new Date().toISOString(),
+        })
+        .select('id, full_name, email, phone, whatsapp_id, title, organisation')
+        .maybeSingle()
+      if (created.error) return { ok: false, message: created.error.message }
+      if (!created.data) return { ok: false, message: 'Could not create the CRM contact.' }
+      contact = contactOptionFromRow(created.data)
+    }
+  }
+
+  const conferenceName = String(conferenceResult.data.name)
+  const notification = await notifyConferenceContact(contact, conferenceName, input.conferenceId, auth.userId)
+  const assignedAt = new Date().toISOString()
+  const assignment = await db.from('conference_contact_assignments').upsert({
+    conference_id: input.conferenceId,
+    contact_id: contact.id,
+    role: 'attendee',
+    notification_status: notification.status,
+    notification_detail: notification.detail,
+    assigned_by: auth.userId,
+    assigned_at: assignedAt,
+    updated_at: assignedAt,
+  }, { onConflict: 'conference_id,contact_id' })
+  if (assignment.error) return { ok: false, message: assignment.error.message }
+
+  await db.from('comms_crm_interactions').insert({
+    contact_id: contact.id,
+    interaction_type: 'event',
+    summary: `Assigned to attend/contact ${conferenceName}. ${notification.detail}`,
+    occurred_at: assignedAt,
+    created_by: auth.userId,
+  })
+  await db.from('comms_crm_contacts').update({
+    lifecycle_stage: 'active',
+    last_interaction_at: assignedAt,
+    updated_by: auth.userId,
+    updated_at: assignedAt,
+  }).eq('id', contact.id)
+
+  revalidatePath(CONFERENCES_PATH)
+  revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
+  revalidatePath('/app/comms/whatsapp')
+
+  return { ok: true, contact, message: `Assigned ${contact.fullName} to ${conferenceName}. ${notification.detail}` }
 }
