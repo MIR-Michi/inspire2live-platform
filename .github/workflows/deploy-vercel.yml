@@ -2,8 +2,11 @@ name: Deploy to Vercel (Production)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Triggers:
-#   • Every push to main that passes CI (via workflow_run)
 #   • Manual trigger from the GitHub Actions UI (workflow_dispatch)
+#
+# Branch health is handled by CI plus the Vercel GitHub integration. Production
+# deployment applies remote database migrations and depends on deployment
+# secrets/remote Supabase state, so it must not keep the main branch red.
 #
 # Required GitHub Secrets  (Settings → Secrets → Actions):
 #   VERCEL_TOKEN              – https://vercel.com/account/tokens
@@ -14,13 +17,6 @@ name: Deploy to Vercel (Production)
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
-  # Auto-deploy whenever CI passes on main
-  workflow_run:
-    workflows: ["CI"]
-    types: [completed]
-    branches: [main]
-
-  # Manual deploy from the Actions tab (no code change required)
   workflow_dispatch:
     inputs:
       reason:
@@ -33,13 +29,6 @@ jobs:
     name: Deploy to Vercel Production
     runs-on: ubuntu-latest
 
-    # workflow_run: only deploy when CI succeeded on main
-    # workflow_dispatch: always run
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      (github.event.workflow_run.conclusion == 'success' &&
-       github.event.workflow_run.head_branch == 'main')
-
     env:
       VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
       VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
@@ -47,8 +36,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
 
       - name: Validate required secrets
         shell: bash
@@ -109,7 +96,7 @@ jobs:
           echo "## ✅ Deployed to Vercel Production" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| | |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|"
           echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.event.workflow_run.head_sha || github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
           echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
