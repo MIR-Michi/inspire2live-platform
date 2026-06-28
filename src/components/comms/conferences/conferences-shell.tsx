@@ -1,6 +1,6 @@
 'use client'
 
-import { useCallback, useMemo, useState, useTransition } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
 import { useConferenceRun } from '@/components/comms/use-conference-run'
 import {
@@ -24,6 +24,8 @@ import {
 } from '@/app/app/comms/conferences/actions'
 
 const FORMAT_LABELS: Record<string, string> = { in_person: 'In person', virtual: 'Virtual', hybrid: 'Hybrid' }
+const BACKGROUND_DETAIL_LIMIT = 120
+const BACKGROUND_DETAIL_CONCURRENCY = 2
 
 const STAGE_TONES: Record<ConferenceStage, StatusTone> = {
   intended: 'blue',
@@ -56,6 +58,12 @@ function formatDateRange(start: string | null, end: string | null): string {
   return endFmt ? `${startFmt} – ${endFmt}` : startFmt
 }
 
+function detailPrefetchRank(conf: ConferenceView): number {
+  const start = conf.startDate ? Date.parse(conf.startDate) : Number.MAX_SAFE_INTEGER
+  const normalizedStart = Number.isNaN(start) ? Number.MAX_SAFE_INTEGER : start
+  return normalizedStart - conf.relevance * 60 * 60 * 1000
+}
+
 export function ConferencesShell({
   data,
   initialStatus,
@@ -76,6 +84,8 @@ export function ConferencesShell({
     }
     return seed
   })
+  const detailsRef = useRef(details)
+  const backgroundQueuedRef = useRef<Set<string>>(new Set())
   const [pending, startTransition] = useTransition()
   const run = useConferenceRun(initialStatus)
 
@@ -85,20 +95,63 @@ export function ConferencesShell({
   const visible: ConferenceView[] = tab === 'upcoming' ? filteredUpcoming : partitions[tab]
   const selected = useMemo(() => data.conferences.find((c) => c.id === selectedId) ?? null, [data.conferences, selectedId])
 
+  const setDetailState = useCallback((id: string, state: DetailState) => {
+    setDetails((prev) => {
+      const next = { ...prev, [id]: state }
+      detailsRef.current = next
+      return next
+    })
+  }, [])
+
   const loadDetail = useCallback(
     async (conf: ConferenceView, refresh = false) => {
-      if (!refresh && (details[conf.id]?.status === 'ready' || details[conf.id]?.status === 'loading')) return
-      setDetails((prev) => ({ ...prev, [conf.id]: { status: 'loading' } }))
+      const current = detailsRef.current[conf.id]
+      if (!refresh && (current?.status === 'ready' || current?.status === 'loading')) return
+      setDetailState(conf.id, { status: 'loading' })
       const result = await enrichConferenceDetail(conf.id, { refresh })
-      setDetails((prev) => ({
-        ...prev,
-        [conf.id]: result.ok
+      setDetailState(
+        conf.id,
+        result.ok
           ? { status: 'ready', detail: result.detail }
-          : { status: 'error', message: result.message },
-      }))
+          : { status: 'error', message: result.message }
+      )
     },
-    [details]
+    [setDetailState]
   )
+
+  useEffect(() => {
+    detailsRef.current = details
+  }, [details])
+
+  useEffect(() => {
+    if (!aiEnabled) return
+    let cancelled = false
+    const queue = data.conferences
+      .filter((conf) => conf.detailStatus !== 'ready' || !conf.detail)
+      .filter((conf) => !backgroundQueuedRef.current.has(conf.id))
+      .sort((a, b) => detailPrefetchRank(a) - detailPrefetchRank(b))
+      .slice(0, BACKGROUND_DETAIL_LIMIT)
+
+    if (queue.length === 0) return
+    for (const conf of queue) backgroundQueuedRef.current.add(conf.id)
+
+    async function worker() {
+      while (!cancelled) {
+        const conf = queue.shift()
+        if (!conf) return
+        try {
+          await loadDetail(conf)
+        } catch (error) {
+          console.error('[conferences] background detail prefetch failed', error)
+        }
+      }
+    }
+
+    void Promise.all(Array.from({ length: Math.min(BACKGROUND_DETAIL_CONCURRENCY, queue.length) }, () => worker()))
+    return () => {
+      cancelled = true
+    }
+  }, [aiEnabled, data.conferences, loadDetail])
 
   const handleSelect = useCallback(
     (conf: ConferenceView) => {
@@ -125,7 +178,7 @@ export function ConferencesShell({
   }
 
   return (
-    <section className="space-y-5">
+    <section className="flex min-h-[calc(100vh-8rem)] flex-col gap-5">
       <header className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
@@ -166,8 +219,8 @@ export function ConferencesShell({
       )}
 
       {/* Master-detail */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <div className="space-y-2">
+      <div className="grid min-h-0 flex-1 gap-4 lg:h-[calc(100vh-18rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="min-h-[360px] pr-1 lg:h-full lg:overflow-y-scroll">
           {visible.length === 0 ? (
             <EmptyState tab={tab} aiEnabled={aiEnabled} run={run} />
           ) : (
@@ -181,7 +234,7 @@ export function ConferencesShell({
           )}
         </div>
 
-        <div className="lg:sticky lg:top-4 lg:self-start">
+        <div className="min-h-[360px] lg:h-full lg:overflow-y-scroll">
           <ConferenceDetailPane
             conf={selected}
             detail={selected ? details[selected.id] : undefined}
@@ -368,11 +421,18 @@ function ConferenceDetailPane({
           {conf.location && <> · {conf.location}</>}
           {conf.organizer && <> · {conf.organizer}</>}
         </p>
-        {conf.websiteUrl && (
-          <a href={conf.websiteUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-semibold text-orange-700 hover:underline">
-            Official website ↗
-          </a>
-        )}
+        <div className="flex flex-wrap gap-3">
+          {conf.websiteUrl && (
+            <a href={conf.websiteUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-semibold text-orange-700 hover:underline">
+              Official website ↗
+            </a>
+          )}
+          {conf.sourceUrl && conf.sourceUrl !== conf.websiteUrl && (
+            <a href={conf.sourceUrl} target="_blank" rel="noopener noreferrer" className="inline-block text-sm font-semibold text-neutral-500 hover:text-orange-700 hover:underline">
+              Source ↗
+            </a>
+          )}
+        </div>
       </div>
 
       {/* Pipeline actions */}
@@ -432,6 +492,16 @@ function ConferenceDetailPane({
 }
 
 function DetailBody({ detail, onRefresh }: { detail: ConferenceDetail; onRefresh: () => void }) {
+  const hasRegistrationCosts = Boolean(
+    detail.registration ||
+      detail.registrationDeadline ||
+      detail.earlyBirdDeadline ||
+      detail.earlyBirdFees ||
+      detail.regularDeadline ||
+      detail.regularFees ||
+      detail.fees
+  )
+
   return (
     <div className="space-y-3 text-sm">
       {detail.overview && <p className="leading-relaxed text-neutral-700">{detail.overview}</p>}
@@ -474,11 +544,17 @@ function DetailBody({ detail, onRefresh }: { detail: ConferenceDetail; onRefresh
 
       {detail.audience && <Section title="Audience"><p className="text-sm text-neutral-700">{detail.audience}</p></Section>}
 
-      {(detail.registration || detail.registrationDeadline || detail.fees) && (
-        <Section title="Registration">
-          {detail.registrationDeadline && <p className="text-sm text-neutral-700"><span className="font-semibold">Deadline:</span> {detail.registrationDeadline}</p>}
-          {detail.fees && <p className="text-sm text-neutral-700"><span className="font-semibold">Fees:</span> {detail.fees}</p>}
-          {detail.registration && <p className="text-sm text-neutral-700">{detail.registration}</p>}
+      {hasRegistrationCosts && (
+        <Section title="Registration & costs">
+          <div className="space-y-1.5">
+            {detail.earlyBirdDeadline && <p className="text-sm text-neutral-700"><span className="font-semibold">Early-bird deadline:</span> {detail.earlyBirdDeadline}</p>}
+            {detail.earlyBirdFees && <p className="text-sm text-neutral-700"><span className="font-semibold">Early-bird fees:</span> {detail.earlyBirdFees}</p>}
+            {detail.regularDeadline && <p className="text-sm text-neutral-700"><span className="font-semibold">Regular deadline:</span> {detail.regularDeadline}</p>}
+            {detail.regularFees && <p className="text-sm text-neutral-700"><span className="font-semibold">Regular fees:</span> {detail.regularFees}</p>}
+            {detail.registrationDeadline && <p className="text-sm text-neutral-700"><span className="font-semibold">Registration deadline:</span> {detail.registrationDeadline}</p>}
+            {detail.fees && <p className="text-sm text-neutral-700"><span className="font-semibold">Other fees:</span> {detail.fees}</p>}
+            {detail.registration && <p className="text-sm text-neutral-700">{detail.registration}</p>}
+          </div>
         </Section>
       )}
 
