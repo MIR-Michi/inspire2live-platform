@@ -135,16 +135,22 @@ export async function executeAndRecordConferenceRun(userId: string | null): Prom
     const result = await runConferenceDiscoveryJob(admin, { createdBy: userId, onProgress: progress })
     if (result.inserted > 0) {
       const laneCount = result.groupCount ?? 0
-      const note = result.groupErrors ? ` (${result.groupErrors} search lane${result.groupErrors === 1 ? '' : 's'} timed out)` : ''
+      const note = result.groupErrors ? ` (${result.groupErrors} search lane${result.groupErrors === 1 ? '' : 's'} timed out or failed)` : ''
       const scope = laneCount > 0 ? ` across ${laneCount} search lane${laneCount === 1 ? '' : 's'}` : ''
       await finish('success', `Added ${result.inserted} new conference${result.inserted === 1 ? '' : 's'} from ${result.discovered} validated result${result.discovered === 1 ? '' : 's'}${scope}${note}.`, result.inserted)
     } else {
       const candidates = result.candidates ?? 0
       const validated = result.validated ?? 0
+      const laneCount = result.groupCount ?? 0
+      const failedLanes = result.groupErrors ?? 0
       let why: string
-      if (candidates === 0) {
+      if (candidates === 0 && laneCount > 0 && failedLanes === laneCount) {
+        why = `all ${laneCount} AI search lane${laneCount === 1 ? '' : 's'} failed before returning candidates.`
+      } else if (candidates === 0 && failedLanes > 0) {
+        why = `${failedLanes} AI search lane${failedLanes === 1 ? '' : 's'} failed and the remaining lanes returned no usable upcoming conferences.`
+      } else if (candidates === 0) {
         why = result.outputWasJson === false
-          ? 'the model did not return structured JSON.'
+          ? 'the model did not return parseable JSON.'
           : 'the web search returned no usable upcoming conferences.'
       } else if (validated === 0) {
         why = `the model returned ${candidates} candidate result${candidates === 1 ? '' : 's'}, but none had a valid future date and official URL.`
