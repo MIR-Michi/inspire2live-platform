@@ -10,12 +10,12 @@ const LONG_WAIT_SECONDS = 300
 
 function progressMessage(elapsed: number, providerMessage: string | null): string | null {
   if (providerMessage) return providerMessage
-  if (elapsed < 5) return 'Starting discovery and checking AI configuration.'
+  if (elapsed < 5) return 'Starting background cache refresh and checking AI configuration.'
   if (elapsed < 35) return 'Preparing 24 global search lanes across regions and oncology focus areas.'
   if (elapsed < 120) return 'Searching Europe, North America, Latin America, Africa / Middle East, Asia-Pacific, and global conference sources.'
   if (elapsed < 220) return 'Collecting tumor-specific, research, clinical, patient advocacy, survivorship, nursing, and supportive-care meetings.'
-  if (elapsed < LONG_WAIT_SECONDS) return 'Validating future dates, official URLs, and duplicate conference names before saving results.'
-  return 'This is taking longer than expected. The backend will stop the run and show a real error if no result arrives.'
+  if (elapsed < LONG_WAIT_SECONDS) return 'Validating future dates, official URLs, and duplicate conference names before saving the cache.'
+  return 'This cache refresh is taking longer than expected. The backend will stop the run and show a real error if no result arrives.'
 }
 
 export function useConferenceRun(initial: ConferenceRunStatus | null) {
@@ -79,7 +79,7 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
   const start = useCallback(async () => {
     setStarting(true)
     setStatus('running')
-    setMessage('Starting discovery request.')
+    setMessage('Starting background cache refresh.')
     setElapsed(0)
     poll()
 
@@ -88,12 +88,12 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
         if (response.ok) return
         const payload = await response.json().catch(() => null) as { error?: string } | null
         setStatus('error')
-        setMessage(payload?.error ?? 'Could not start the discovery run.')
+        setMessage(payload?.error ?? 'Could not start the cache refresh.')
         stopPoll()
       })
       .catch((error: unknown) => {
         setStatus('error')
-        setMessage(error instanceof Error ? error.message : 'Could not start the discovery run.')
+        setMessage(error instanceof Error ? error.message : 'Could not start the cache refresh.')
         stopPoll()
       })
       .finally(() => {
