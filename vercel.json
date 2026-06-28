@@ -8,6 +8,10 @@
       "schedule": "0 * * * *"
     },
     {
+      "path": "/api/comms/conferences",
+      "schedule": "30 2 * * *"
+    },
+    {
       "path": "/api/comms/newsfeed",
       "schedule": "0 6 * * *"
     }
