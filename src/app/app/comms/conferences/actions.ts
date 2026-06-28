@@ -5,13 +5,34 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
-import { enrichConference, type ConferenceDetail } from '@/lib/ai/conferences'
+import { findTargetedConferences } from '@/lib/ai/conference-targeted-search'
+import {
+  enrichConference,
+  validateConferences,
+  type ConferenceDetail,
+  type ConferenceRegion,
+  type DiscoveredConference,
+} from '@/lib/ai/conferences'
 import { loadConference } from '@/lib/comms-conferences'
 import { CONFERENCE_STAGES, type ConferenceStage } from '@/lib/comms-conferences'
 
 const CONFERENCES_PATH = '/app/comms/conferences'
 
 type ActionResult = { ok: boolean; message?: string }
+
+export type DiscoverMoreCriteria = {
+  region?: ConferenceRegion | 'all'
+  country?: string | null
+  keywords?: string | null
+}
+
+export type DiscoverMoreResult =
+  | { ok: true; conferences: DiscoveredConference[]; message: string; candidateCount: number; validatedCount: number }
+  | { ok: false; message: string }
+
+export type AddDiscoveredResult =
+  | { ok: true; inserted: number; message: string }
+  | { ok: false; message: string }
 
 async function requireCommsUser() {
   const supabase = await createClient()
@@ -24,9 +45,37 @@ async function requireCommsUser() {
 
 type LooseDb = {
   from: (table: string) => {
-    upsert: (payload: Record<string, unknown>, options?: { onConflict: string }) => Promise<{ error: { message: string } | null }>
+    select: (columns: string) => {
+      order: (column: string, opts: { ascending: boolean }) => {
+        limit: (n: number) => Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }>
+      }
+    }
+    upsert: (
+      payload: Record<string, unknown> | Record<string, unknown>[],
+      options?: { onConflict: string; ignoreDuplicates?: boolean }
+    ) => Promise<{ data?: unknown[] | null; error: { message: string } | null }>
     update: (payload: Record<string, unknown>) => { eq: (column: string, value: string) => Promise<{ error: { message: string } | null }> }
     delete: () => { eq: (column: string, value: string) => Promise<{ error: { message: string } | null }> }
+  }
+}
+
+function conferenceRow(conf: DiscoveredConference, createdBy: string | null): Record<string, unknown> {
+  return {
+    name: conf.name,
+    organizer: conf.organizer,
+    region: conf.region,
+    location: conf.location,
+    main_focus: conf.mainFocus,
+    topics: conf.topics,
+    format: conf.format,
+    start_date: conf.startDate,
+    end_date: conf.endDate,
+    website_url: conf.websiteUrl,
+    source_url: conf.sourceUrl,
+    summary: conf.summary,
+    relevance: conf.relevance,
+    dedupe_key: conf.dedupeKey,
+    created_by: createdBy,
   }
 }
 
@@ -136,5 +185,61 @@ export async function enrichConferenceDetail(conferenceId: string, options?: { r
   } catch (error) {
     await admin.from('conferences').update({ detail_status: 'error' }).eq('id', conferenceId)
     return { ok: false, message: error instanceof Error ? error.message : 'Could not gather details for this conference.' }
+  }
+}
+
+/** Find extra conferences using user-specified region/country/keyword criteria. */
+export async function findMoreConferences(criteria: DiscoverMoreCriteria): Promise<DiscoverMoreResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+  if (!isAiEnabled()) return { ok: false, message: 'AI features are disabled for this environment.' }
+
+  const admin = createAdminClient() as unknown as LooseDb
+  const { data: existing, error } = await admin
+    .from('conferences')
+    .select('name, dedupe_key')
+    .order('discovered_at', { ascending: false })
+    .limit(600)
+  if (error) return { ok: false, message: error.message }
+
+  const existingNames = (existing ?? []).map((row) => String(row.name ?? '')).filter(Boolean)
+  const existingKeys = new Set((existing ?? []).map((row) => String(row.dedupe_key ?? '')).filter(Boolean))
+
+  try {
+    const result = await findTargetedConferences({
+      region: criteria.region ?? 'all',
+      country: criteria.country ?? null,
+      keywords: criteria.keywords ?? null,
+      existingNames,
+      createdBy: auth.userId,
+    })
+    const fresh = result.conferences.filter((conf) => !existingKeys.has(conf.dedupeKey))
+    const message = fresh.length > 0
+      ? `Found ${fresh.length} new conference${fresh.length === 1 ? '' : 's'} matching the criteria.`
+      : `No new conferences found. The search returned ${result.validatedCount} valid result${result.validatedCount === 1 ? '' : 's'}, but they are already saved or did not match the criteria.`
+    return { ok: true, conferences: fresh, message, candidateCount: result.candidateCount, validatedCount: result.validatedCount }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Targeted conference search failed.' }
+  }
+}
+
+/** Add one or more targeted-search results to the shared conference list. */
+export async function addDiscoveredConferences(conferences: DiscoveredConference[]): Promise<AddDiscoveredResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const validated = validateConferences({ conferences }, 'global', 12)
+  if (validated.length === 0) return { ok: false, message: 'No valid conferences selected.' }
+
+  const rows = validated.map((conf) => conferenceRow(conf, auth.userId))
+  const admin = createAdminClient() as unknown as LooseDb
+  const { error } = await admin.from('conferences').upsert(rows, { onConflict: 'dedupe_key', ignoreDuplicates: true })
+  if (error) return { ok: false, message: error.message }
+
+  revalidatePath(CONFERENCES_PATH)
+  return {
+    ok: true,
+    inserted: rows.length,
+    message: `Added ${rows.length} conference${rows.length === 1 ? '' : 's'} to the list.`,
   }
 }
