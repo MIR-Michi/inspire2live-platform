@@ -4,7 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { discoverConferences, type ConferenceRegion } from './conferences'
 
-const AI_SWEEP_TIMEOUT_MS = 150_000
+const AI_SWEEP_TIMEOUT_MS = 270_000
+const DEFAULT_LANES_PER_REGION = 4
 
 export type ConferenceDiscoveryJobResult = {
   ok: boolean
@@ -14,6 +15,7 @@ export type ConferenceDiscoveryJobResult = {
   candidates?: number
   validated?: number
   outputWasJson?: boolean
+  groupCount?: number
   groupErrors?: number
 }
 
@@ -57,9 +59,9 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, message: string):
 }
 
 /**
- * Run the conference-discovery job: fan out across regions to find upcoming
- * oncology conferences, dedupe against the stored master list, and insert the
- * new ones. Idempotent — duplicate dedupe keys are ignored.
+ * Run the conference-discovery job: fan out across global source lanes to find
+ * upcoming oncology conferences, dedupe against the stored master list, and
+ * insert the new ones. Idempotent — duplicate dedupe keys are ignored.
  *
  * Shared by the CRON_SECRET-protected route and the admin/comms "Refresh" action.
  */
@@ -82,8 +84,12 @@ export async function runConferenceDiscoveryJob(
   const existingNames = (existing ?? []).map((row) => row.name)
   const existingKeys = new Set((existing ?? []).map((row) => row.dedupe_key))
   const regionCount = options?.regions?.length ?? 6
+  const expectedLaneCount = regionCount * DEFAULT_LANES_PER_REGION
 
-  await report(options?.onProgress, `Starting AI web search across ${regionCount} conference region${regionCount === 1 ? '' : 's'}. This has a hard ${Math.round(AI_SWEEP_TIMEOUT_MS / 1000)} second limit.`)
+  await report(
+    options?.onProgress,
+    `Starting comprehensive AI web search across ${expectedLaneCount} global discovery lanes (${regionCount} region${regionCount === 1 ? '' : 's'} x source focus). This has a hard ${Math.round(AI_SWEEP_TIMEOUT_MS / 1000)} second limit.`
+  )
 
   const result = await withTimeout(
     discoverConferences({
@@ -93,18 +99,19 @@ export async function runConferenceDiscoveryJob(
       createdBy: options?.createdBy ?? null,
     }),
     AI_SWEEP_TIMEOUT_MS,
-    'AI conference discovery did not finish within 150 seconds. No results were saved from this run; try again later.'
+    'AI conference discovery did not finish within 270 seconds. No results were saved from this run; try again later.'
   )
 
   await report(
     options?.onProgress,
-    `AI search finished: ${result.candidateCount} candidate${result.candidateCount === 1 ? '' : 's'}, ${result.validatedCount} valid upcoming conference${result.validatedCount === 1 ? '' : 's'}, ${result.groupErrors} region timeout/error${result.groupErrors === 1 ? '' : 's'}.`
+    `AI search finished: ${result.candidateCount} candidate${result.candidateCount === 1 ? '' : 's'} from ${result.groupCount} search lane${result.groupCount === 1 ? '' : 's'}, ${result.validatedCount} valid upcoming conference${result.validatedCount === 1 ? '' : 's'}, ${result.groupErrors} lane timeout/error${result.groupErrors === 1 ? '' : 's'}.`
   )
 
   const diagnostics = {
     candidates: result.candidateCount,
     validated: result.validatedCount,
     outputWasJson: result.outputWasJson,
+    groupCount: result.groupCount,
     groupErrors: result.groupErrors,
   }
 
