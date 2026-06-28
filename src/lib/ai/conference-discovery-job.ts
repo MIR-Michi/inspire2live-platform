@@ -4,8 +4,8 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { discoverConferences, type ConferenceRegion } from './conferences'
 
-const AI_SWEEP_TIMEOUT_MS = 270_000
-const DEFAULT_LANES_PER_REGION = 4
+const AI_SWEEP_TIMEOUT_MS = 300_000
+const DEFAULT_LANES_PER_REGION = 6
 
 export type ConferenceDiscoveryJobResult = {
   ok: boolean
@@ -99,7 +99,7 @@ export async function runConferenceDiscoveryJob(
       createdBy: options?.createdBy ?? null,
     }),
     AI_SWEEP_TIMEOUT_MS,
-    'AI conference discovery did not finish within 270 seconds. No results were saved from this run; try again later.'
+    'AI conference discovery did not finish within 300 seconds. No results were saved from this run; try again later.'
   )
 
   await report(
