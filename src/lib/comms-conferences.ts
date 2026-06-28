@@ -340,6 +340,35 @@ export async function loadConference(supabase: SupabaseClient<Database>, id: str
   }
 }
 
+/** Load the pipeline tracking (stage + notes) for one conference, if any. */
+export async function loadConferenceTracking(
+  supabase: SupabaseClient<Database>,
+  conferenceId: string
+): Promise<ConferenceTracking | null> {
+  const db = supabase as unknown as {
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (column: string, value: string) => {
+          maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
+        }
+      }
+    }
+  }
+  try {
+    const { data } = await db.from('conference_tracking').select(TRACKING_COLUMNS).eq('conference_id', conferenceId).maybeSingle()
+    if (!data) return null
+    return {
+      stage: normalizeStage(data.stage),
+      notes: (data.notes as string | null) ?? null,
+      addedAt: String(data.added_at ?? ''),
+      updatedAt: String(data.updated_at ?? ''),
+    }
+  } catch (error) {
+    console.error('[conferences] loadConferenceTracking failed', error)
+    return null
+  }
+}
+
 // ── Pure filtering / grouping (shared with unit tests) ───────────────────────
 
 /** Apply the region / focus / format / search filters to a conference list. */
@@ -364,30 +393,33 @@ export function filterConferences(conferences: ConferenceView[], filters: Confer
   })
 }
 
-/** The four tabs the Conferences space is organized into. */
-export type ConferenceTab = 'upcoming' | 'shortlist' | 'pipeline' | 'archive'
+/**
+ * The tabs the Conferences space is organized into: "Upcoming" for newly
+ * discovered conferences, then one tab per pipeline stage so the tab labels
+ * line up exactly with the stage a conference can be set to.
+ */
+export type ConferenceTab = 'upcoming' | ConferenceStage
 
 /** Which tab a conference belongs to, based on its tracking stage. */
 export function partitionConferences(conferences: ConferenceView[]): Record<ConferenceTab, ConferenceView[]> {
-  const upcoming: ConferenceView[] = []
-  const shortlist: ConferenceView[] = []
-  const pipeline: ConferenceView[] = []
-  const archive: ConferenceView[] = []
+  const result: Record<ConferenceTab, ConferenceView[]> = {
+    upcoming: [],
+    intended: [],
+    registered: [],
+    ongoing: [],
+    follow_up: [],
+    archived: [],
+  }
 
   for (const conf of conferences) {
     const stage = conf.tracking?.stage
     if (!stage) {
-      upcoming.push(conf)
-    } else if (stage === 'archived') {
-      archive.push(conf)
-    } else if (stage === 'intended') {
-      shortlist.push(conf)
-      upcoming.push(conf) // shortlisted items still appear in Upcoming (flagged)
+      result.upcoming.push(conf)
     } else {
-      // registered / ongoing / follow_up
-      pipeline.push(conf)
+      result[stage].push(conf)
+      if (stage === 'intended') result.upcoming.push(conf) // intended items still appear in Upcoming (flagged)
     }
   }
 
-  return { upcoming, shortlist, pipeline, archive }
+  return result
 }

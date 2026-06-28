@@ -16,6 +16,13 @@ import {
 } from '@/lib/ai/conferences'
 import { loadConference } from '@/lib/comms-conferences'
 import { CONFERENCE_STAGES, type ConferenceStage } from '@/lib/comms-conferences'
+import {
+  isConferencePrepFlag,
+  parseKeyPeople,
+  prepFlagColumn,
+  type ConferenceKeyPerson,
+} from '@/lib/comms-conference-prep'
+import { parseDelimitedList } from '@/lib/comms-events'
 
 const CONFERENCES_PATH = '/app/comms/conferences'
 const CONFERENCE_ASSIGNMENT_TOKEN = /\[conference:([0-9a-f-]{36})\]/i
@@ -356,6 +363,122 @@ export async function setConferenceNotes(conferenceId: string, notes: string): P
   if (error) return { ok: false, message: error.message }
 
   revalidatePath(CONFERENCES_PATH)
+  return { ok: true }
+}
+
+// ── Conference prep (the "speaking" operating page) ──────────────────────────
+
+function str(formData: FormData, key: string): string {
+  const value = formData.get(key)
+  return typeof value === 'string' ? value.trim() : ''
+}
+
+function nullableId(formData: FormData, key: string): string | null {
+  const value = str(formData, key)
+  return value.length > 0 ? value : null
+}
+
+/** Tri-state presentation flag from a select: yes → true, no → false, else null. */
+function parsePresentation(value: string): boolean | null {
+  if (value === 'yes') return true
+  if (value === 'no') return false
+  return null
+}
+
+function parseKeyPeopleJson(raw: string): ConferenceKeyPerson[] {
+  if (!raw) return []
+  try {
+    return parseKeyPeople(JSON.parse(raw))
+  } catch {
+    return []
+  }
+}
+
+/**
+ * Save one stage section of a conference's prep record. The row is created
+ * lazily on first save (upsert on conference_id). Each section only writes
+ * the fields it owns, so saving "Follow-up" never clobbers "Registered".
+ */
+export async function saveConferencePrep(formData: FormData): Promise<ActionResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const conferenceId = str(formData, 'conference_id')
+  const section = str(formData, 'section')
+  if (!conferenceId) return { ok: false, message: 'Missing conference.' }
+
+  const payload: Record<string, unknown> = { conference_id: conferenceId, updated_at: new Date().toISOString() }
+
+  if (section === 'registered') {
+    payload.has_presentation = parsePresentation(str(formData, 'has_presentation'))
+    payload.presentation_title = str(formData, 'presentation_title').slice(0, 300) || null
+    payload.abstract = str(formData, 'abstract').slice(0, 6000) || null
+    payload.deck_url = str(formData, 'deck_url') || null
+    payload.asset_urls = parseDelimitedList(str(formData, 'asset_urls'))
+    payload.key_people = parseKeyPeopleJson(str(formData, 'key_people'))
+    payload.comms_owner_id = nullableId(formData, 'comms_owner_id')
+    payload.comms_contributor_id = nullableId(formData, 'comms_contributor_id')
+  } else if (section === 'ongoing') {
+    payload.photo_urls = parseDelimitedList(str(formData, 'photo_urls'))
+    payload.takeaways = str(formData, 'takeaways').slice(0, 6000) || null
+  } else if (section === 'follow_up') {
+    payload.followup_notes = str(formData, 'followup_notes').slice(0, 6000) || null
+    payload.podcast_event_id = nullableId(formData, 'podcast_event_id')
+    payload.campus_session_id = nullableId(formData, 'campus_session_id')
+  } else {
+    return { ok: false, message: 'Unknown prep section.' }
+  }
+
+  const db = auth.supabase as unknown as LooseDb
+  const { error } = await db.from('conference_prep').upsert(payload, { onConflict: 'conference_id' })
+  if (error) return { ok: false, message: error.message }
+
+  revalidateConference(conferenceId)
+  return { ok: true }
+}
+
+/** Flip a single boolean prep flag (checklist item / amplification output / idea toggle). */
+export async function toggleConferencePrepFlag(
+  conferenceId: string,
+  flag: string,
+  next: boolean
+): Promise<ActionResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+  if (!conferenceId) return { ok: false, message: 'Missing conference.' }
+  if (!isConferencePrepFlag(flag)) return { ok: false, message: 'Unknown prep field.' }
+
+  const db = auth.supabase as unknown as LooseDb
+  const { error } = await db.from('conference_prep').upsert(
+    { conference_id: conferenceId, [prepFlagColumn(flag)]: next, updated_at: new Date().toISOString() },
+    { onConflict: 'conference_id' }
+  )
+  if (error) return { ok: false, message: error.message }
+
+  revalidateConference(conferenceId)
+  return { ok: true }
+}
+
+/**
+ * Advance (or move) a conference to a pipeline stage from the operating page.
+ * Shares the same write path as the stage dropdown but also revalidates the
+ * conference's own page so the stepper reflects the new stage immediately.
+ */
+export async function advanceConferenceStage(conferenceId: string, stage: ConferenceStage): Promise<ActionResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+  if (!CONFERENCE_STAGES.includes(stage)) return { ok: false, message: 'Unknown stage.' }
+
+  const db = auth.supabase as unknown as LooseDb
+  const { error } = await db
+    .from('conference_tracking')
+    .upsert(
+      { conference_id: conferenceId, stage, added_by: auth.userId, updated_at: new Date().toISOString() },
+      { onConflict: 'conference_id' }
+    )
+  if (error) return { ok: false, message: error.message }
+
+  revalidateConference(conferenceId)
   return { ok: true }
 }
 
