@@ -30,6 +30,10 @@ export type ConferenceDetail = {
   notableSpeakers: string[]
   registration: string | null
   registrationDeadline: string | null
+  earlyBirdDeadline: string | null
+  earlyBirdFees: string | null
+  regularDeadline: string | null
+  regularFees: string | null
   fees: string | null
   facts: ConferenceDetailFact[]
   links: Array<{ label: string; url: string }>
