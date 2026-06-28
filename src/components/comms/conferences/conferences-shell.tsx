@@ -76,10 +76,12 @@ export function ConferencesShell({
   data,
   initialStatus,
   aiEnabled,
+  canRefreshCache,
 }: {
   data: ConferencesData
   initialStatus: ConferenceRunStatus | null
   aiEnabled: boolean
+  canRefreshCache: boolean
 }) {
   const [tab, setTab] = useState<ConferenceTab>('upcoming')
   const [filters, setFilters] = useState<ConferenceFilters>({ region: 'all', focus: 'all', format: 'all', search: '' })
@@ -187,7 +189,7 @@ export function ConferencesShell({
 
   return (
     <section className="flex h-[calc(100vh-7rem)] min-h-0 flex-col gap-4 overflow-hidden">
-      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
+      <header className="flex shrink-0 flex-wrap items-start justify-between gap-3">
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
           <h1 className="text-2xl font-semibold text-neutral-900">Oncology conferences</h1>
@@ -195,9 +197,9 @@ export function ConferencesShell({
             Saved oncology conference cache, refreshed nightly in the background. Shortlist the ones worth attending and track them through to follow-up.
           </p>
         </div>
-        <div className="flex flex-wrap items-end gap-2">
+        <div className="flex flex-wrap items-start gap-2">
           <FindMoreDialog aiEnabled={aiEnabled} />
-          <RefreshControl run={run} aiEnabled={aiEnabled} />
+          {canRefreshCache && <RefreshControl run={run} aiEnabled={aiEnabled} />}
         </div>
       </header>
 
@@ -233,7 +235,7 @@ export function ConferencesShell({
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="min-h-[360px] pr-1 lg:h-full lg:min-h-0 lg:overflow-y-scroll">
           {visible.length === 0 ? (
-            <EmptyState tab={tab} aiEnabled={aiEnabled} run={run} />
+            <EmptyState tab={tab} aiEnabled={aiEnabled} canRefreshCache={canRefreshCache} run={run} />
           ) : (
             <ul className="space-y-2">
               {visible.map((conf) => (
@@ -641,7 +643,17 @@ function Spinner() {
   return <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-orange-500" aria-hidden="true" />
 }
 
-function EmptyState({ tab, aiEnabled, run }: { tab: ConferenceTab; aiEnabled: boolean; run: ReturnType<typeof useConferenceRun> }) {
+function EmptyState({
+  tab,
+  aiEnabled,
+  canRefreshCache,
+  run,
+}: {
+  tab: ConferenceTab
+  aiEnabled: boolean
+  canRefreshCache: boolean
+  run: ReturnType<typeof useConferenceRun>
+}) {
   if (tab === 'upcoming') {
     return (
       <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
@@ -649,7 +661,7 @@ function EmptyState({ tab, aiEnabled, run }: { tab: ConferenceTab; aiEnabled: bo
         <p className="mt-1 text-sm text-neutral-400">
           {aiEnabled ? 'Start a background cache refresh to collect upcoming oncology conferences.' : 'AI discovery is disabled for this environment.'}
         </p>
-        {aiEnabled && (
+        {aiEnabled && canRefreshCache && (
           <button
             type="button"
             onClick={() => void run.start()}

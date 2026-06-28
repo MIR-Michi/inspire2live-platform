@@ -15,7 +15,7 @@ import {
 
 const TARGETED_CONFERENCE_MODEL: AiModelId = 'claude-sonnet-4-6'
 const TARGETED_MONTHS_AHEAD = 12
-const TARGETED_LIMIT = 40
+const TARGETED_LIMIT = 18
 
 export type TargetedConferenceSearchInput = {
   region?: ConferenceRegion | 'all' | null
@@ -53,7 +53,7 @@ function buildTargetedInstruction(input: TargetedConferenceSearchInput, region: 
     `Find up to ${TARGETED_LIMIT} real upcoming oncology or cancer-research conferences ${geography}, starting within the next ${monthsAhead} months.`,
     keywords ? `Prioritize conferences matching these keywords or topics: ${keywords}.` : 'Cover relevant oncology, cancer research, patient advocacy, survivorship, palliative/supportive care, nursing, radiotherapy, surgical oncology, and tumor-specific meetings.',
     region ? `Set region to "${region}" for every result unless the event is fully global/virtual.` : 'Infer the best region for each result using the allowed region taxonomy.',
-    'Search official society calendars, official conference websites, university/hospital event calendars, cancer institute calendars, and reputable conference-listing directories such as Conference-Service, Conference Alerts, Clocate, 10times, and World Conference Alerts.',
+    'Use focused searches only: one official society/calendar search, one country or region conference-directory search, and one verification search if needed.',
     'Do not repeat conferences from the existing list. Never invent a conference, date, or URL. Return fewer results if necessary, but each result must be a real conference-scale event.',
     'Return ONLY schema-valid JSON.',
   ].join(' ')
@@ -67,20 +67,20 @@ export async function findTargetedConferences(input: TargetedConferenceSearchInp
   const existingNames = input.existingNames ?? []
   const existingContext = wrapExternalData(
     'conferences.existing',
-    JSON.stringify({ existingNames: existingNames.slice(0, 150), note: 'Do not repeat these.' })
+    JSON.stringify({ existingNames: existingNames.slice(0, 80), note: 'Do not repeat these.' })
   )
 
   const result = await runAiMessage<unknown>({
     feature: 'conference_targeted_search',
     model: TARGETED_CONFERENCE_MODEL,
     effort: 'low',
-    maxTokens: 6000,
-    timeoutMs: 100_000,
+    maxTokens: 3500,
+    timeoutMs: 45_000,
     retries: 0,
     createdBy: input.createdBy ?? null,
     system,
     cacheSystemPrompt: true,
-    tools: [webSearchTool({ maxUses: 5 })],
+    tools: [webSearchTool({ maxUses: 3 })],
     structuredFormat: {
       type: 'json_schema',
       name: 'conference_targeted_list',

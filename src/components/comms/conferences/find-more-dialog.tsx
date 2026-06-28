@@ -1,6 +1,6 @@
 'use client'
 
-import { useMemo, useState, useTransition } from 'react'
+import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import {
   addDiscoveredConferences,
@@ -47,6 +47,14 @@ function formatDateRange(start: string | null, end: string | null): string {
   return endText ? `${startText} - ${endText}` : startText
 }
 
+function progressMessage(elapsed: number): string {
+  if (elapsed < 3) return 'Preparing targeted query and excluding already saved conferences.'
+  if (elapsed < 10) return 'Searching official society calendars and conference pages.'
+  if (elapsed < 20) return 'Checking country and regional conference directories.'
+  if (elapsed < 35) return 'Validating dates, URLs, regions, and duplicate keys.'
+  return 'Waiting for the final AI response. You can stop waiting and keep working.'
+}
+
 export function FindMoreDialog({ aiEnabled }: { aiEnabled: boolean }) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -55,32 +63,61 @@ export function FindMoreDialog({ aiEnabled }: { aiEnabled: boolean }) {
   const [selected, setSelected] = useState<Set<string>>(new Set())
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [isSearching, startSearch] = useTransition()
+  const [searching, setSearching] = useState(false)
+  const [elapsed, setElapsed] = useState(0)
+  const searchRunRef = useRef(0)
   const [isSaving, startSave] = useTransition()
 
   const countries = useMemo(() => countryOptions(criteria.region ?? 'all'), [criteria.region])
-  const busy = isSearching || isSaving
+  const busy = searching || isSaving
   const selectedResults = results.filter((conf) => selected.has(conf.dedupeKey))
+
+  useEffect(() => {
+    if (!searching) return
+    const timer = setInterval(() => setElapsed((s) => s + 1), 1000)
+    return () => clearInterval(timer)
+  }, [searching])
 
   const updateCriteria = (patch: Partial<DiscoverMoreCriteria>) => {
     setCriteria((prev) => ({ ...prev, ...patch }))
   }
 
+  const stopSearch = () => {
+    searchRunRef.current += 1
+    setSearching(false)
+    setElapsed(0)
+    setMessage('Search stopped. Any late result from the cancelled request will be ignored.')
+  }
+
   const search = () => {
+    const runId = searchRunRef.current + 1
+    searchRunRef.current = runId
     setError(null)
     setMessage(null)
     setResults([])
     setSelected(new Set())
-    startSearch(async () => {
-      const result = await findMoreConferences(criteria)
-      if (!result.ok) {
-        setError(result.message)
-        return
-      }
-      setResults(result.conferences)
-      setSelected(new Set(result.conferences.map((conf) => conf.dedupeKey)))
-      setMessage(`${result.message} ${result.candidateCount} candidates checked; ${result.validatedCount} valid.`)
-    })
+    setElapsed(0)
+    setSearching(true)
+
+    void findMoreConferences(criteria)
+      .then((result) => {
+        if (searchRunRef.current !== runId) return
+        if (!result.ok) {
+          setError(result.message)
+          return
+        }
+        setResults(result.conferences)
+        setSelected(new Set(result.conferences.map((conf) => conf.dedupeKey)))
+        setMessage(`${result.message} ${result.candidateCount} candidates checked; ${result.validatedCount} valid.`)
+      })
+      .catch((err) => {
+        if (searchRunRef.current !== runId) return
+        setError(err instanceof Error ? err.message : 'Targeted conference search failed.')
+      })
+      .finally(() => {
+        if (searchRunRef.current !== runId) return
+        setSearching(false)
+      })
   }
 
   const save = (items: DiscoveredConference[]) => {
@@ -133,7 +170,8 @@ export function FindMoreDialog({ aiEnabled }: { aiEnabled: boolean }) {
                 <select
                   value={criteria.region ?? 'all'}
                   onChange={(e) => updateCriteria({ region: e.target.value as ConferenceRegion | 'all', country: '' })}
-                  className="rounded-lg border border-neutral-300 px-2 py-2 text-sm font-semibold text-neutral-800 focus:border-orange-400 focus:outline-none"
+                  disabled={searching}
+                  className="rounded-lg border border-neutral-300 px-2 py-2 text-sm font-semibold text-neutral-800 focus:border-orange-400 focus:outline-none disabled:bg-neutral-50 disabled:text-neutral-400"
                 >
                   {REGION_OPTIONS.map((option) => (
                     <option key={option.value} value={option.value}>{option.label}</option>
@@ -146,7 +184,7 @@ export function FindMoreDialog({ aiEnabled }: { aiEnabled: boolean }) {
                 <select
                   value={criteria.country ?? ''}
                   onChange={(e) => updateCriteria({ country: e.target.value })}
-                  disabled={criteria.region === 'global'}
+                  disabled={searching || criteria.region === 'global'}
                   className="rounded-lg border border-neutral-300 px-2 py-2 text-sm font-semibold text-neutral-800 focus:border-orange-400 focus:outline-none disabled:bg-neutral-50 disabled:text-neutral-400"
                 >
                   <option value="">Any country</option>
@@ -161,22 +199,43 @@ export function FindMoreDialog({ aiEnabled }: { aiEnabled: boolean }) {
                 <input
                   value={criteria.keywords ?? ''}
                   onChange={(e) => updateCriteria({ keywords: e.target.value })}
+                  disabled={searching}
                   placeholder="e.g. breast cancer, advocacy, radiotherapy"
-                  className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-800 focus:border-orange-400 focus:outline-none"
+                  className="rounded-lg border border-neutral-300 px-3 py-2 text-sm text-neutral-800 focus:border-orange-400 focus:outline-none disabled:bg-neutral-50 disabled:text-neutral-400"
                 />
               </label>
 
-              <button
-                type="button"
-                onClick={search}
-                disabled={busy || !aiEnabled}
-                className="self-end rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                {isSearching ? 'Searching...' : 'Search'}
-              </button>
+              <div className="flex items-end gap-2">
+                <button
+                  type="button"
+                  onClick={search}
+                  disabled={busy || !aiEnabled}
+                  className="rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {searching ? 'Searching...' : 'Search'}
+                </button>
+                {searching && (
+                  <button
+                    type="button"
+                    onClick={stopSearch}
+                    className="rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:bg-neutral-50"
+                  >
+                    Stop
+                  </button>
+                )}
+              </div>
             </div>
 
             <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
+              {searching && (
+                <div className="mb-3 rounded-lg border border-orange-100 bg-orange-50 px-3 py-2 text-sm text-orange-800">
+                  <div className="flex items-center gap-2 font-semibold">
+                    <span className="h-3 w-3 animate-spin rounded-full border-2 border-orange-300 border-t-orange-700" aria-hidden="true" />
+                    Focused AI search running ({elapsed}s)
+                  </div>
+                  <p className="mt-1 text-orange-700">{progressMessage(elapsed)}</p>
+                </div>
+              )}
               {error && <p className="mb-3 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">{error}</p>}
               {message && <p className="mb-3 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-sm text-neutral-600">{message}</p>}
 
