@@ -9,6 +9,7 @@ import {
   isInternalEmail,
   normalizeContactKind,
   normalizeCrmConsent,
+  normalizeCrmContinent,
   normalizeCrmInteractionType,
   normalizeCrmLifecycle,
   normalizeCrmPersonType,
@@ -142,10 +143,13 @@ export async function saveCrmContact(formData: FormData) {
   // even if the form submitted 'external'. Everything else honours the chosen
   // kind, defaulting to external. The segment is always derived from the kind so
   // the two can never drift apart.
+  // A campus member is, by definition, active for Inspire2Live — so an explicit
+  // campus flag forces internal_contact regardless of email domain.
+  const isCampusMember = asText(formData.get('is_campus_member')) === 'true'
   const isProfileSourced = sourceType === 'profile' && Boolean(sourceId)
   const contactKind: CrmContactKind = isProfileSourced
     ? 'internal_user'
-    : isInternalEmail(email)
+    : isInternalEmail(email) || isCampusMember
       ? 'internal_contact'
       : normalizeContactKind(asText(formData.get('contact_kind'))) ?? 'external'
   const segment = segmentFromKind(contactKind)
@@ -185,6 +189,10 @@ export async function saveCrmContact(formData: FormData) {
     bio: asNullableText(formData.get('bio')),
     title: asNullableText(formData.get('title')),
     organisation: asNullableText(formData.get('organisation')),
+    organisation_url: asNullableText(formData.get('organisation_url')),
+    linkedin_url: asNullableText(formData.get('linkedin_url')),
+    continent: normalizeCrmContinent(asText(formData.get('continent'))),
+    is_campus_member: isCampusMember,
     email,
     phone: asNullableText(formData.get('phone')),
     city: asNullableText(formData.get('city')),
@@ -213,6 +221,7 @@ export async function saveCrmContact(formData: FormData) {
     payload.bio = null
     payload.title = null
     payload.organisation = null
+    payload.organisation_url = null
     payload.email = null
     payload.city = null
     payload.country = null

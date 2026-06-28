@@ -12,6 +12,8 @@ import {
 import {
   CRM_CONSENT_OPTIONS,
   CRM_CONTACT_KIND_OPTIONS,
+  CRM_CONTACT_LINK_KIND_LABELS,
+  CRM_CONTINENT_OPTIONS,
   CRM_INTERACTION_OPTIONS,
   CRM_LIFECYCLE_OPTIONS,
   CRM_PERSON_TYPE_OPTIONS,
@@ -35,7 +37,7 @@ const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]
   ([value, label]) => ({ value, label })
 )
 
-type CrmFilter = 'follow_up' | 'privacy_review' | null
+type CrmFilter = 'follow_up' | 'privacy_review' | 'campus' | null
 
 function buildHref({
   kind,
@@ -211,6 +213,23 @@ function ContactEditForm({
             <input name="organisation" defaultValue={contact.organisation ?? ''} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
           </label>
           <label className="space-y-1">
+            <span className="text-xs font-semibold text-neutral-700">Organisation URL</span>
+            <input name="organisation_url" defaultValue={contact.organisationUrl ?? ''} type="url" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-neutral-700">LinkedIn URL</span>
+            <input name="linkedin_url" defaultValue={contact.linkedinUrl ?? ''} type="url" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
+          </label>
+          <label className="space-y-1">
+            <span className="text-xs font-semibold text-neutral-700">Continent</span>
+            <select name="continent" defaultValue={contact.continent ?? ''} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+              <option value="">Not set</option>
+              {CRM_CONTINENT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="space-y-1">
             <span className="text-xs font-semibold text-neutral-700">Email</span>
             <input name="email" defaultValue={contact.email ?? ''} type="email" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
           </label>
@@ -236,6 +255,11 @@ function ContactEditForm({
           </label>
         </div>
       )}
+
+      <label className="flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-800">
+        <input type="checkbox" name="is_campus_member" value="true" defaultChecked={contact.isCampusMember} className="h-4 w-4 rounded accent-teal-600" />
+        Inspire2Live campus member (active for I2L regardless of email domain)
+      </label>
 
       <div className="grid gap-3 md:grid-cols-2">
         <label className="space-y-1">
@@ -391,10 +415,27 @@ function NewContactForm({
           <input name="email" type="email" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
         </label>
         <label className="space-y-1">
+          <span className="text-xs font-semibold text-neutral-700">LinkedIn URL</span>
+          <input name="linkedin_url" type="url" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
+        </label>
+        <label className="space-y-1">
+          <span className="text-xs font-semibold text-neutral-700">Continent</span>
+          <select name="continent" defaultValue="" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm">
+            <option value="">Not set</option>
+            {CRM_CONTINENT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
+        </label>
+        <label className="space-y-1">
           <span className="text-xs font-semibold text-neutral-700">Next follow-up</span>
           <input name="next_follow_up_at" type="date" className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
         </label>
       </div>
+      <label className="flex items-center gap-2 rounded-lg border border-teal-200 bg-teal-50 px-3 py-2 text-sm font-semibold text-teal-800">
+        <input type="checkbox" name="is_campus_member" value="true" className="h-4 w-4 rounded accent-teal-600" />
+        Inspire2Live campus member
+      </label>
       <label className="space-y-1">
         <span className="text-xs font-semibold text-neutral-700">Bio</span>
         <textarea name="bio" rows={3} className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm" />
@@ -510,6 +551,11 @@ function ContactDetail({
               <span className="rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-violet-700">
                 {getCrmPersonTypeLabel(contact.personType)}
               </span>
+              {contact.isCampusMember && (
+                <span className="rounded-full border border-teal-200 bg-teal-50 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] text-teal-700">
+                  Campus member
+                </span>
+              )}
               <span className={`rounded-full border px-2.5 py-1 text-[11px] font-semibold uppercase tracking-[0.12em] ${toneForHealth(contact.health)}`}>
                 {getCrmHealthLabel(contact.health)}
               </span>
@@ -647,7 +693,15 @@ function ContactDetail({
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Location</dt>
-              <dd className="mt-1 text-neutral-700">{[contact.city, contact.country].filter(Boolean).join(', ') || 'Not recorded'}</dd>
+              <dd className="mt-1 text-neutral-700">{[contact.city, contact.country, contact.continent].filter(Boolean).join(', ') || 'Not recorded'}</dd>
+            </div>
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">LinkedIn</dt>
+              <dd className="mt-1 text-neutral-700">
+                {contact.linkedinUrl ? (
+                  <a href={contact.linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-900">Profile ↗</a>
+                ) : 'Not recorded'}
+              </dd>
             </div>
             <div>
               <dt className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Email</dt>
@@ -689,6 +743,26 @@ function ContactDetail({
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {contact.links.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Public footprint</p>
+              <ul className="space-y-1">
+                {contact.links.map((link) => (
+                  <li key={link.id} className="text-sm text-neutral-700">
+                    <span className="mr-1.5 rounded border border-neutral-200 bg-neutral-50 px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-neutral-500">
+                      {CRM_CONTACT_LINK_KIND_LABELS[link.kind]}
+                    </span>
+                    {link.url ? (
+                      <a href={link.url} target="_blank" rel="noopener noreferrer" className="text-blue-700 hover:text-blue-900">{link.label} ↗</a>
+                    ) : (
+                      link.label
+                    )}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
 
@@ -838,6 +912,14 @@ export function CommsCrmWorkspace({
               label: option.label,
               href: buildHref({ kind: activeKind, personType: option.value, filter: activeFilter, query }),
             })),
+          ]}
+        />
+        <NavSelect
+          label="Membership"
+          value={activeFilter === 'campus' ? 'campus' : ''}
+          options={[
+            { value: '', label: 'Everyone', href: buildHref({ kind: activeKind, personType: activePersonType, query }) },
+            { value: 'campus', label: 'Campus members', href: buildHref({ kind: activeKind, personType: activePersonType, filter: 'campus', query }) },
           ]}
         />
       </div>
