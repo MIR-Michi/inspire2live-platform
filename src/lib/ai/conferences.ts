@@ -164,9 +164,8 @@ export const CONFERENCE_DETAIL_SCHEMA = {
 const ORG_PROFILE = `Inspire2Live is an international patient-driven cancer organization. Its patient advocates attend and present at oncology and cancer-research conferences worldwide to build partnerships, share patient perspectives, and bring research back to patients.`
 
 /**
- * Stable, cacheable system prefix shared by every per-region discovery search.
- * The specific region + window is supplied per group in the user message, so
- * this prefix is identical across calls and gets prompt-cached.
+ * Stable, cacheable system prefix shared by every discovery lane. The specific
+ * region + oncology focus is supplied per lane in the user message.
  */
 export function buildDiscoverySystemPrompt(monthsAhead: number): string {
   return [
@@ -175,12 +174,13 @@ export function buildDiscoverySystemPrompt(monthsAhead: number): string {
     '',
     `Only include conferences whose start date is in the future, within roughly the next ${monthsAhead} months.`,
     '',
-    'Rules (each request is small and bounded — do not over-search):',
+    'Rules:',
     '- Use the web_search tool to find REAL conferences. Never invent a conference, a date, or a URL.',
+    '- Every result must have a real future startDate and either websiteUrl or sourceUrl.',
     '- Prefer the official conference website for websiteUrl; copy sourceUrl from a real search result.',
-    '- Focus on oncology, cancer research, patient advocacy, and closely adjacent fields.',
-    '- Use at most 2 searches, then return ONLY schema-valid JSON — nothing else.',
-    '- Dates must be ISO (YYYY-MM-DD). If only a month is known, use the first of that month.',
+    '- Include major global congresses and smaller regionally important oncology, cancer research, patient advocacy, survivorship, palliative oncology, nursing, radiotherapy, surgical oncology, and tumor-specific meetings.',
+    '- Use at most 3 searches for this lane, then return ONLY schema-valid JSON — nothing else.',
+    '- Dates must be ISO (YYYY-MM-DD). If only a month is known, use the first day of that month.',
     '- Set mainFocus to the primary oncology theme ("Breast cancer", "Immuno-oncology", "General oncology", …).',
     '- relevance is 0-100 for how valuable the conference is to a patient-advocacy organization.',
   ].join('\n')
@@ -279,6 +279,8 @@ function normalizeConference(value: unknown, region: ConferenceRegion): Discover
 
   const startDate = toIsoDate(raw.startDate)
   const endDate = toIsoDate(raw.endDate)
+  const websiteUrl = cleanUrl(raw.websiteUrl)
+  const sourceUrl = cleanUrl(raw.sourceUrl) ?? websiteUrl
 
   return {
     name: name.slice(0, 240),
@@ -290,8 +292,8 @@ function normalizeConference(value: unknown, region: ConferenceRegion): Discover
     format: normalizeFormat(raw.format),
     startDate,
     endDate,
-    websiteUrl: cleanUrl(raw.websiteUrl),
-    sourceUrl: cleanUrl(raw.sourceUrl) ?? cleanUrl(raw.websiteUrl),
+    websiteUrl,
+    sourceUrl,
     summary: nullableString(raw.summary, 600),
     relevance: clampRelevance(raw.relevance),
     dedupeKey: conferenceDedupeKey(name, startDate),
@@ -305,9 +307,10 @@ function listFrom(value: unknown, key: string): unknown[] {
 
 /** Drop past-dated conferences and anything outside the discovery window. */
 function withinWindow(conf: DiscoveredConference, monthsAhead: number): boolean {
-  if (!conf.startDate) return true // keep date-TBD; the team can triage
+  if (!conf.startDate) return false
+  if (!conf.websiteUrl && !conf.sourceUrl) return false
   const start = Date.parse(conf.startDate)
-  if (Number.isNaN(start)) return true
+  if (Number.isNaN(start)) return false
   const now = Date.now()
   // Allow a small grace for events that started yesterday/today.
   const grace = 2 * 24 * 60 * 60 * 1000
@@ -380,14 +383,59 @@ export function normalizeDetail(value: unknown): ConferenceDetail {
 }
 
 // ── Fan-out discovery ────────────────────────────────────────────────────────
-// Each region is a small, fast, bounded search; they run with limited
-// concurrency so the whole sweep completes well inside the 300s function cap.
+// The comprehensive sweep is a region × focus matrix. Each lane is small and
+// bounded, but together the sweep can produce 80+ validated conferences.
 
-const GROUP_TIMEOUT_MS = 60_000
-const GROUP_CONCURRENCY = 3
-const GROUP_ITEMS = 6
-const TOTAL_CAP = 60
+const GROUP_TIMEOUT_MS = 55_000
+const GROUP_CONCURRENCY = 6
+const GROUP_ITEMS = 8
+const TOTAL_CAP = 120
 const DEFAULT_MONTHS_AHEAD = 12
+
+type DiscoveryLens = {
+  key: string
+  label: string
+  instruction: string
+  searchHints: string[]
+}
+
+type DiscoveryLane = DiscoveryLens & { region: ConferenceRegion }
+
+const DISCOVERY_LENSES: DiscoveryLens[] = [
+  {
+    key: 'flagship',
+    label: 'flagship multidisciplinary oncology meetings',
+    instruction: 'major multidisciplinary oncology, cancer research, cancer control, and clinical oncology congresses',
+    searchHints: ['annual congress oncology', 'cancer congress', 'medical oncology conference'],
+  },
+  {
+    key: 'tumor_specific',
+    label: 'tumor-specific meetings',
+    instruction: 'tumor-specific conferences, including breast, lung, GI, GU, gynecologic, hematologic, pediatric, melanoma, and rare cancer meetings',
+    searchHints: ['breast cancer symposium', 'lung cancer conference', 'hematology oncology meeting', 'GI cancer symposium'],
+  },
+  {
+    key: 'research_precision',
+    label: 'research and precision oncology meetings',
+    instruction: 'cancer biology, translational research, immuno-oncology, precision oncology, radiotherapy, surgical oncology, diagnostics, and biomarker meetings',
+    searchHints: ['cancer research conference', 'immuno oncology congress', 'precision oncology meeting', 'radiation oncology congress'],
+  },
+  {
+    key: 'advocacy_survivorship',
+    label: 'patient care and advocacy meetings',
+    instruction: 'patient advocacy, survivorship, palliative oncology, psycho-oncology, oncology nursing, supportive care, public health, and implementation meetings with cancer relevance',
+    searchHints: ['cancer survivorship conference', 'oncology nursing congress', 'palliative oncology conference', 'patient advocacy cancer meeting'],
+  },
+]
+
+const REGION_SEARCH_HINTS: Record<ConferenceRegion, string[]> = {
+  europe: ['ESMO', 'EACR', 'European cancer congress', 'European oncology society calendar'],
+  north_america: ['ASCO', 'AACR', 'ASTRO', 'ONS', 'NCI cancer conference', 'Canadian oncology conference'],
+  latin_america: ['Latin America oncology congress', 'SLACOM', 'LACOG', 'SBOC', 'Mexico oncology congress', 'Argentina oncology congress'],
+  asia_pacific: ['ESMO Asia', 'Asia Pacific oncology conference', 'JSMO', 'CSCO', 'KSMO', 'ICON India oncology conference', 'Australia cancer conference'],
+  middle_east_africa: ['AORTIC', 'African cancer conference', 'Middle East oncology congress', 'Gulf oncology conference', 'North Africa oncology conference'],
+  global: ['global oncology congress', 'virtual oncology conference', 'international cancer research conference', 'world cancer congress'],
+}
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length)
@@ -404,21 +452,30 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
 
 type GroupResult = { conferences: DiscoveredConference[]; candidates: number; validated: number; outputWasJson: boolean; error: boolean }
 
-function buildRegionInstruction(region: ConferenceRegion, monthsAhead: number): string {
-  const label = CONFERENCE_REGION_LABELS[region]
+function buildDiscoveryLanes(regions: ConferenceRegion[]): DiscoveryLane[] {
+  return regions.flatMap((region) => DISCOVERY_LENSES.map((lens) => ({ ...lens, region })))
+}
+
+function buildLaneInstruction(lane: DiscoveryLane, monthsAhead: number): string {
+  const label = CONFERENCE_REGION_LABELS[lane.region]
   const scope =
-    region === 'global'
-      ? 'major global or fully virtual oncology / cancer-research conferences (open to international attendees)'
-      : `oncology and cancer-research conferences taking place in ${label}`
+    lane.region === 'global'
+      ? 'global, international, and fully virtual conferences open to international attendees'
+      : `conferences taking place in ${label}`
+  const hints = [...REGION_SEARCH_HINTS[lane.region], ...lane.searchHints].join('; ')
+
   return [
-    `Find up to ${GROUP_ITEMS} upcoming ${scope}, starting within the next ${monthsAhead} months.`,
-    `Set region to "${region}" for every result.`,
-    'Use at most 2 searches, then return the JSON. Fewer well-cited, correctly-dated conferences is better than many uncertain ones.',
+    `Find up to ${GROUP_ITEMS} upcoming ${lane.instruction} for ${scope}, starting within the next ${monthsAhead} months.`,
+    `Set region to "${lane.region}" for every result.`,
+    `Use search terms and source types like: ${hints}.`,
+    'Prefer official society calendars, official conference pages, university or hospital event calendars, and reputable oncology meeting calendars.',
+    'Do not repeat conferences from the existing list. Do not include webinars unless they are conference-scale events.',
+    'Return fewer results if necessary, but every result must have a future date and a real URL.',
   ].join(' ')
 }
 
-async function discoverRegion(
-  region: ConferenceRegion,
+async function discoverLane(
+  lane: DiscoveryLane,
   system: string,
   monthsAhead: number,
   existingNames: string[],
@@ -426,52 +483,53 @@ async function discoverRegion(
 ): Promise<GroupResult> {
   const existingContext = wrapExternalData(
     'conferences.existing',
-    JSON.stringify({ existingNames: existingNames.slice(0, 60), note: 'Do not repeat these.' })
+    JSON.stringify({ existingNames: existingNames.slice(0, 100), note: 'Do not repeat these.' })
   )
   try {
     const result = await runAiMessage<unknown>({
-      feature: 'conference_discovery_region',
+      feature: 'conference_discovery_lane',
       model: CONFERENCE_MODEL,
       effort: 'low',
-      maxTokens: 3000,
+      maxTokens: 4500,
       timeoutMs: GROUP_TIMEOUT_MS,
       retries: 0,
       createdBy,
       system,
       cacheSystemPrompt: true,
-      tools: [webSearchTool({ maxUses: 2 })],
+      tools: [webSearchTool({ maxUses: 3 })],
       structuredFormat: {
         type: 'json_schema',
         name: 'conference_list',
-        description: 'Real upcoming oncology conferences for one region.',
+        description: 'Real upcoming oncology conferences for one region/focus lane.',
         schema: CONFERENCE_LIST_SCHEMA as unknown as Record<string, unknown>,
       },
       messages: [
-        { role: 'user', content: [buildRegionInstruction(region, monthsAhead), existingContext].join('\n\n') },
+        { role: 'user', content: [buildLaneInstruction(lane, monthsAhead), existingContext].join('\n\n') },
       ],
     })
     const candidates = listFrom(result.output, 'conferences').length
-    const validated = validateConferences(result.output, region, monthsAhead)
+    const validated = validateConferences(result.output, lane.region, monthsAhead)
     return { conferences: validated, candidates, validated: validated.length, outputWasJson: typeof result.output !== 'string', error: false }
   } catch (error) {
-    console.error(`[conferences] region "${region}" failed`, error)
+    console.error(`[conferences] lane "${lane.region}/${lane.key}" failed`, error)
     return { conferences: [], candidates: 0, validated: 0, outputWasJson: true, error: true }
   }
 }
 
 /**
- * Discover upcoming oncology conferences by fanning out one bounded search per
- * region, then consolidating + deduping. One slow/failed region does not sink
- * the others. Real dates + URLs are required.
+ * Discover upcoming oncology conferences by fanning out a bounded global search
+ * matrix, then consolidating + deduping. One slow/failed lane does not sink the
+ * others. Real dates + URLs are required.
  */
 export async function discoverConferences(input: DiscoverConferencesInput = {}): Promise<DiscoverConferencesResult> {
   const monthsAhead = input.monthsAhead ?? DEFAULT_MONTHS_AHEAD
   const regions = input.regions && input.regions.length > 0 ? input.regions : [...CONFERENCE_REGIONS]
+  const lanes = buildDiscoveryLanes(regions)
   const system = buildDiscoverySystemPrompt(monthsAhead)
   const existingNames = input.existingNames ?? []
 
-  const groupResults = await mapWithConcurrency(regions, GROUP_CONCURRENCY, (region) =>
-    discoverRegion(region, system, monthsAhead, existingNames, input.createdBy ?? null)
+  const groupResults = await mapWithConcurrency(lanes, GROUP_CONCURRENCY, (lane) =>
+    discoverLane(lane, system, monthsAhead, existingNames, input.createdBy ?? null)
   )
 
   let candidateCount = 0
@@ -504,7 +562,7 @@ export async function discoverConferences(input: DiscoverConferencesInput = {}):
     candidateCount,
     validatedCount,
     outputWasJson,
-    groupCount: regions.length,
+    groupCount: lanes.length,
     groupErrors,
   }
 }
