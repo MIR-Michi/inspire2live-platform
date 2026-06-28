@@ -305,12 +305,14 @@ function listFrom(value: unknown, key: string): unknown[] {
   return Array.isArray(container) ? container : []
 }
 
-/** Drop past-dated conferences and anything outside the discovery window. */
+/**
+ * Drop past-dated conferences and dated conferences outside the discovery window.
+ * Undated candidates are kept so the comms team can manually triage them.
+ */
 function withinWindow(conf: DiscoveredConference, monthsAhead: number): boolean {
-  if (!conf.startDate) return false
-  if (!conf.websiteUrl && !conf.sourceUrl) return false
+  if (!conf.startDate) return true
   const start = Date.parse(conf.startDate)
-  if (Number.isNaN(start)) return false
+  if (Number.isNaN(start)) return true
   const now = Date.now()
   // Allow a small grace for events that started yesterday/today.
   const grace = 2 * 24 * 60 * 60 * 1000
