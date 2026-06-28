@@ -51,10 +51,13 @@ function buildTargetedInstruction(input: TargetedConferenceSearchInput, region: 
 
   return [
     `Find up to ${TARGETED_LIMIT} real upcoming oncology or cancer-research conferences ${geography}, starting within the next ${monthsAhead} months.`,
-    keywords ? `Prioritize conferences matching these keywords or topics: ${keywords}.` : 'Cover relevant oncology, cancer research, patient advocacy, survivorship, palliative/supportive care, nursing, radiotherapy, surgical oncology, and tumor-specific meetings.',
+    keywords
+      ? `Use this user query as the primary targeting signal: ${keywords}. It may be a disease area, exact conference name or acronym, organizer, speaker, chair, researcher, city, treatment modality, advocacy theme, or audience. If it is a person name, find oncology conferences where that person is listed as speaker, chair, faculty, organizer, or programme committee member.`
+      : 'Cover relevant oncology, cancer research, patient advocacy, survivorship, palliative/supportive care, nursing, radiotherapy, surgical oncology, and tumor-specific meetings.',
     region ? `Set region to "${region}" for every result unless the event is fully global/virtual.` : 'Infer the best region for each result using the allowed region taxonomy.',
-    'Use focused searches only: one official society/calendar search, one country or region conference-directory search, and one verification search if needed.',
-    'Do not repeat conferences from the existing list. Never invent a conference, date, or URL. Return fewer results if necessary, but each result must be a real conference-scale event.',
+    'Use focused searches only: one official society/calendar search, one query-specific search using the exact conference/person/topic terms, and one verification search if needed.',
+    'For exact conference names or acronyms, prioritize the official conference page over directory pages. For speaker names, prefer programme/faculty pages that connect the person to a real conference.',
+    'Do not repeat conferences from the existing list. Never invent a conference, date, speaker relationship, or URL. Return fewer results if necessary, but each result must be a real conference-scale event.',
     'Return ONLY schema-valid JSON.',
   ].join(' ')
 }
