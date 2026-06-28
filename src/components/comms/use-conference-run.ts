@@ -56,9 +56,18 @@ export function useConferenceRun(initial: ConferenceRunStatus | null) {
   }, [pollOnce, stopPoll])
 
   useEffect(() => {
-    if (initial?.status === 'running') poll()
-    return stopPoll
-  }, [initial?.status, poll, stopPoll])
+    if (initial?.status !== 'running') return stopPoll
+
+    const interval = setInterval(() => {
+      void pollOnce()
+    }, POLL_MS)
+    pollRef.current = interval
+
+    return () => {
+      clearInterval(interval)
+      if (pollRef.current === interval) pollRef.current = null
+    }
+  }, [initial?.status, pollOnce, stopPoll])
 
   useEffect(() => {
     if (!busy) return
