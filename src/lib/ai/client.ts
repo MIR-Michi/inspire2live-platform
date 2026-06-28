@@ -62,7 +62,9 @@ export type RunAiMessageInput = {
 
 /** Standard Anthropic web-search server tool definition. */
 export function webSearchTool(params?: { maxUses?: number; allowedDomains?: string[]; blockedDomains?: string[] }): Record<string, unknown> {
-  const tool: Record<string, unknown> = { type: 'web_search_20260209', name: 'web_search' }
+  // Use the basic web-search tool. The dynamic-filtering variant requires code
+  // execution to be enabled on the request, which these AI calls do not use.
+  const tool: Record<string, unknown> = { type: 'web_search_20250305', name: 'web_search' }
   if (params?.maxUses) tool.max_uses = params.maxUses
   if (params?.allowedDomains && params.allowedDomains.length > 0) tool.allowed_domains = params.allowedDomains
   if (params?.blockedDomains && params.blockedDomains.length > 0) tool.blocked_domains = params.blockedDomains
@@ -354,9 +356,33 @@ function usageFromResponse(rawResponse: unknown, model: AiModelId, latencyMs: nu
 function parseOutput<T>(rawResponse: unknown, parseJson: boolean): T {
   const text = extractText(rawResponse).trim()
   if (!parseJson) return text as T
+  return parseStructuredJson<T>(text)
+}
+
+function parseStructuredJson<T>(text: string): T {
   try {
     return JSON.parse(text) as T
   } catch {
+    const objectStart = text.indexOf('{')
+    const objectEnd = text.lastIndexOf('}')
+    if (objectStart !== -1 && objectEnd > objectStart) {
+      try {
+        return JSON.parse(text.slice(objectStart, objectEnd + 1)) as T
+      } catch {
+        // Fall through to returning the original text for diagnostics.
+      }
+    }
+
+    const arrayStart = text.indexOf('[')
+    const arrayEnd = text.lastIndexOf(']')
+    if (arrayStart !== -1 && arrayEnd > arrayStart) {
+      try {
+        return JSON.parse(text.slice(arrayStart, arrayEnd + 1)) as T
+      } catch {
+        // Fall through to returning the original text for diagnostics.
+      }
+    }
+
     return text as T
   }
 }
