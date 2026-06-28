@@ -59,6 +59,10 @@ export type ConferenceDetail = {
   notableSpeakers: string[]
   registration: string | null
   registrationDeadline: string | null
+  earlyBirdDeadline: string | null
+  earlyBirdFees: string | null
+  regularDeadline: string | null
+  regularFees: string | null
   fees: string | null
   facts: ConferenceDetailFact[]
   links: Array<{ label: string; url: string }>
@@ -130,8 +134,12 @@ export const CONFERENCE_DETAIL_SCHEMA = {
     keyTopics: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 120 } },
     notableSpeakers: { type: 'array', maxItems: 12, items: { type: 'string', maxLength: 160 } },
     registration: { type: ['string', 'null'], maxLength: 600 },
-    registrationDeadline: { type: ['string', 'null'], maxLength: 80 },
-    fees: { type: ['string', 'null'], maxLength: 400 },
+    registrationDeadline: { type: ['string', 'null'], maxLength: 120 },
+    earlyBirdDeadline: { type: ['string', 'null'], maxLength: 120 },
+    earlyBirdFees: { type: ['string', 'null'], maxLength: 240 },
+    regularDeadline: { type: ['string', 'null'], maxLength: 120 },
+    regularFees: { type: ['string', 'null'], maxLength: 240 },
+    fees: { type: ['string', 'null'], maxLength: 600 },
     facts: {
       type: 'array',
       maxItems: 12,
@@ -178,8 +186,9 @@ export function buildDiscoverySystemPrompt(monthsAhead: number): string {
     '- Use the web_search tool to find REAL conferences. Never invent a conference, a date, or a URL.',
     '- Every result must have a real future startDate and either websiteUrl or sourceUrl.',
     '- Prefer the official conference website for websiteUrl; copy sourceUrl from a real search result.',
+    '- Search both official society calendars and reputable conference-listing directories; then verify each result against an official event page when possible.',
     '- Include major global congresses and smaller regionally important oncology, cancer research, patient advocacy, survivorship, palliative oncology, nursing, radiotherapy, surgical oncology, and tumor-specific meetings.',
-    '- Use at most 3 searches for this lane, then return ONLY schema-valid JSON — nothing else.',
+    '- Use at most 4 searches for this lane, then return ONLY schema-valid JSON — nothing else.',
     '- Dates must be ISO (YYYY-MM-DD). If only a month is known, use the first day of that month.',
     '- Set mainFocus to the primary oncology theme ("Breast cancer", "Immuno-oncology", "General oncology", …).',
     '- relevance is 0-100 for how valuable the conference is to a patient-advocacy organization.',
@@ -377,21 +386,25 @@ export function normalizeDetail(value: unknown): ConferenceDetail {
     keyTopics: stringList(raw.keyTopics, 12, 120),
     notableSpeakers: stringList(raw.notableSpeakers, 12, 160),
     registration: nullableString(raw.registration, 600),
-    registrationDeadline: nullableString(raw.registrationDeadline, 80),
-    fees: nullableString(raw.fees, 400),
+    registrationDeadline: nullableString(raw.registrationDeadline, 120),
+    earlyBirdDeadline: nullableString(raw.earlyBirdDeadline, 120),
+    earlyBirdFees: nullableString(raw.earlyBirdFees, 240),
+    regularDeadline: nullableString(raw.regularDeadline, 120),
+    regularFees: nullableString(raw.regularFees, 240),
+    fees: nullableString(raw.fees, 600),
     facts,
     links,
   }
 }
 
 // ── Fan-out discovery ────────────────────────────────────────────────────────
-// The comprehensive sweep is a region × focus matrix. Each lane is small and
-// bounded, but together the sweep can produce 80+ validated conferences.
+// The comprehensive sweep is a region × focus/source matrix. Each lane is small
+// and bounded, but together the sweep can produce 80+ validated conferences.
 
-const GROUP_TIMEOUT_MS = 55_000
-const GROUP_CONCURRENCY = 6
-const GROUP_ITEMS = 8
-const TOTAL_CAP = 120
+const GROUP_TIMEOUT_MS = 50_000
+const GROUP_CONCURRENCY = 8
+const GROUP_ITEMS = 10
+const TOTAL_CAP = 180
 const DEFAULT_MONTHS_AHEAD = 12
 
 type DiscoveryLens = {
@@ -419,8 +432,8 @@ const DISCOVERY_LENSES: DiscoveryLens[] = [
   {
     key: 'research_precision',
     label: 'research and precision oncology meetings',
-    instruction: 'cancer biology, translational research, immuno-oncology, precision oncology, radiotherapy, surgical oncology, diagnostics, and biomarker meetings',
-    searchHints: ['cancer research conference', 'immuno oncology congress', 'precision oncology meeting', 'radiation oncology congress'],
+    instruction: 'cancer biology, translational research, immuno-oncology, precision oncology, radiotherapy, surgical oncology, diagnostics, biomarkers, and surgical oncology meetings',
+    searchHints: ['cancer research conference', 'immuno oncology congress', 'precision oncology meeting', 'radiation oncology congress', 'surgical oncology congress'],
   },
   {
     key: 'advocacy_survivorship',
@@ -428,16 +441,40 @@ const DISCOVERY_LENSES: DiscoveryLens[] = [
     instruction: 'patient advocacy, survivorship, palliative oncology, psycho-oncology, oncology nursing, supportive care, public health, and implementation meetings with cancer relevance',
     searchHints: ['cancer survivorship conference', 'oncology nursing congress', 'palliative oncology conference', 'patient advocacy cancer meeting'],
   },
+  {
+    key: 'society_calendars',
+    label: 'official society and institute calendars',
+    instruction: 'oncology meetings listed by cancer societies, oncology societies, research institutes, hospitals, universities, and conference calendars',
+    searchHints: ['oncology society meeting calendar', 'cancer institute events calendar', 'cancer center conference oncology', 'oncology congress calendar'],
+  },
+  {
+    key: 'listing_directories',
+    label: 'conference-listing directories',
+    instruction: 'oncology and cancer conferences discoverable through reputable conference-listing directories, then verified against official event pages when possible',
+    searchHints: ['Conference-Service oncology conferences', 'Conference Alerts oncology conferences', 'Clocate oncology conferences', '10times oncology conferences', 'World Conference Alerts oncology cancer'],
+  },
 ]
 
 const REGION_SEARCH_HINTS: Record<ConferenceRegion, string[]> = {
-  europe: ['ESMO', 'EACR', 'European cancer congress', 'European oncology society calendar'],
-  north_america: ['ASCO', 'AACR', 'ASTRO', 'ONS', 'NCI cancer conference', 'Canadian oncology conference'],
-  latin_america: ['Latin America oncology congress', 'SLACOM', 'LACOG', 'SBOC', 'Mexico oncology congress', 'Argentina oncology congress'],
-  asia_pacific: ['ESMO Asia', 'Asia Pacific oncology conference', 'JSMO', 'CSCO', 'KSMO', 'ICON India oncology conference', 'Australia cancer conference'],
-  middle_east_africa: ['AORTIC', 'African cancer conference', 'Middle East oncology congress', 'Gulf oncology conference', 'North Africa oncology conference'],
-  global: ['global oncology congress', 'virtual oncology conference', 'international cancer research conference', 'world cancer congress'],
+  europe: ['ESMO', 'EACR', 'ESTRO', 'ESO oncology events', 'European cancer congress', 'European oncology society calendar', 'European cancer conference calendar'],
+  north_america: ['ASCO', 'AACR', 'ASTRO', 'ONS', 'SITC', 'SSO', 'NCI cancer conference', 'Canadian oncology conference'],
+  latin_america: ['Latin America oncology congress', 'SLACOM', 'LACOG', 'SBOC', 'Brazil oncology congress', 'Mexico oncology congress', 'Argentina oncology congress', 'Chile oncology congress'],
+  asia_pacific: ['ESMO Asia', 'Asia Pacific oncology conference', 'JSMO', 'CSCO', 'KSMO', 'ICON India oncology conference', 'Australia cancer conference', 'APOS oncology conference'],
+  middle_east_africa: ['AORTIC', 'African cancer conference', 'SASMO oncology congress', 'Middle East oncology congress', 'Gulf oncology conference', 'North Africa oncology conference', 'Kenya oncology conference', 'Nigeria cancer conference'],
+  global: ['global oncology congress', 'virtual oncology conference', 'international cancer research conference', 'world cancer congress', 'UICC events cancer', 'MASCC supportive care congress', 'SIOP pediatric oncology congress'],
 }
+
+const SOURCE_DIRECTORY_HINTS = [
+  'ASCO meetings',
+  'AACR meetings and conferences',
+  'ESMO meeting calendar',
+  'UICC events',
+  'Conference-Service oncology',
+  'Conference Alerts oncology',
+  'Clocate oncology conferences',
+  '10times oncology conferences',
+  'World Conference Alerts oncology',
+]
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length)
@@ -470,6 +507,7 @@ function buildLaneInstruction(lane: DiscoveryLane, monthsAhead: number): string 
     `Find up to ${GROUP_ITEMS} upcoming ${lane.instruction} for ${scope}, starting within the next ${monthsAhead} months.`,
     `Set region to "${lane.region}" for every result.`,
     `Use search terms and source types like: ${hints}.`,
+    `Useful source directories to cross-check include: ${SOURCE_DIRECTORY_HINTS.join('; ')}.`,
     'Prefer official society calendars, official conference pages, university or hospital event calendars, and reputable oncology meeting calendars.',
     'Do not repeat conferences from the existing list. Do not include webinars unless they are conference-scale events.',
     'Return fewer results if necessary, but every result must have a future date and a real URL.',
@@ -492,13 +530,13 @@ async function discoverLane(
       feature: 'conference_discovery_lane',
       model: CONFERENCE_MODEL,
       effort: 'low',
-      maxTokens: 4500,
+      maxTokens: 5000,
       timeoutMs: GROUP_TIMEOUT_MS,
       retries: 0,
       createdBy,
       system,
       cacheSystemPrompt: true,
-      tools: [webSearchTool({ maxUses: 3 })],
+      tools: [webSearchTool({ maxUses: 4 })],
       structuredFormat: {
         type: 'json_schema',
         name: 'conference_list',
@@ -581,12 +619,14 @@ export async function enrichConference(conference: {
   startDate?: string | null
   endDate?: string | null
   websiteUrl?: string | null
+  sourceUrl?: string | null
 }): Promise<ConferenceDetail> {
   const system = [
     'You gather concise, accurate detail about a specific upcoming oncology conference for the Inspire2Live communications team.',
     ORG_PROFILE,
-    'Use the web_search tool to confirm facts. Never invent speakers, dates, fees, or URLs — omit a field rather than guess.',
-    'Use at most 3 searches, then return ONLY schema-valid JSON.',
+    'Use the web_search tool to confirm facts. Never invent speakers, dates, fees, deadlines, or URLs — omit a field rather than guess.',
+    'Prioritize registration deadlines and costs: early-bird deadline, early-bird fees, regular deadline, regular fees, patient advocate/student discounts, abstract deadlines, and registration links when available.',
+    'Use at most 4 searches, then return ONLY schema-valid JSON.',
     'whyRelevant explains, in 1-2 sentences, why this conference matters to a patient-advocacy cancer organization.',
   ].join('\n')
 
@@ -597,16 +637,16 @@ export async function enrichConference(conference: {
       feature: 'conference_detail',
       model: CONFERENCE_MODEL,
       effort: 'low',
-      maxTokens: 2500,
+      maxTokens: 3500,
       timeoutMs: 90_000,
       retries: 0,
       system,
       cacheSystemPrompt: true,
-      tools: [webSearchTool({ maxUses: 3 })],
+      tools: [webSearchTool({ maxUses: 4 })],
       structuredFormat: {
         type: 'json_schema',
         name: 'conference_detail',
-        description: 'Concise, citation-backed detail about one conference.',
+        description: 'Concise, citation-backed detail about one conference, including registration deadlines and cost tiers when available.',
         schema: CONFERENCE_DETAIL_SCHEMA as unknown as Record<string, unknown>,
       },
       messages: [
