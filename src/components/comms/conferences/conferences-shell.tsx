@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
 import { useConferenceRun } from '@/components/comms/use-conference-run'
 import { FindMoreDialog } from '@/components/comms/conferences/find-more-dialog'
+import { ConferenceContactAssignment } from '@/components/comms/conferences/conference-contact-assignment'
 import {
   CONFERENCE_STAGE_LABELS,
   CONFERENCE_STAGES,
@@ -520,6 +521,10 @@ function ConferenceDetailPane({
           </>
         )}
       </div>
+
+      {conf.tracking?.stage === 'registered' && (
+        <ConferenceContactAssignment conferenceId={conf.id} conferenceName={conf.name} />
+      )}
 
       {conf.summary && <p className="text-sm leading-relaxed text-neutral-700">{conf.summary}</p>}
 
