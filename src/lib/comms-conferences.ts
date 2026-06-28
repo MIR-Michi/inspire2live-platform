@@ -37,6 +37,19 @@ export type ConferenceTracking = {
   updatedAt: string
 }
 
+export type ConferenceAssignedContact = {
+  id: string
+  fullName: string
+  email: string | null
+  whatsappId: string | null
+  meta: string | null
+  assignmentId: string
+  role: string
+  notificationStatus: string
+  notificationDetail: string | null
+  assignedAt: string
+}
+
 export type ConferenceView = {
   id: string
   name: string
@@ -57,6 +70,7 @@ export type ConferenceView = {
   detailStatus: 'none' | 'loading' | 'ready' | 'error'
   /** Present once the conference has been added to the pipeline. */
   tracking: ConferenceTracking | null
+  assignedContacts: ConferenceAssignedContact[]
 }
 
 export type ConferenceFilters = {
@@ -75,12 +89,32 @@ export type ConferencesData = {
 const CONFERENCE_COLUMNS =
   'id, name, organizer, region, location, main_focus, topics, format, start_date, end_date, website_url, source_url, summary, relevance, detail, detail_status, discovered_at'
 const TRACKING_COLUMNS = 'conference_id, stage, notes, added_at, updated_at'
+const ASSIGNMENT_COLUMNS = 'id, conference_id, contact_id, role, notification_status, notification_detail, assigned_at'
+const CONTACT_COLUMNS = 'id, full_name, email, whatsapp_id, title, organisation'
+
+type DbError = { message: string }
+type Row = Record<string, unknown>
+type RowsResult = Promise<{ data: Row[] | null; error: DbError | null }>
+type RowResult = Promise<{ data: Row | null; error: DbError | null }>
 
 function normalizeStage(value: unknown): ConferenceStage {
   return (CONFERENCE_STAGES as readonly string[]).includes(value as string) ? (value as ConferenceStage) : 'intended'
 }
 
-function rowToView(row: Record<string, unknown>, tracking: Map<string, ConferenceTracking>): ConferenceView {
+function cleanText(value: unknown): string | null {
+  const text = typeof value === 'string' ? value.trim() : ''
+  return text || null
+}
+
+function contactMeta(row: Row): string | null {
+  return [cleanText(row.title), cleanText(row.organisation), cleanText(row.email)].filter(Boolean).join(' · ') || null
+}
+
+function rowToView(
+  row: Row,
+  tracking: Map<string, ConferenceTracking>,
+  assignedContacts: Map<string, ConferenceAssignedContact[]>
+): ConferenceView {
   const region = (CONFERENCE_REGIONS as readonly string[]).includes(String(row.region))
     ? (String(row.region) as ConferenceRegion)
     : 'global'
@@ -104,25 +138,75 @@ function rowToView(row: Record<string, unknown>, tracking: Map<string, Conferenc
     detail: (row.detail as ConferenceDetail | null) ?? null,
     detailStatus: (['none', 'loading', 'ready', 'error'].includes(String(row.detail_status)) ? String(row.detail_status) : 'none') as ConferenceView['detailStatus'],
     tracking: tracking.get(id) ?? null,
+    assignedContacts: assignedContacts.get(id) ?? [],
   }
 }
 
 type LooseDb = {
   from: (table: string) => {
     select: (columns: string) => {
-      order: (column: string, opts: { ascending: boolean; nullsFirst?: boolean }) => Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }>
-      eq: (column: string, value: string) => { maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }> }
+      order: (column: string, opts: { ascending: boolean; nullsFirst?: boolean }) => RowsResult
+      eq: (column: string, value: string) => { maybeSingle: () => RowResult }
+      in: (column: string, values: string[]) => { limit: (n: number) => RowsResult }
     }
   }
+}
+
+async function loadAssignedContacts(db: LooseDb): Promise<Map<string, ConferenceAssignedContact[]>> {
+  const assignmentResult = await db
+    .from('conference_contact_assignments')
+    .select(ASSIGNMENT_COLUMNS)
+    .order('assigned_at', { ascending: false })
+
+  if (assignmentResult.error) return new Map()
+
+  const assignments = assignmentResult.data ?? []
+  const contactIds = Array.from(new Set(assignments.map((row) => String(row.contact_id ?? '')).filter(Boolean)))
+  if (contactIds.length === 0) return new Map()
+
+  const contactResult = await db
+    .from('comms_crm_contacts')
+    .select(CONTACT_COLUMNS)
+    .in('id', contactIds)
+    .limit(Math.max(contactIds.length, 1))
+
+  if (contactResult.error) return new Map()
+
+  const contacts = new Map((contactResult.data ?? []).map((row) => [String(row.id), row]))
+  const byConference = new Map<string, ConferenceAssignedContact[]>()
+
+  for (const assignment of assignments) {
+    const contact = contacts.get(String(assignment.contact_id))
+    if (!contact) continue
+    const conferenceId = String(assignment.conference_id)
+    byConference.set(conferenceId, [
+      ...(byConference.get(conferenceId) ?? []),
+      {
+        id: String(contact.id),
+        fullName: String(contact.full_name ?? 'Unnamed contact'),
+        email: cleanText(contact.email),
+        whatsappId: cleanText(contact.whatsapp_id),
+        meta: contactMeta(contact),
+        assignmentId: String(assignment.id),
+        role: String(assignment.role ?? 'attendee'),
+        notificationStatus: String(assignment.notification_status ?? 'queued'),
+        notificationDetail: cleanText(assignment.notification_detail),
+        assignedAt: String(assignment.assigned_at),
+      },
+    ])
+  }
+
+  return byConference
 }
 
 /** Load every discovered conference joined with its pipeline tracking. */
 export async function loadConferencesData(supabase: SupabaseClient<Database>): Promise<ConferencesData> {
   const db = supabase as unknown as LooseDb
   try {
-    const [conferencesResult, trackingResult] = await Promise.all([
+    const [conferencesResult, trackingResult, assignedContacts] = await Promise.all([
       db.from('conferences').select(CONFERENCE_COLUMNS).order('start_date', { ascending: true, nullsFirst: false }),
       db.from('conference_tracking').select(TRACKING_COLUMNS).order('updated_at', { ascending: false }),
+      loadAssignedContacts(db),
     ])
 
     const trackingMap = new Map<string, ConferenceTracking>()
@@ -135,7 +219,7 @@ export async function loadConferencesData(supabase: SupabaseClient<Database>): P
       })
     }
 
-    const conferences = (conferencesResult.data ?? []).map((row) => rowToView(row, trackingMap))
+    const conferences = (conferencesResult.data ?? []).map((row) => rowToView(row, trackingMap, assignedContacts))
 
     // Region facets (only regions that actually have conferences).
     const regionCounts = new Map<ConferenceRegion, number>()
@@ -163,7 +247,7 @@ export async function loadConference(supabase: SupabaseClient<Database>, id: str
   try {
     const { data } = await db.from('conferences').select(CONFERENCE_COLUMNS).eq('id', id).maybeSingle()
     if (!data) return null
-    return rowToView(data, new Map())
+    return rowToView(data, new Map(), new Map())
   } catch (error) {
     console.error('[conferences] loadConference failed', error)
     return null
