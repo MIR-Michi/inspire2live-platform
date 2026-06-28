@@ -91,6 +91,7 @@ const CONFERENCE_COLUMNS =
 const TRACKING_COLUMNS = 'conference_id, stage, notes, added_at, updated_at'
 const ASSIGNMENT_COLUMNS = 'id, conference_id, contact_id, role, notification_status, notification_detail, assigned_at'
 const CONTACT_COLUMNS = 'id, full_name, email, whatsapp_id, title, organisation'
+const ASSIGNMENT_TOKEN_PATTERN = /\[conference:([0-9a-f-]{36})\]/i
 
 type DbError = { message: string }
 type Row = Record<string, unknown>
@@ -104,6 +105,30 @@ function normalizeStage(value: unknown): ConferenceStage {
 function cleanText(value: unknown): string | null {
   const text = typeof value === 'string' ? value.trim() : ''
   return text || null
+}
+
+function isMissingAssignmentTable(error: DbError | null | undefined): boolean {
+  const message = error?.message.toLowerCase() ?? ''
+  return message.includes('conference_contact_assignments') && (
+    message.includes('schema cache') ||
+    message.includes('could not find') ||
+    message.includes('does not exist') ||
+    message.includes('relation')
+  )
+}
+
+function conferenceIdFromAssignmentSummary(summary: unknown): string | null {
+  const text = cleanText(summary)
+  return text?.match(ASSIGNMENT_TOKEN_PATTERN)?.[1] ?? null
+}
+
+function notificationStatusFromSummary(summary: unknown): string {
+  const match = cleanText(summary)?.match(/Notification status: ([a-z_]+)/i)
+  return match?.[1]?.toLowerCase() ?? 'recorded'
+}
+
+function notificationDetailFromSummary(summary: unknown): string | null {
+  return cleanText(cleanText(summary)?.replace(ASSIGNMENT_TOKEN_PATTERN, '').replace(/^\s*Assigned to attend\/contact .*?\.\s*/i, '') ?? null)
 }
 
 function contactMeta(row: Row): string | null {
@@ -147,9 +172,67 @@ type LooseDb = {
     select: (columns: string) => {
       order: (column: string, opts: { ascending: boolean; nullsFirst?: boolean }) => RowsResult
       eq: (column: string, value: string) => { maybeSingle: () => RowResult }
+      ilike: (column: string, pattern: string) => { order: (column: string, opts: { ascending: boolean }) => RowsResult }
       in: (column: string, values: string[]) => { limit: (n: number) => RowsResult }
     }
   }
+}
+
+async function loadAssignedContactsFromInteractions(db: LooseDb): Promise<Map<string, ConferenceAssignedContact[]>> {
+  const interactionResult = await db
+    .from('comms_crm_interactions')
+    .select('id, contact_id, summary, occurred_at')
+    .ilike('summary', '%[conference:%]%')
+    .order('occurred_at', { ascending: false })
+
+  if (interactionResult.error) return new Map()
+
+  const latestByConferenceContact = new Map<string, Row>()
+  const contactIds = new Set<string>()
+  for (const interaction of interactionResult.data ?? []) {
+    const conferenceId = conferenceIdFromAssignmentSummary(interaction.summary)
+    const contactId = String(interaction.contact_id ?? '')
+    if (!conferenceId || !contactId) continue
+    const key = `${conferenceId}:${contactId}`
+    if (!latestByConferenceContact.has(key)) latestByConferenceContact.set(key, interaction)
+    contactIds.add(contactId)
+  }
+
+  if (contactIds.size === 0) return new Map()
+
+  const contactResult = await db
+    .from('comms_crm_contacts')
+    .select(CONTACT_COLUMNS)
+    .in('id', [...contactIds])
+    .limit(Math.max(contactIds.size, 1))
+
+  if (contactResult.error) return new Map()
+
+  const contacts = new Map((contactResult.data ?? []).map((row) => [String(row.id), row]))
+  const byConference = new Map<string, ConferenceAssignedContact[]>()
+
+  for (const interaction of latestByConferenceContact.values()) {
+    const conferenceId = conferenceIdFromAssignmentSummary(interaction.summary)
+    const contact = contacts.get(String(interaction.contact_id))
+    if (!conferenceId || !contact) continue
+    byConference.set(conferenceId, [
+      ...(byConference.get(conferenceId) ?? []),
+      {
+        id: String(contact.id),
+        fullName: String(contact.full_name ?? 'Unnamed contact'),
+        email: cleanText(contact.email),
+        whatsappId: cleanText(contact.whatsapp_id),
+        meta: contactMeta(contact),
+        assignmentId: String(interaction.id),
+        role: 'attendee',
+        notificationStatus: notificationStatusFromSummary(interaction.summary),
+        notificationDetail: notificationDetailFromSummary(interaction.summary),
+        assignedAt: String(interaction.occurred_at),
+      },
+    ])
+  }
+
+  return byConference
 }
 
 async function loadAssignedContacts(db: LooseDb): Promise<Map<string, ConferenceAssignedContact[]>> {
@@ -158,7 +241,10 @@ async function loadAssignedContacts(db: LooseDb): Promise<Map<string, Conference
     .select(ASSIGNMENT_COLUMNS)
     .order('assigned_at', { ascending: false })
 
-  if (assignmentResult.error) return new Map()
+  if (assignmentResult.error) {
+    if (isMissingAssignmentTable(assignmentResult.error)) return loadAssignedContactsFromInteractions(db)
+    return new Map()
+  }
 
   const assignments = assignmentResult.data ?? []
   const contactIds = Array.from(new Set(assignments.map((row) => String(row.contact_id ?? '')).filter(Boolean)))
