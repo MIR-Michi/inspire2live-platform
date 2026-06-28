@@ -23,6 +23,7 @@ export function ConferenceContactAssignment({ conferenceId, conferenceName }: { 
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [pending, startTransition] = useTransition()
+  const showOptions = query.trim().length >= 2 && options.length > 0
 
   const loadAssigned = useCallback(async () => {
     const result = await getConferenceContacts(conferenceId)
@@ -34,17 +35,12 @@ export function ConferenceContactAssignment({ conferenceId, conferenceName }: { 
   }, [conferenceId])
 
   useEffect(() => {
-    setError(null)
-    setMessage(null)
     void loadAssigned()
   }, [loadAssigned])
 
   useEffect(() => {
     const text = query.trim()
-    if (text.length < 2) {
-      setOptions([])
-      return
-    }
+    if (text.length < 2) return
 
     let cancelled = false
     const timer = setTimeout(() => {
@@ -68,6 +64,11 @@ export function ConferenceContactAssignment({ conferenceId, conferenceName }: { 
       clearTimeout(timer)
     }
   }, [query])
+
+  const updateQuery = (value: string) => {
+    setQuery(value)
+    if (value.trim().length < 2) setOptions([])
+  }
 
   const assignExisting = (contact: ConferenceContactOption) => {
     setError(null)
@@ -140,14 +141,14 @@ export function ConferenceContactAssignment({ conferenceId, conferenceName }: { 
           <input
             type="search"
             value={query}
-            onChange={(event) => setQuery(event.target.value)}
+            onChange={(event) => updateQuery(event.target.value)}
             placeholder="Type a name from the CRM..."
             className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-800 focus:border-violet-400 focus:outline-none"
           />
         </label>
 
         {loading && <p className="text-xs text-neutral-500">Searching CRM...</p>}
-        {options.length > 0 && (
+        {showOptions && (
           <ul className="space-y-1.5">
             {options.map((contact) => (
               <li key={contact.id} className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 bg-white px-3 py-2">
