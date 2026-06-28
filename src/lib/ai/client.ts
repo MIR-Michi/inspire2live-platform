@@ -253,11 +253,13 @@ export function buildMessageRequest(input: RunAiMessageInput, config: AiConfig):
   }
   const outputConfig: Record<string, unknown> = {}
   const hasTools = Boolean(input.tools && input.tools.length > 0)
+  const toolJsonContract = input.structuredFormat && hasTools ? buildToolJsonContract(input.structuredFormat) : ''
+  const systemText = [input.system, toolJsonContract].filter(Boolean).join('\n\n')
 
-  if (input.system) {
+  if (systemText) {
     request.system = input.cacheSystemPrompt
-      ? [{ type: 'text', text: input.system, cache_control: { type: 'ephemeral' } }]
-      : input.system
+      ? [{ type: 'text', text: systemText, cache_control: { type: 'ephemeral' } }]
+      : systemText
   }
   if (input.tools && input.tools.length > 0) request.tools = input.tools
   if (config.effort !== 'none' && !hasTools) {
@@ -290,6 +292,13 @@ export function buildOutputFormat(format: AiStructuredFormat): { type: string; s
     type: format.type,
     schema: sanitizeStructuredSchema(format.schema),
   }
+}
+
+function buildToolJsonContract(format: AiStructuredFormat): string {
+  return [
+    'Return only a JSON value matching this schema. Do not wrap it in Markdown or add explanatory text.',
+    JSON.stringify(sanitizeStructuredSchema(format.schema)),
+  ].join('\n')
 }
 
 // Anthropic structured outputs accept only a subset of JSON Schema. Validation
