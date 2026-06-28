@@ -523,7 +523,7 @@ function ConferenceDetailPane({
       </div>
 
       {conf.tracking?.stage === 'registered' && (
-        <ConferenceContactAssignment conferenceId={conf.id} conferenceName={conf.name} initialContacts={conf.assignedContacts} />
+        <ConferenceContactAssignment conferenceId={conf.id} conferenceName={conf.name} initialContacts={conf.assignedContacts ?? []} />
       )}
 
       {conf.summary && <p className="text-sm leading-relaxed text-neutral-700">{conf.summary}</p>}
