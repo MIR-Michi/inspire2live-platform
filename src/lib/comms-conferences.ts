@@ -194,30 +194,33 @@ export function filterConferences(conferences: ConferenceView[], filters: Confer
   })
 }
 
-/** The four tabs the Conferences space is organized into. */
-export type ConferenceTab = 'upcoming' | 'shortlist' | 'pipeline' | 'archive'
+/**
+ * The tabs the Conferences space is organized into: "Upcoming" for newly
+ * discovered conferences, then one tab per pipeline stage so the tab labels
+ * line up exactly with the stage a conference can be set to.
+ */
+export type ConferenceTab = 'upcoming' | ConferenceStage
 
 /** Which tab a conference belongs to, based on its tracking stage. */
 export function partitionConferences(conferences: ConferenceView[]): Record<ConferenceTab, ConferenceView[]> {
-  const upcoming: ConferenceView[] = []
-  const shortlist: ConferenceView[] = []
-  const pipeline: ConferenceView[] = []
-  const archive: ConferenceView[] = []
+  const result: Record<ConferenceTab, ConferenceView[]> = {
+    upcoming: [],
+    intended: [],
+    registered: [],
+    ongoing: [],
+    follow_up: [],
+    archived: [],
+  }
 
   for (const conf of conferences) {
     const stage = conf.tracking?.stage
     if (!stage) {
-      upcoming.push(conf)
-    } else if (stage === 'archived') {
-      archive.push(conf)
-    } else if (stage === 'intended') {
-      shortlist.push(conf)
-      upcoming.push(conf) // shortlisted items still appear in Upcoming (flagged)
+      result.upcoming.push(conf)
     } else {
-      // registered / ongoing / follow_up
-      pipeline.push(conf)
+      result[stage].push(conf)
+      if (stage === 'intended') result.upcoming.push(conf) // intended items still appear in Upcoming (flagged)
     }
   }
 
-  return { upcoming, shortlist, pipeline, archive }
+  return result
 }

@@ -67,19 +67,21 @@ describe('filterConferences', () => {
 })
 
 describe('partitionConferences', () => {
-  it('routes conferences to the right tab by tracking stage', () => {
+  it('routes conferences to a tab per stage, keeping intended in Upcoming', () => {
     const list = [
       conf({ id: 'd' }), // discovered → upcoming only
-      conf({ id: 'i', tracking: track('intended') }), // shortlist + upcoming
-      conf({ id: 'r', tracking: track('registered') }), // pipeline
-      conf({ id: 'o', tracking: track('ongoing') }), // pipeline
-      conf({ id: 'f', tracking: track('follow_up') }), // pipeline
-      conf({ id: 'a', tracking: track('archived') }), // archive
+      conf({ id: 'i', tracking: track('intended') }), // intended + upcoming
+      conf({ id: 'r', tracking: track('registered') }), // registered
+      conf({ id: 'o', tracking: track('ongoing') }), // ongoing
+      conf({ id: 'f', tracking: track('follow_up') }), // follow_up
+      conf({ id: 'a', tracking: track('archived') }), // archived
     ]
     const p = partitionConferences(list)
     expect(p.upcoming.map((c) => c.id).sort()).toEqual(['d', 'i'])
-    expect(p.shortlist.map((c) => c.id)).toEqual(['i'])
-    expect(p.pipeline.map((c) => c.id).sort()).toEqual(['f', 'o', 'r'])
-    expect(p.archive.map((c) => c.id)).toEqual(['a'])
+    expect(p.intended.map((c) => c.id)).toEqual(['i'])
+    expect(p.registered.map((c) => c.id)).toEqual(['r'])
+    expect(p.ongoing.map((c) => c.id)).toEqual(['o'])
+    expect(p.follow_up.map((c) => c.id)).toEqual(['f'])
+    expect(p.archived.map((c) => c.id)).toEqual(['a'])
   })
 })
