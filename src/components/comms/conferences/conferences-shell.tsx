@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
 import { useConferenceRun } from '@/components/comms/use-conference-run'
@@ -502,6 +503,12 @@ function ConferenceDetailPane({
           </button>
         ) : (
           <>
+            <Link
+              href={`/app/comms/conferences/${conf.id}`}
+              className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-3.5 py-2 text-sm font-semibold text-white transition hover:bg-orange-700"
+            >
+              Open operating page →
+            </Link>
             <label className="inline-flex items-center gap-1.5 text-xs font-semibold text-neutral-500">
               Stage
               <select

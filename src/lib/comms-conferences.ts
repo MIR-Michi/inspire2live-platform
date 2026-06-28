@@ -340,6 +340,35 @@ export async function loadConference(supabase: SupabaseClient<Database>, id: str
   }
 }
 
+/** Load the pipeline tracking (stage + notes) for one conference, if any. */
+export async function loadConferenceTracking(
+  supabase: SupabaseClient<Database>,
+  conferenceId: string
+): Promise<ConferenceTracking | null> {
+  const db = supabase as unknown as {
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (column: string, value: string) => {
+          maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }>
+        }
+      }
+    }
+  }
+  try {
+    const { data } = await db.from('conference_tracking').select(TRACKING_COLUMNS).eq('conference_id', conferenceId).maybeSingle()
+    if (!data) return null
+    return {
+      stage: normalizeStage(data.stage),
+      notes: (data.notes as string | null) ?? null,
+      addedAt: String(data.added_at ?? ''),
+      updatedAt: String(data.updated_at ?? ''),
+    }
+  } catch (error) {
+    console.error('[conferences] loadConferenceTracking failed', error)
+    return null
+  }
+}
+
 // ── Pure filtering / grouping (shared with unit tests) ───────────────────────
 
 /** Apply the region / focus / format / search filters to a conference list. */
