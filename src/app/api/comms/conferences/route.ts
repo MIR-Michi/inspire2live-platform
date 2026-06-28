@@ -7,10 +7,9 @@ import { executeAndRecordConferenceRun, markConferenceRunStarted } from '@/lib/a
 export const maxDuration = 300
 
 /**
- * Monthly cron: refresh the upcoming-oncology-conferences list. Protected by
- * CRON_SECRET. Claims the singleton run lock (so a manual run and the cron can't
- * collide), then runs + records the discovery job within the 300s window so the
- * UI reflects the outcome.
+ * Scheduled cache refresh: collect upcoming oncology conferences globally and
+ * save them to Supabase. The page itself only reads saved rows, so users do not
+ * wait for AI/web-search work during normal browsing.
  */
 export async function GET(request: Request) {
   const expected = process.env.CRON_SECRET
@@ -24,9 +23,8 @@ export async function GET(request: Request) {
 }
 
 /**
- * Manual run from the Conferences page. This intentionally runs in a route
- * handler, not in a server-action `after()` callback: in production that callback
- * can leave the status row stuck at "running" without executing the AI sweep.
+ * Manual admin override for the same cache refresh. This is not part of the page
+ * read path: existing saved conferences remain visible while the refresh runs.
  */
 export async function POST() {
   const supabase = await createClient()
