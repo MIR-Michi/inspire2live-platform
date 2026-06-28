@@ -125,6 +125,7 @@ export async function enrichConferenceDetail(conferenceId: string, options?: { r
       startDate: conference.startDate,
       endDate: conference.endDate,
       websiteUrl: conference.websiteUrl,
+      sourceUrl: conference.sourceUrl,
     })
     await admin
       .from('conferences')
