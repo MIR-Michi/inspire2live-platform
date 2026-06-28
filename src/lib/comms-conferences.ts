@@ -70,7 +70,7 @@ export type ConferenceView = {
   detailStatus: 'none' | 'loading' | 'ready' | 'error'
   /** Present once the conference has been added to the pipeline. */
   tracking: ConferenceTracking | null
-  assignedContacts: ConferenceAssignedContact[]
+  assignedContacts?: ConferenceAssignedContact[]
 }
 
 export type ConferenceFilters = {
