@@ -6,14 +6,15 @@ import { getConferenceStatus } from '@/app/app/comms/conferences/run-actions'
 import type { ConferenceRunStatus, ConferenceRunState } from '@/lib/ai/conference-run'
 
 const POLL_MS = 4000
-const LONG_WAIT_SECONDS = 180
+const LONG_WAIT_SECONDS = 300
 
 function progressMessage(elapsed: number, providerMessage: string | null): string | null {
   if (providerMessage) return providerMessage
   if (elapsed < 5) return 'Starting discovery and checking AI configuration.'
-  if (elapsed < 30) return 'Preparing regional oncology conference searches.'
-  if (elapsed < 90) return 'Waiting for AI web-search results and structured conference data.'
-  if (elapsed < LONG_WAIT_SECONDS) return 'Validating dates, official URLs, and duplicate conference names.'
+  if (elapsed < 35) return 'Preparing 24 global search lanes across regions and oncology focus areas.'
+  if (elapsed < 120) return 'Searching Europe, North America, Latin America, Africa / Middle East, Asia-Pacific, and global conference sources.'
+  if (elapsed < 220) return 'Collecting tumor-specific, research, clinical, patient advocacy, survivorship, nursing, and supportive-care meetings.'
+  if (elapsed < LONG_WAIT_SECONDS) return 'Validating future dates, official URLs, and duplicate conference names before saving results.'
   return 'This is taking longer than expected. The backend will stop the run and show a real error if no result arrives.'
 }
 
