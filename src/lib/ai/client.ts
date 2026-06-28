@@ -252,6 +252,7 @@ export function buildMessageRequest(input: RunAiMessageInput, config: AiConfig):
     messages: input.messages,
   }
   const outputConfig: Record<string, unknown> = {}
+  const hasTools = Boolean(input.tools && input.tools.length > 0)
 
   if (input.system) {
     request.system = input.cacheSystemPrompt
@@ -259,7 +260,7 @@ export function buildMessageRequest(input: RunAiMessageInput, config: AiConfig):
       : input.system
   }
   if (input.tools && input.tools.length > 0) request.tools = input.tools
-  if (config.effort !== 'none') {
+  if (config.effort !== 'none' && !hasTools) {
     request.thinking = { type: 'adaptive' }
     outputConfig.effort = config.effort
     // Anthropic rejects thinking/adaptive requests with any explicit
@@ -269,7 +270,10 @@ export function buildMessageRequest(input: RunAiMessageInput, config: AiConfig):
   } else if (typeof input.temperature === 'number') {
     request.temperature = input.temperature
   }
-  if (input.structuredFormat) outputConfig.format = buildOutputFormat(input.structuredFormat)
+  // Provider structured-output mode is intentionally skipped when server tools
+  // are present. Web-search calls return ordinary text JSON and are parsed below;
+  // combining tool use with output_config has caused zero-candidate runs.
+  if (input.structuredFormat && !hasTools) outputConfig.format = buildOutputFormat(input.structuredFormat)
   if (Object.keys(outputConfig).length > 0) request.output_config = outputConfig
 
   return request
