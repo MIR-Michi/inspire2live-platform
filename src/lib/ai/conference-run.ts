@@ -7,7 +7,7 @@ import { runConferenceDiscoveryJob } from './conference-discovery-job'
 
 // The AI sweep is hard-capped below this. If the serverless task is interrupted
 // before it can write a final state, the next status read self-heals the row.
-const STALE_RUN_MS = 180 * 1000
+const STALE_RUN_MS = 330 * 1000
 
 export type ConferenceRunState = 'idle' | 'running' | 'success' | 'error'
 
@@ -103,7 +103,7 @@ export async function markConferenceRunStarted(): Promise<{ started: boolean; re
     last_run_status: 'running',
     last_run_started_at: new Date().toISOString(),
     last_run_finished_at: null,
-    last_run_message: 'Initializing conference discovery.',
+    last_run_message: 'Initializing comprehensive conference discovery.',
     last_run_inserted: null,
   })
 
@@ -134,8 +134,10 @@ export async function executeAndRecordConferenceRun(userId: string | null): Prom
   try {
     const result = await runConferenceDiscoveryJob(admin, { createdBy: userId, onProgress: progress })
     if (result.inserted > 0) {
-      const note = result.groupErrors ? ` (${result.groupErrors} region search${result.groupErrors === 1 ? '' : 'es'} timed out)` : ''
-      await finish('success', `Added ${result.inserted} new conference${result.inserted === 1 ? '' : 's'} from ${result.discovered} validated result${result.discovered === 1 ? '' : 's'}${note}.`, result.inserted)
+      const laneCount = result.groupCount ?? 0
+      const note = result.groupErrors ? ` (${result.groupErrors} search lane${result.groupErrors === 1 ? '' : 's'} timed out)` : ''
+      const scope = laneCount > 0 ? ` across ${laneCount} search lane${laneCount === 1 ? '' : 's'}` : ''
+      await finish('success', `Added ${result.inserted} new conference${result.inserted === 1 ? '' : 's'} from ${result.discovered} validated result${result.discovered === 1 ? '' : 's'}${scope}${note}.`, result.inserted)
     } else {
       const candidates = result.candidates ?? 0
       const validated = result.validated ?? 0
