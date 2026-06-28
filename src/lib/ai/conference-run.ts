@@ -65,7 +65,7 @@ export async function getConferenceRunStatus(supabase: SupabaseClient<Database>)
   if (status.status === 'running' && status.startedAt) {
     const age = Date.now() - new Date(status.startedAt).getTime()
     if (age > STALE_RUN_MS) {
-      const message = 'The previous discovery run was interrupted before finishing. No results were saved from that run; please try again.'
+      const message = 'The previous conference cache refresh was interrupted before finishing. No results were saved from that run; please try again.'
       await updateConferenceRunStatus(db, {
         last_run_status: 'error',
         last_run_finished_at: new Date().toISOString(),
@@ -103,17 +103,14 @@ export async function markConferenceRunStarted(): Promise<{ started: boolean; re
     last_run_status: 'running',
     last_run_started_at: new Date().toISOString(),
     last_run_finished_at: null,
-    last_run_message: 'Initializing comprehensive conference discovery.',
+    last_run_message: 'Initializing comprehensive conference cache refresh.',
     last_run_inserted: null,
   })
 
   return { started: true }
 }
 
-/**
- * Execute the discovery job and record the outcome on the singleton status row.
- * Meant to run in the background (Next.js `after()`), after the lock is claimed.
- */
+/** Execute the discovery job and record the outcome on the singleton status row. */
 export async function executeAndRecordConferenceRun(userId: string | null): Promise<void> {
   const admin = createAdminClient()
   const db = admin as unknown as LooseDb
@@ -137,7 +134,7 @@ export async function executeAndRecordConferenceRun(userId: string | null): Prom
       const laneCount = result.groupCount ?? 0
       const note = result.groupErrors ? ` (${result.groupErrors} search lane${result.groupErrors === 1 ? '' : 's'} timed out or failed)` : ''
       const scope = laneCount > 0 ? ` across ${laneCount} search lane${laneCount === 1 ? '' : 's'}` : ''
-      await finish('success', `Added ${result.inserted} new conference${result.inserted === 1 ? '' : 's'} from ${result.discovered} validated result${result.discovered === 1 ? '' : 's'}${scope}${note}.`, result.inserted)
+      await finish('success', `Saved ${result.inserted} new conference${result.inserted === 1 ? '' : 's'} to the cache from ${result.discovered} validated result${result.discovered === 1 ? '' : 's'}${scope}${note}.`, result.inserted)
     } else {
       const candidates = result.candidates ?? 0
       const validated = result.validated ?? 0
@@ -155,11 +152,11 @@ export async function executeAndRecordConferenceRun(userId: string | null): Prom
       } else if (validated === 0) {
         why = `the model returned ${candidates} candidate result${candidates === 1 ? '' : 's'}, but none had a valid future date and official URL.`
       } else {
-        why = `${validated} validated result${validated === 1 ? ' was' : 's were'} already in the list.`
+        why = `${validated} validated result${validated === 1 ? ' was' : 's were'} already in the cache.`
       }
-      await finish('success', `No new conferences added: ${why}`, 0)
+      await finish('success', `No new conferences saved: ${why}`, 0)
     }
   } catch (error) {
-    await finish('error', error instanceof Error ? error.message : 'Conference discovery run failed.', null)
+    await finish('error', error instanceof Error ? error.message : 'Conference cache refresh failed.', null)
   }
 }
