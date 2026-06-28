@@ -18,6 +18,7 @@ import { loadConference } from '@/lib/comms-conferences'
 import { CONFERENCE_STAGES, type ConferenceStage } from '@/lib/comms-conferences'
 
 const CONFERENCES_PATH = '/app/comms/conferences'
+const CONFERENCE_ASSIGNMENT_TOKEN = /\[conference:([0-9a-f-]{36})\]/i
 
 type ActionResult = { ok: boolean; message?: string }
 
@@ -141,6 +142,33 @@ function clean(value: string | null | undefined, max = 160): string | null {
   return text ? text.slice(0, max) : null
 }
 
+function assignmentToken(conferenceId: string): string {
+  return `[conference:${conferenceId}]`
+}
+
+function isMissingAssignmentTable(error: DbError | null | undefined): boolean {
+  const message = error?.message.toLowerCase() ?? ''
+  return message.includes('conference_contact_assignments') && (
+    message.includes('schema cache') ||
+    message.includes('could not find') ||
+    message.includes('does not exist') ||
+    message.includes('relation')
+  )
+}
+
+function assignmentSummary(conferenceId: string, conferenceName: string, notification: { status: string; detail: string }): string {
+  return `${assignmentToken(conferenceId)} Assigned to attend/contact ${conferenceName}. Notification status: ${notification.status}. ${notification.detail}`
+}
+
+function notificationStatusFromSummary(summary: string): string {
+  const match = summary.match(/Notification status: ([a-z_]+)/i)
+  return match?.[1]?.toLowerCase() ?? 'recorded'
+}
+
+function notificationDetailFromSummary(summary: string): string | null {
+  return clean(summary.replace(CONFERENCE_ASSIGNMENT_TOKEN, '').replace(/^\s*Assigned to attend\/contact .*?\.\s*/i, ''), 600)
+}
+
 function contactOptionFromRow(row: Row): ConferenceContactOption {
   const title = clean(String(row.title ?? ''))
   const organisation = clean(String(row.organisation ?? ''))
@@ -218,6 +246,57 @@ async function notifyConferenceContact(contact: ConferenceContactOption, confere
 
   const status = emailOk && whatsappOk ? 'sent' : emailOk || whatsappOk ? 'partial' : 'failed'
   return { status, detail: details.join(' ') }
+}
+
+async function getConferenceContactsFromInteractions(
+  db: ConferenceContactDb,
+  conferenceId: string
+): Promise<{ ok: true; contacts: AssignedConferenceContact[] } | { ok: false; message: string }> {
+  const interactionsResult = await db
+    .from('comms_crm_interactions')
+    .select('id, contact_id, summary, occurred_at')
+    .ilike('summary', `%${assignmentToken(conferenceId)}%`)
+    .order('occurred_at', { ascending: false })
+    .limit(100)
+
+  if (interactionsResult.error) return { ok: false, message: interactionsResult.error.message }
+
+  const interactions = interactionsResult.data ?? []
+  const latestByContact = new Map<string, Row>()
+  for (const interaction of interactions) {
+    const contactId = String(interaction.contact_id ?? '')
+    if (contactId && !latestByContact.has(contactId)) latestByContact.set(contactId, interaction)
+  }
+
+  const contactIds = [...latestByContact.keys()]
+  if (contactIds.length === 0) return { ok: true, contacts: [] }
+
+  const contactsResult = await db
+    .from('comms_crm_contacts')
+    .select('id, full_name, email, phone, whatsapp_id, title, organisation')
+    .in('id', contactIds)
+    .limit(100)
+
+  if (contactsResult.error) return { ok: false, message: contactsResult.error.message }
+  const byId = new Map((contactsResult.data ?? []).map((row) => [String(row.id), contactOptionFromRow(row)]))
+
+  return {
+    ok: true,
+    contacts: contactIds.flatMap((contactId) => {
+      const contact = byId.get(contactId)
+      const interaction = latestByContact.get(contactId)
+      if (!contact || !interaction) return []
+      const summary = String(interaction.summary ?? '')
+      return [{
+        ...contact,
+        assignmentId: String(interaction.id),
+        role: 'attendee',
+        notificationStatus: notificationStatusFromSummary(summary),
+        notificationDetail: notificationDetailFromSummary(summary),
+        assignedAt: String(interaction.occurred_at),
+      }]
+    }),
+  }
 }
 
 /** Add a discovered conference to the visit pipeline at the "intended" stage. */
@@ -415,7 +494,10 @@ export async function getConferenceContacts(conferenceId: string): Promise<{ ok:
     .eq('conference_id', conferenceId)
     .order('assigned_at', { ascending: false })
 
-  if (assignmentsResult.error) return { ok: false, message: assignmentsResult.error.message }
+  if (assignmentsResult.error) {
+    if (isMissingAssignmentTable(assignmentsResult.error)) return getConferenceContactsFromInteractions(db, conferenceId)
+    return { ok: false, message: assignmentsResult.error.message }
+  }
 
   const assignments = assignmentsResult.data ?? []
   const contactIds = Array.from(new Set(assignments.map((row) => String(row.contact_id)).filter(Boolean)))
@@ -533,15 +615,17 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
     assigned_at: assignedAt,
     updated_at: assignedAt,
   }, { onConflict: 'conference_id,contact_id' })
-  if (assignment.error) return { ok: false, message: assignment.error.message }
+  if (assignment.error && !isMissingAssignmentTable(assignment.error)) return { ok: false, message: assignment.error.message }
 
-  await db.from('comms_crm_interactions').insert({
+  const interaction = await db.from('comms_crm_interactions').insert({
     contact_id: contact.id,
     interaction_type: 'event',
-    summary: `Assigned to attend/contact ${conferenceName}. ${notification.detail}`,
+    summary: assignmentSummary(input.conferenceId, conferenceName, notification),
     occurred_at: assignedAt,
     created_by: auth.userId,
   })
+  if (interaction.error) return { ok: false, message: interaction.error.message }
+
   await db.from('comms_crm_contacts').update({
     lifecycle_stage: 'active',
     last_interaction_at: assignedAt,
