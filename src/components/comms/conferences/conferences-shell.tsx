@@ -131,7 +131,7 @@ export function ConferencesShell({
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
           <h1 className="text-2xl font-semibold text-neutral-900">Oncology conferences</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            AI-discovered upcoming oncology conferences, refreshed monthly. Shortlist the ones worth attending and track them through to follow-up.
+            Saved oncology conference cache, refreshed nightly in the background. Shortlist the ones worth attending and track them through to follow-up.
           </p>
         </div>
         <RefreshControl run={run} aiEnabled={aiEnabled} />
@@ -210,9 +210,9 @@ function RefreshControl({ run, aiEnabled }: { run: ReturnType<typeof useConferen
         disabled={run.busy}
         className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
       >
-        {run.running ? `Discovering… ${run.elapsed}s` : run.starting ? 'Starting…' : 'Refresh list'}
+        {run.running ? `Refreshing cache… ${run.elapsed}s` : run.starting ? 'Starting…' : 'Refresh cache'}
       </button>
-      {run.running && <p className="text-xs text-neutral-400">Scanning regions — this can take a couple of minutes.</p>}
+      {run.running && <p className="text-xs text-neutral-400">Updating saved results in the background; the current list remains available.</p>}
       {!run.running && run.message && (
         <p className={['max-w-xs text-right text-xs', run.status === 'error' ? 'text-red-600' : 'text-neutral-500'].join(' ')}>{run.message}</p>
       )}
@@ -520,9 +520,9 @@ function EmptyState({ tab, aiEnabled, run }: { tab: ConferenceTab; aiEnabled: bo
   if (tab === 'upcoming') {
     return (
       <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
-        <p className="text-sm font-semibold text-neutral-700">No upcoming conferences yet.</p>
+        <p className="text-sm font-semibold text-neutral-700">No upcoming conferences saved yet.</p>
         <p className="mt-1 text-sm text-neutral-400">
-          {aiEnabled ? 'Run a discovery sweep to find upcoming oncology conferences.' : 'AI discovery is disabled for this environment.'}
+          {aiEnabled ? 'Start a background cache refresh to collect upcoming oncology conferences.' : 'AI discovery is disabled for this environment.'}
         </p>
         {aiEnabled && (
           <button
@@ -531,7 +531,7 @@ function EmptyState({ tab, aiEnabled, run }: { tab: ConferenceTab; aiEnabled: bo
             disabled={run.busy}
             className="mt-3 inline-flex items-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
           >
-            {run.running ? `Discovering… ${run.elapsed}s` : 'Discover conferences'}
+            {run.running ? `Refreshing cache… ${run.elapsed}s` : 'Refresh cache'}
           </button>
         )}
       </div>
