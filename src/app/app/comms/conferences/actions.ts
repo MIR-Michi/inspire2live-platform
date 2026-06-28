@@ -27,6 +27,12 @@ import { parseDelimitedList } from '@/lib/comms-events'
 const CONFERENCES_PATH = '/app/comms/conferences'
 const CONFERENCE_ASSIGNMENT_TOKEN = /\[conference:([0-9a-f-]{36})\]/i
 
+/** Revalidate both the pipeline list and a conference's operating page. */
+function revalidateConference(conferenceId: string) {
+  revalidatePath(CONFERENCES_PATH)
+  revalidatePath(`${CONFERENCES_PATH}/${conferenceId}`)
+}
+
 type ActionResult = { ok: boolean; message?: string }
 
 type DbError = { message: string }
