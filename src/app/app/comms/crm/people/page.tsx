@@ -5,7 +5,7 @@ import { normalizeRole } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 
 const VALID_KINDS = new Set(['all', 'internal_user', 'internal_contact', 'external'])
-const VALID_FILTERS = new Set(['follow_up', 'privacy_review'])
+const VALID_FILTERS = new Set(['follow_up', 'privacy_review', 'campus'])
 
 export default async function CommsCrmPeoplePage({
   searchParams,
@@ -16,7 +16,7 @@ export default async function CommsCrmPeoplePage({
   const activeKind =
     params.kind && VALID_KINDS.has(params.kind) ? (params.kind as 'all' | CrmContactKind) : 'all'
   const activePersonType = normalizeCrmPersonType(params.type) ?? (params.type === 'unclassified' ? 'unclassified' : null)
-  const activeFilter = params.filter && VALID_FILTERS.has(params.filter) ? (params.filter as 'follow_up' | 'privacy_review') : null
+  const activeFilter = params.filter && VALID_FILTERS.has(params.filter) ? (params.filter as 'follow_up' | 'privacy_review' | 'campus') : null
   const query = params.q?.trim().toLowerCase() ?? ''
 
   const supabase = await createClient()
@@ -38,6 +38,7 @@ export default async function CommsCrmPeoplePage({
     if (activePersonType && activePersonType !== 'unclassified' && record.personType !== activePersonType) return false
     if (activeFilter === 'follow_up' && record.health !== 'follow_up' && !record.nextFollowUpAt) return false
     if (activeFilter === 'privacy_review' && record.consentStatus !== 'unknown' && !record.retentionReviewAt) return false
+    if (activeFilter === 'campus' && !record.isCampusMember) return false
 
     return matchesCrmQuery(
       [

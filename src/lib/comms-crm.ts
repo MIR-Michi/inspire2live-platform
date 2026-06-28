@@ -117,6 +117,46 @@ export const CRM_PERSON_TYPE_OPTIONS = [
 
 export type CrmPersonType = (typeof CRM_PERSON_TYPE_OPTIONS)[number]['value']
 
+// ─── Continent (geo facet from the community import) ─────────────────────────
+
+export const CRM_CONTINENT_OPTIONS = [
+  { value: 'Europe', label: 'Europe' },
+  { value: 'Africa', label: 'Africa' },
+  { value: 'Asia', label: 'Asia' },
+  { value: 'North America', label: 'North America' },
+  { value: 'South America', label: 'South America' },
+  { value: 'Oceania', label: 'Oceania' },
+  { value: 'Antarctica', label: 'Antarctica' },
+] as const
+
+export type CrmContinent = (typeof CRM_CONTINENT_OPTIONS)[number]['value']
+
+const CRM_CONTINENT_SET = new Set(CRM_CONTINENT_OPTIONS.map((option) => option.value))
+
+export function normalizeCrmContinent(value: string | null | undefined): CrmContinent | null {
+  return CRM_CONTINENT_SET.has(value as CrmContinent) ? (value as CrmContinent) : null
+}
+
+// ─── Public-footprint links (publications / talks / media / profiles) ────────
+
+export type CrmContactLinkKind = 'publication' | 'talk' | 'media' | 'profile' | 'linkedin' | 'other'
+
+export type CrmContactLink = {
+  id: string
+  kind: CrmContactLinkKind
+  label: string
+  url: string | null
+}
+
+export const CRM_CONTACT_LINK_KIND_LABELS: Record<CrmContactLinkKind, string> = {
+  publication: 'Publications',
+  talk: 'Talks',
+  media: 'Media',
+  profile: 'Profiles',
+  linkedin: 'LinkedIn',
+  other: 'Links',
+}
+
 const CRM_PERSON_TYPE_SET = new Set(CRM_PERSON_TYPE_OPTIONS.map((option) => option.value))
 
 export function normalizeCrmPersonType(value: string | null | undefined): CrmPersonType | null {
@@ -181,12 +221,17 @@ export type CrmContactRecord = {
   intendedRole: string | null
   profileId: string | null
   personType: CrmPersonType | null
+  isCampusMember: boolean
   fieldOfExpertise: string[]
   skills: string[]
   pictureUrl: string | null
   bio: string | null
   title: string | null
   organisation: string | null
+  organisationUrl: string | null
+  linkedinUrl: string | null
+  continent: CrmContinent | null
+  links: CrmContactLink[]
   associatedProjects: string[]
   associatedProjectIds: string[]
   associatedEvents: string[]

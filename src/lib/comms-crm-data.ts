@@ -8,12 +8,14 @@ import {
   normalizeCrmConsent,
   normalizeCrmLifecycle,
   normalizeCrmPersonType,
+  normalizeCrmContinent,
   normalizeEmail,
   normalizePlatformStatus,
-  normalizeProjectLabels,
   segmentFromKind,
   type CrmConnectorBacklogItem,
   type CrmContactKind,
+  type CrmContactLink,
+  type CrmContactLinkKind,
   type CrmContactRecord,
   type CrmPipelineDetail,
   type CrmPipelineMember,
@@ -59,19 +61,13 @@ export type RawProfileRow = {
   onboarding_completed?: boolean | null
 }
 
-export type RawCampusMemberRow = {
+export type RawCrmContactLinkRow = {
   id: string
-  name: string
-  organisation: string | null
-  role_description: string | null
-  country: string | null
-  platform_profile_id: string | null
-  initiative_affiliations: string[] | null
-  last_channel_activity: string | null
-  date_welcomed: string | null
-  welcomed_by_peter: boolean | null
-  notes: string | null
-  whatsapp_id?: string | null
+  contact_id: string
+  kind: string
+  label: string
+  url: string | null
+  position?: number | null
 }
 
 export type RawCrmContactRow = {
@@ -86,12 +82,16 @@ export type RawCrmContactRow = {
   profile_id?: string | null
   normalized_email?: string | null
   person_type: string | null
+  is_campus_member?: boolean | null
   field_of_expertise: string[] | null
   skills: string[] | null
   picture_url: string | null
   bio: string | null
   title: string | null
   organisation: string | null
+  organisation_url?: string | null
+  linkedin_url?: string | null
+  continent?: string | null
   email: string | null
   phone: string | null
   city: string | null
@@ -114,9 +114,9 @@ export type AssembleInput = {
   profiles: RawProfileRow[]
   initiativeMembers: Array<{ user_id: string; initiative_id: string }>
   initiatives: Array<{ id: string; title: string }>
-  campusMembers: RawCampusMemberRow[]
   events: Array<{ id: string; name: string; event_type: string; start_date: string | null }>
   crmContacts: RawCrmContactRow[]
+  contactLinks: RawCrmContactLinkRow[]
   crmInitiatives: Array<{ contact_id: string; initiative_id: string }>
   crmEventLinks: Array<{ contact_id: string; event_id: string; relationship_type: string }>
   crmInteractions: Array<{
@@ -147,22 +147,24 @@ function platformStatusForProfile(profile: RawProfileRow): CrmPlatformStatus {
 }
 
 /**
- * Pure assembler: merges platform profiles (internal_user), World Campus members
- * (internal_contact — NOT external), and dedicated CRM rows into one
- * deduplicated list of `CrmContactRecord`s.
+ * Pure assembler: merges platform profiles (internal_user) and dedicated CRM
+ * rows into one deduplicated list of `CrmContactRecord`s.
  *
- * Identity is resolved spine-first: profiles and campus members seed base
- * records keyed by a stable person key and indexed by normalized email; CRM rows
- * then overlay onto the matching base (by profile_id, then email, then legacy
- * source link) instead of creating a duplicate. Profile identity always wins for
- * internal users; the CRM row contributes only relationship data for them.
+ * Identity is resolved spine-first: profiles seed base records keyed by a stable
+ * person key and indexed by normalized email; CRM rows then overlay onto the
+ * matching base (by profile_id, then email, then legacy source link) instead of
+ * creating a duplicate. Profile identity always wins for internal users; the CRM
+ * row contributes only relationship data for them.
+ *
+ * Campus membership comes solely from the CRM row's `is_campus_member` flag (the
+ * imported community list) — the legacy `campus_members` roster is no longer a
+ * CRM source.
  */
 export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
   const initiativeMap = new Map(input.initiatives.map((i) => [i.id, i.title]))
   const eventMap = new Map(
     input.events.map((e) => [e.id, `${e.name}${e.event_type === 'podcast' ? ' (Podcast)' : ''}`])
   )
-  const profileMap = new Map(input.profiles.map((p) => [p.id, p]))
   const ownerMap = input.ownerLabels ?? new Map(input.profiles.map((p) => [p.id, p.name ?? p.email ?? '']))
 
   const membershipTitles = new Map<string, string[]>()
@@ -198,12 +200,17 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
       intendedRole: null,
       profileId: profile.id,
       personType: normalizeRole(profile.role) === 'Comms' ? 'comms' : null,
+      isCampusMember: false,
       fieldOfExpertise: [],
       skills: profile.expertise_tags ?? [],
       pictureUrl: profile.avatar_url,
       bio: profile.bio,
       title: getRoleLabel(profile.role),
       organisation: profile.organization,
+      organisationUrl: null,
+      linkedinUrl: null,
+      continent: null,
+      links: [],
       associatedProjects: membershipTitles.get(profile.id) ?? [],
       associatedProjectIds: membershipIds.get(profile.id) ?? [],
       associatedEvents: [],
@@ -229,66 +236,18 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
     indexEmail(profile.email, key)
   }
 
-  // 2) World Campus members — internal contacts WITHOUT platform access. When
-  //    linked to a platform user, fold the channel data into that user record
-  //    instead of creating a separate identity.
-  for (const member of input.campusMembers) {
-    const linkedKey = member.platform_profile_id ? `profile:${member.platform_profile_id}` : null
-    const linkedProfile = member.platform_profile_id ? profileMap.get(member.platform_profile_id) ?? null : null
-    const projectIds = (member.initiative_affiliations ?? []).filter((v) => initiativeMap.has(v))
-
-    if (linkedKey && records.has(linkedKey)) {
-      // Fold campus affiliations onto the existing user record.
-      const rec = records.get(linkedKey)!
-      const mergedIds = Array.from(new Set([...rec.associatedProjectIds, ...projectIds]))
-      rec.associatedProjectIds = mergedIds
-      rec.associatedProjects = mergedIds.map((id) => initiativeMap.get(id)).filter(Boolean) as string[]
-      if (member.welcomed_by_peter) rec.tags = Array.from(new Set([...rec.tags, 'world-campus']))
-      continue
+  // 2) Group a contact's public-footprint links (publications/talks/media).
+  const linksByContact = new Map<string, CrmContactLink[]>()
+  for (const link of input.contactLinks) {
+    const resolved: CrmContactLink = {
+      id: link.id,
+      kind: (['publication', 'talk', 'media', 'profile', 'linkedin', 'other'].includes(link.kind)
+        ? link.kind
+        : 'other') as CrmContactLinkKind,
+      label: link.label,
+      url: link.url,
     }
-
-    const key = `campus_member:${member.id}`
-    const lastInteractionAt = member.last_channel_activity ?? member.date_welcomed ?? null
-    records.set(key, {
-      id: key,
-      crmContactId: null,
-      sourceType: 'campus_member' as CrmSourceType,
-      sourceId: member.id,
-      fullName: member.name,
-      segment: 'internal' as CrmSegment,
-      contactKind: 'internal_contact',
-      platformStatus: 'none',
-      intendedRole: null,
-      profileId: null,
-      personType: null,
-      fieldOfExpertise: [],
-      skills: [],
-      pictureUrl: linkedProfile?.avatar_url ?? null,
-      bio: linkedProfile?.bio ?? member.role_description ?? member.notes,
-      title: member.role_description,
-      organisation: member.organisation ?? linkedProfile?.organization ?? null,
-      associatedProjects: normalizeProjectLabels(member.initiative_affiliations, initiativeMap),
-      associatedProjectIds: projectIds,
-      associatedEvents: [],
-      associatedEventIds: [],
-      email: linkedProfile?.email ?? null,
-      phone: null,
-      city: linkedProfile?.city ?? null,
-      country: member.country ?? linkedProfile?.country ?? null,
-      preferredChannel: member.whatsapp_id ? 'WhatsApp / community' : 'WhatsApp / community',
-      relationshipOwner: member.welcomed_by_peter ? 'Peter' : 'Communications team',
-      relationshipOwnerId: null,
-      health: deriveRelationshipHealth(lastInteractionAt),
-      lastInteractionAt,
-      nextFollowUpAt: null,
-      consentStatus: 'unknown' as const,
-      privacyNotes: null,
-      retentionReviewAt: null,
-      sourceLabel: linkedProfile ? 'Campus + platform profile' : 'World Campus member',
-      tags: Array.from(new Set([...normalizeProjectLabels(member.initiative_affiliations, initiativeMap), 'world-campus'])),
-      notes: member.notes,
-      recentInteractions: [],
-    })
+    linksByContact.set(link.contact_id, [...(linksByContact.get(link.contact_id) ?? []), resolved])
   }
 
   // 3) Dedicated CRM rows overlay onto the matching base, or stand alone.
@@ -322,11 +281,10 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
     else if (normalized && keyByEmail.has(normalized)) key = keyByEmail.get(normalized)!
     else if (contact.source_type === 'profile' && contact.source_id && records.has(`profile:${contact.source_id}`))
       key = `profile:${contact.source_id}`
-    else if (contact.source_type === 'campus_member' && contact.source_id && records.has(`campus_member:${contact.source_id}`))
-      key = `campus_member:${contact.source_id}`
 
     const base = key ? records.get(key) ?? null : null
     const isInternalUser = base?.contactKind === 'internal_user'
+    const isCampusMember = Boolean(contact.is_campus_member) || (base?.isCampusMember ?? false)
 
     const contactKind: CrmContactKind = isInternalUser
       ? 'internal_user'
@@ -335,7 +293,7 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
         deriveContactKind({
           profileId: contact.profile_id,
           email: contact.email,
-          isCampusMember: contact.source_type === 'campus_member',
+          isCampusMember,
         })
 
     const platformStatus: CrmPlatformStatus = isInternalUser
@@ -347,6 +305,9 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
     const ownerLabel = contact.relationship_owner_id
       ? ownerMap.get(contact.relationship_owner_id) ?? contact.relationship_owner_label
       : contact.relationship_owner_label
+
+    const baseTags = contact.tags.length > 0 ? contact.tags : base?.tags ?? []
+    const tags = isCampusMember ? Array.from(new Set([...baseTags, 'world-campus'])) : baseTags
 
     const record: CrmContactRecord = {
       id: contact.id,
@@ -360,12 +321,17 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
       intendedRole: contact.intended_role ?? null,
       profileId: contact.profile_id ?? base?.profileId ?? null,
       personType: normalizeCrmPersonType(contact.person_type) ?? base?.personType ?? null,
+      isCampusMember,
       fieldOfExpertise: isInternalUser ? base!.fieldOfExpertise : mergeArray(contact.field_of_expertise, base?.fieldOfExpertise),
       skills: isInternalUser ? base!.skills : mergeArray(contact.skills, base?.skills),
       pictureUrl: isInternalUser ? base!.pictureUrl : mergeText(contact.picture_url, base?.pictureUrl),
       bio: isInternalUser ? base!.bio : mergeText(contact.bio, base?.bio),
       title: isInternalUser ? base!.title : mergeText(contact.title, base?.title),
       organisation: isInternalUser ? base!.organisation : mergeText(contact.organisation, base?.organisation),
+      organisationUrl: mergeText(contact.organisation_url, base?.organisationUrl),
+      linkedinUrl: mergeText(contact.linkedin_url, base?.linkedinUrl),
+      continent: normalizeCrmContinent(contact.continent) ?? base?.continent ?? null,
+      links: linksByContact.get(contact.id) ?? base?.links ?? [],
       associatedProjects: projectIds.map((id) => initiativeMap.get(id)).filter(Boolean) as string[],
       associatedProjectIds: projectIds,
       associatedEvents: eventIds.map((id) => eventMap.get(id)).filter(Boolean) as string[],
@@ -384,7 +350,7 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
       privacyNotes: contact.privacy_notes,
       retentionReviewAt: contact.retention_review_at,
       sourceLabel: contact.source_label ?? base?.sourceLabel ?? 'CRM contact',
-      tags: contact.tags.length > 0 ? contact.tags : base?.tags ?? [],
+      tags,
       notes: contact.notes ?? base?.notes ?? null,
       recentInteractions: (interactionsByContact.get(contact.id) ?? []).slice(0, 12),
     }
@@ -408,9 +374,9 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     profilesResult,
     { data: initiativeMembers },
     { data: initiatives },
-    campusResult,
     { data: events },
     crmContactsResult,
+    contactLinksResult,
     crmInitiativesResult,
     crmEventsResult,
     crmInteractionsResult,
@@ -423,12 +389,9 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
       .order('name'),
     supabase.from('initiative_members').select('user_id, initiative_id, role'),
     supabase.from('initiatives').select('id, title').order('title'),
-    supabase
-      .from('campus_members')
-      .select('id, name, organisation, role_description, country, platform_profile_id, initiative_affiliations, last_channel_activity, date_welcomed, welcomed_by_peter, notes, whatsapp_id')
-      .order('name'),
     supabase.from('events').select('id, name, event_type, start_date').order('start_date', { ascending: false }).limit(160),
     crmSupabase.from('comms_crm_contacts').select('*').order('updated_at', { ascending: false }),
+    crmSupabase.from('comms_crm_contact_links').select('id, contact_id, kind, label, url, position').order('position', { ascending: true }),
     crmSupabase.from('comms_crm_contact_initiatives').select('contact_id, initiative_id'),
     crmSupabase.from('comms_crm_contact_events').select('contact_id, event_id, relationship_type'),
     crmSupabase
@@ -449,24 +412,15 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     profiles = (fallback.data as RawProfileRow[] | null) ?? []
   }
 
-  let campusMembers = campusResult.data as RawCampusMemberRow[] | null
-  if (campusResult.error) {
-    const fallback = await supabase
-      .from('campus_members')
-      .select('id, name, organisation, role_description, country, platform_profile_id, initiative_affiliations, last_channel_activity, date_welcomed, welcomed_by_peter, notes')
-      .order('name')
-    campusMembers = (fallback.data as RawCampusMemberRow[] | null) ?? []
-  }
-
   const ownerLabels = new Map((profiles ?? []).map((p) => [p.id, p.name ?? p.email ?? '']))
 
   const records = assembleCrmRecords({
     profiles: profiles ?? [],
     initiativeMembers: (initiativeMembers ?? []) as Array<{ user_id: string; initiative_id: string }>,
     initiatives: (initiatives ?? []) as Array<{ id: string; title: string }>,
-    campusMembers: campusMembers ?? [],
     events: (events ?? []) as Array<{ id: string; name: string; event_type: string; start_date: string | null }>,
     crmContacts: crmContactsResult.error ? [] : (crmContactsResult.data as RawCrmContactRow[]) ?? [],
+    contactLinks: contactLinksResult.error ? [] : (contactLinksResult.data as RawCrmContactLinkRow[]) ?? [],
     crmInitiatives: crmInitiativesResult.error ? [] : crmInitiativesResult.data ?? [],
     crmEventLinks: crmEventsResult.error ? [] : crmEventsResult.data ?? [],
     crmInteractions: crmInteractionsResult.error ? [] : crmInteractionsResult.data ?? [],

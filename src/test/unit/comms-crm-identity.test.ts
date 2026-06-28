@@ -10,7 +10,6 @@ import {
 import {
   assembleCrmRecords,
   type AssembleInput,
-  type RawCampusMemberRow,
   type RawCrmContactRow,
   type RawProfileRow,
 } from '@/lib/comms-crm-data'
@@ -106,23 +105,6 @@ function profile(partial: Partial<RawProfileRow> & { id: string }): RawProfileRo
   }
 }
 
-function campus(partial: Partial<RawCampusMemberRow> & { id: string }): RawCampusMemberRow {
-  return {
-    name: 'Unnamed',
-    organisation: null,
-    role_description: null,
-    country: null,
-    platform_profile_id: null,
-    initiative_affiliations: [],
-    last_channel_activity: null,
-    date_welcomed: null,
-    welcomed_by_peter: false,
-    notes: null,
-    whatsapp_id: null,
-    ...partial,
-  }
-}
-
 function crm(partial: Partial<RawCrmContactRow> & { id: string }): RawCrmContactRow {
   return {
     source_type: 'manual',
@@ -135,6 +117,10 @@ function crm(partial: Partial<RawCrmContactRow> & { id: string }): RawCrmContact
     profile_id: null,
     normalized_email: null,
     person_type: null,
+    is_campus_member: false,
+    linkedin_url: null,
+    organisation_url: null,
+    continent: null,
     field_of_expertise: [],
     skills: [],
     picture_url: null,
@@ -166,9 +152,9 @@ function emptyInput(partial: Partial<AssembleInput> = {}): AssembleInput {
     profiles: [],
     initiativeMembers: [],
     initiatives: [],
-    campusMembers: [],
     events: [],
     crmContacts: [],
+    contactLinks: [],
     crmInitiatives: [],
     crmEventLinks: [],
     crmInteractions: [],
@@ -194,11 +180,31 @@ describe('assembleCrmRecords', () => {
     expect(record.platformStatus).toBe('invited')
   })
 
-  it('treats a World Campus member as an internal contact, not external', () => {
-    const [record] = assembleCrmRecords(emptyInput({ campusMembers: [campus({ id: 'm1', name: 'Bob' })] }))
+  it('treats an imported campus member with a non-i2l email as an internal contact', () => {
+    const [record] = assembleCrmRecords(
+      emptyInput({
+        crmContacts: [crm({ id: 'c1', full_name: 'Bob', email: 'bob@gmail.com', is_campus_member: true, contact_kind: null })],
+      })
+    )
+    expect(record.isCampusMember).toBe(true)
     expect(record.contactKind).toBe('internal_contact')
     expect(record.segment).toBe('internal')
-    expect(record.platformStatus).toBe('none')
+    expect(record.tags).toContain('world-campus')
+  })
+
+  it('attaches public-footprint links to the matching contact', () => {
+    const [record] = assembleCrmRecords(
+      emptyInput({
+        crmContacts: [crm({ id: 'c1', full_name: 'Dr Cite', email: 'cite@uni.edu', is_campus_member: true })],
+        contactLinks: [
+          { id: 'l1', contact_id: 'c1', kind: 'publication', label: 'ORCID', url: 'https://orcid.org/x', position: 1 },
+          { id: 'l2', contact_id: 'c1', kind: 'talk', label: 'Keynote', url: null, position: 1 },
+        ],
+      })
+    )
+    expect(record.links).toHaveLength(2)
+    expect(record.links[0]).toMatchObject({ kind: 'publication', label: 'ORCID' })
+    expect(record.continent).toBeNull()
   })
 
   it('keeps a third-party CRM row external', () => {
@@ -238,15 +244,16 @@ describe('assembleCrmRecords', () => {
     expect(record.tags).toContain('vip')
   })
 
-  it('does NOT duplicate a campus member linked to a profile', () => {
+  it('folds an imported campus-member row onto a matching profile and flags it', () => {
     const records = assembleCrmRecords(
       emptyInput({
         profiles: [profile({ id: 'p1', name: 'Eve', email: 'eve@inspire2live.org' })],
-        campusMembers: [campus({ id: 'm1', name: 'Eve', platform_profile_id: 'p1', welcomed_by_peter: true })],
+        crmContacts: [crm({ id: 'c1', full_name: 'Eve (import)', email: 'eve@inspire2live.org', is_campus_member: true })],
       })
     )
     expect(records).toHaveLength(1)
     expect(records[0].contactKind).toBe('internal_user')
+    expect(records[0].isCampusMember).toBe(true)
     expect(records[0].tags).toContain('world-campus')
   })
 
