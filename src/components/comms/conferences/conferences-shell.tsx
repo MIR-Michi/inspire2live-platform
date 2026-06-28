@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
 import { useConferenceRun } from '@/components/comms/use-conference-run'
+import { FindMoreDialog } from '@/components/comms/conferences/find-more-dialog'
 import {
   CONFERENCE_STAGE_LABELS,
   CONFERENCE_STAGES,
@@ -62,6 +63,13 @@ function detailPrefetchRank(conf: ConferenceView): number {
   const start = conf.startDate ? Date.parse(conf.startDate) : Number.MAX_SAFE_INTEGER
   const normalizedStart = Number.isNaN(start) ? Number.MAX_SAFE_INTEGER : start
   return normalizedStart - conf.relevance * 60 * 60 * 1000
+}
+
+function optionLabel(value: string): string {
+  return value
+    .split('_')
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(' ')
 }
 
 export function ConferencesShell({
@@ -178,8 +186,8 @@ export function ConferencesShell({
   }
 
   return (
-    <section className="flex min-h-[calc(100vh-8rem)] flex-col gap-5">
-      <header className="flex flex-wrap items-end justify-between gap-3">
+    <section className="flex h-[calc(100vh-7rem)] min-h-0 flex-col gap-4 overflow-hidden">
+      <header className="flex shrink-0 flex-wrap items-end justify-between gap-3">
         <div>
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
           <h1 className="text-2xl font-semibold text-neutral-900">Oncology conferences</h1>
@@ -187,11 +195,14 @@ export function ConferencesShell({
             Saved oncology conference cache, refreshed nightly in the background. Shortlist the ones worth attending and track them through to follow-up.
           </p>
         </div>
-        <RefreshControl run={run} aiEnabled={aiEnabled} />
+        <div className="flex flex-wrap items-end gap-2">
+          <FindMoreDialog aiEnabled={aiEnabled} />
+          <RefreshControl run={run} aiEnabled={aiEnabled} />
+        </div>
       </header>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1 border-b border-neutral-200">
+      <div className="flex shrink-0 flex-wrap gap-1 border-b border-neutral-200">
         {TABS.map(({ key, label }) => {
           const count = key === 'upcoming' ? partitions.upcoming.length : partitions[key].length
           const active = tab === key
@@ -215,12 +226,12 @@ export function ConferencesShell({
       </div>
 
       {tab === 'upcoming' && (
-        <FiltersBar data={data} filters={filters} onChange={setFilters} resultCount={filteredUpcoming.length} />
+        <FiltersBar data={data} conferences={partitions.upcoming} filters={filters} onChange={setFilters} resultCount={filteredUpcoming.length} />
       )}
 
       {/* Master-detail */}
-      <div className="grid min-h-0 flex-1 gap-4 lg:h-[calc(100vh-18rem)] lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <div className="min-h-[360px] pr-1 lg:h-full lg:overflow-y-scroll">
+      <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+        <div className="min-h-[360px] pr-1 lg:h-full lg:min-h-0 lg:overflow-y-scroll">
           {visible.length === 0 ? (
             <EmptyState tab={tab} aiEnabled={aiEnabled} run={run} />
           ) : (
@@ -234,7 +245,7 @@ export function ConferencesShell({
           )}
         </div>
 
-        <div className="min-h-[360px] lg:h-full lg:overflow-y-scroll">
+        <div className="min-h-[360px] lg:h-full lg:min-h-0 lg:overflow-y-scroll">
           <ConferenceDetailPane
             conf={selected}
             detail={selected ? details[selected.id] : undefined}
@@ -275,18 +286,61 @@ function RefreshControl({ run, aiEnabled }: { run: ReturnType<typeof useConferen
 
 function FiltersBar({
   data,
+  conferences,
   filters,
   onChange,
   resultCount,
 }: {
   data: ConferencesData
+  conferences: ConferenceView[]
   filters: ConferenceFilters
   onChange: (next: ConferenceFilters) => void
   resultCount: number
 }) {
   const set = (patch: Partial<ConferenceFilters>) => onChange({ ...filters, ...patch })
+  const regionLabels = useMemo(() => new Map(data.regions.map((r) => [r.value, r.label])), [data.regions])
+
+  const regionOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const conf of filterConferences(conferences, { ...filters, region: 'all' })) {
+      counts.set(conf.region, (counts.get(conf.region) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => (regionLabels.get(a[0] as never) ?? a[0]).localeCompare(regionLabels.get(b[0] as never) ?? b[0]))
+      .map(([value, count]) => ({ value, label: `${regionLabels.get(value as never) ?? optionLabel(value)} (${count})` }))
+  }, [conferences, filters, regionLabels])
+
+  const focusOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const conf of filterConferences(conferences, { ...filters, focus: 'all' })) {
+      if (!conf.mainFocus) continue
+      counts.set(conf.mainFocus, (counts.get(conf.mainFocus) ?? 0) + 1)
+    }
+    return [...counts.entries()]
+      .sort((a, b) => a[0].localeCompare(b[0]))
+      .map(([value, count]) => ({ value, label: `${value} (${count})` }))
+  }, [conferences, filters])
+
+  const formatOptions = useMemo(() => {
+    const counts = new Map<string, number>()
+    for (const conf of filterConferences(conferences, { ...filters, format: 'all' })) {
+      counts.set(conf.format, (counts.get(conf.format) ?? 0) + 1)
+    }
+    return Object.entries(FORMAT_LABELS)
+      .filter(([value]) => (counts.get(value) ?? 0) > 0)
+      .map(([value, label]) => ({ value, label: `${label} (${counts.get(value) ?? 0})` }))
+  }, [conferences, filters])
+
+  useEffect(() => {
+    const patch: Partial<ConferenceFilters> = {}
+    if (filters.region && filters.region !== 'all' && !regionOptions.some((opt) => opt.value === filters.region)) patch.region = 'all'
+    if (filters.focus && filters.focus !== 'all' && !focusOptions.some((opt) => opt.value === filters.focus)) patch.focus = 'all'
+    if (filters.format && filters.format !== 'all' && !formatOptions.some((opt) => opt.value === filters.format)) patch.format = 'all'
+    if (Object.keys(patch).length > 0) onChange({ ...filters, ...patch })
+  }, [filters, focusOptions, formatOptions, onChange, regionOptions])
+
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+    <div className="flex shrink-0 flex-wrap items-center gap-x-3 gap-y-2 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
       <input
         type="search"
         value={filters.search ?? ''}
@@ -298,26 +352,21 @@ function FiltersBar({
         label="Region"
         value={filters.region ?? 'all'}
         onChange={(v) => set({ region: v })}
-        options={[{ value: 'all', label: 'All regions' }, ...data.regions.map((r) => ({ value: r.value, label: `${r.label} (${r.count})` }))]}
+        options={[{ value: 'all', label: 'All regions' }, ...regionOptions]}
       />
-      {data.focuses.length > 0 && (
+      {focusOptions.length > 0 && (
         <Select
           label="Focus"
           value={filters.focus ?? 'all'}
           onChange={(v) => set({ focus: v })}
-          options={[{ value: 'all', label: 'All focuses' }, ...data.focuses.map((f) => ({ value: f, label: f }))]}
+          options={[{ value: 'all', label: 'All focuses' }, ...focusOptions]}
         />
       )}
       <Select
         label="Format"
         value={filters.format ?? 'all'}
         onChange={(v) => set({ format: v })}
-        options={[
-          { value: 'all', label: 'Any format' },
-          { value: 'in_person', label: 'In person' },
-          { value: 'virtual', label: 'Virtual' },
-          { value: 'hybrid', label: 'Hybrid' },
-        ]}
+        options={[{ value: 'all', label: 'Any format' }, ...formatOptions]}
       />
       <span className="ml-auto text-xs font-medium text-neutral-400">{resultCount} shown</span>
     </div>
