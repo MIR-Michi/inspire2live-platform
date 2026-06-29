@@ -5,15 +5,42 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { normalizeRole } from '@/lib/role-access'
-import { CAMPUS_MEETING_TASK_TEMPLATE } from '@/lib/campus-meeting-tasks'
+import {
+  CAMPUS_MEETING_TASK_TEMPLATE,
+  CAMPUS_MEETING_DEFAULT_OWNERS,
+} from '@/lib/campus-meeting-tasks'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { generateCampusBriefing, type CampusBriefing } from '@/lib/ai/campus-briefing'
+import { notifyUser } from '@/lib/notify'
 
 /**
- * Seeds the standard campus-meeting checklist as comms_tasks tied to a newly
- * created session. Each task is owned by the meeting's creator (every task must
- * have an owner) and can be reassigned afterwards. Best-effort: a failure to
- * seed must not block creating the meeting itself.
+ * Resolves the template's default owner names (e.g. "Peter Kapitein") to
+ * platform profile ids. Names without a matching profile are simply absent from
+ * the map, so the caller falls back to the meeting's creator.
+ */
+async function resolveDefaultOwnerIds(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  supabase: any
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>()
+  if (CAMPUS_MEETING_DEFAULT_OWNERS.length === 0) return map
+
+  const { data } = await supabase.from('profiles').select('id, name')
+  for (const profile of (data ?? []) as Array<{ id: string; name: string | null }>) {
+    const name = (profile.name ?? '').trim().toLowerCase()
+    if (!name) continue
+    const match = CAMPUS_MEETING_DEFAULT_OWNERS.find((owner) => owner.toLowerCase() === name)
+    if (match && !map.has(match)) map.set(match, profile.id)
+  }
+  return map
+}
+
+/**
+ * Seeds the standard campus-meeting checklist as comms_tasks tied to a session.
+ * Each task is owned by its template default owner (resolved by name), falling
+ * back to the meeting's creator so every task always has an owner. created_at is
+ * staggered by index so the checklist renders in template order. Best-effort: a
+ * failure to seed must not block creating the meeting itself.
  */
 async function seedCampusMeetingTasks(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -21,12 +48,18 @@ async function seedCampusMeetingTasks(
   sessionId: string,
   ownerId: string
 ) {
-  const rows = CAMPUS_MEETING_TASK_TEMPLATE.map((title) => ({
-    title,
-    owner_id: ownerId,
+  const ownerIds = await resolveDefaultOwnerIds(supabase)
+  const total = CAMPUS_MEETING_TASK_TEMPLATE.length
+  const base = Date.now()
+  const rows = CAMPUS_MEETING_TASK_TEMPLATE.map((task, index) => ({
+    title: task.title,
+    owner_id: (task.defaultOwnerName && ownerIds.get(task.defaultOwnerName)) || ownerId,
     status: 'not_started',
     campus_session_id: sessionId,
     created_by: ownerId,
+    // Stagger into the recent past so the checklist renders in template order
+    // (loaders sort by created_at asc) without dating tasks in the future.
+    created_at: new Date(base - (total - index) * 1000).toISOString(),
   }))
   await supabase.from('comms_tasks').insert(rows)
 }
@@ -513,4 +546,193 @@ export async function addCampusActionItem(formData: FormData) {
   revalidatePath('/app/comms/campus')
   revalidatePath('/app/comms/campus-log')
   revalidatePath(returnPath)
+}
+
+// ─── Campus meeting checklist (comms_tasks scoped to a campus session) ────────
+
+type ChecklistResult = { ok: boolean; message?: string }
+
+const VALID_TASK_STATUSES = new Set(['not_started', 'in_progress', 'completed', 'skipped'])
+
+function isIsoDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+function revalidateChecklist(year?: string, month?: string) {
+  revalidatePath('/app/comms/campus')
+  revalidatePath('/app/comms/campus-log')
+  revalidatePath('/app/dashboard')
+  if (year && month) revalidatePath(`/app/comms/campus/${year}/${month}`)
+}
+
+/** Seeds the standard checklist for a session that has none yet (e.g. an older
+ *  meeting created before the template existed). No-op if tasks already exist. */
+export async function seedCampusChecklist(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const sessionId = asText(formData.get('session_id'))
+    if (!sessionId) return { ok: false, message: 'Session is required.' }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabase as any
+    const { count } = await db
+      .from('comms_tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('campus_session_id', sessionId)
+
+    if ((count ?? 0) > 0) return { ok: true }
+
+    await seedCampusMeetingTasks(supabase, sessionId, user.id)
+    revalidateChecklist(asText(formData.get('year')), asText(formData.get('month')))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to set up checklist.' }
+  }
+}
+
+export async function createCampusChecklistTask(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const sessionId = asText(formData.get('session_id'))
+    const title = asText(formData.get('title'))
+    const ownerId = asText(formData.get('owner_id')) || null
+    const dueInput = asText(formData.get('due_date'))
+    const dueDate = isIsoDate(dueInput) ? dueInput : null
+
+    if (!sessionId) return { ok: false, message: 'Session is required.' }
+    if (!title) return { ok: false, message: 'A task title is required.' }
+
+    const resolvedOwnerId = ownerId ?? user.id
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('comms_tasks').insert({
+      title: title.slice(0, 200),
+      owner_id: resolvedOwnerId,
+      due_date: dueDate,
+      status: 'not_started',
+      campus_session_id: sessionId,
+      created_by: user.id,
+    })
+    if (error) return { ok: false, message: error.message }
+
+    if (resolvedOwnerId !== user.id) {
+      await notifyUser({
+        recipientId: resolvedOwnerId,
+        event: 'task_assigned',
+        title: 'New campus task assigned to you',
+        body: `You have been assigned a campus task: "${title}"`,
+        linkUrl: '/app/comms/campus',
+      })
+    }
+
+    revalidateChecklist(asText(formData.get('year')), asText(formData.get('month')))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to add task.' }
+  }
+}
+
+export async function updateCampusChecklistTask(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const taskId = asText(formData.get('task_id'))
+    if (!taskId) return { ok: false, message: 'Task is required.' }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const patch: Record<string, any> = { updated_at: new Date().toISOString() }
+
+    const title = asText(formData.get('title'))
+    if (formData.has('title')) {
+      if (!title) return { ok: false, message: 'A task title is required.' }
+      patch.title = title.slice(0, 200)
+    }
+    if (formData.has('owner_id')) {
+      patch.owner_id = asText(formData.get('owner_id')) || null
+    }
+    if (formData.has('status')) {
+      const status = asText(formData.get('status'))
+      if (!VALID_TASK_STATUSES.has(status)) return { ok: false, message: 'Invalid status.' }
+      patch.status = status
+    }
+    if (formData.has('due_date')) {
+      const dueInput = asText(formData.get('due_date'))
+      patch.due_date = isIsoDate(dueInput) ? dueInput : null
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('comms_tasks').update(patch).eq('id', taskId)
+    if (error) return { ok: false, message: error.message }
+
+    // Notify a newly assigned owner (unless they assigned it to themselves).
+    if (patch.owner_id && patch.owner_id !== user.id) {
+      await notifyUser({
+        recipientId: patch.owner_id,
+        event: 'task_assigned',
+        title: 'A campus task was assigned to you',
+        body: `You are now the owner of: "${asText(formData.get('task_title')) || 'a campus task'}"`,
+        linkUrl: '/app/comms/campus',
+      })
+    }
+
+    revalidateChecklist(asText(formData.get('year')), asText(formData.get('month')))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to update task.' }
+  }
+}
+
+export async function deleteCampusChecklistTask(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase } = await requireCommsOperator()
+    const taskId = asText(formData.get('task_id'))
+    if (!taskId) return { ok: false, message: 'Task is required.' }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('comms_tasks').delete().eq('id', taskId)
+    if (error) return { ok: false, message: error.message }
+
+    revalidateChecklist(asText(formData.get('year')), asText(formData.get('month')))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to delete task.' }
+  }
+}
+
+// ─── Campus presenter (highlight of the month) ───────────────────────────────
+
+export async function saveCampusPresenter(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase } = await requireCommsOperator()
+    const sessionId = asText(formData.get('session_id'))
+    if (!sessionId) return { ok: false, message: 'Session is required.' }
+
+    const name = asText(formData.get('presenter_name'))
+    const avatarUrl = asText(formData.get('presenter_avatar_url'))
+    const linkedinUrl = asText(formData.get('presenter_linkedin_url'))
+
+    const safeUrl = (value: string) => {
+      if (!value) return null
+      try {
+        const url = new URL(value)
+        return url.protocol === 'http:' || url.protocol === 'https:' ? value.slice(0, 1000) : null
+      } catch {
+        return null
+      }
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any)
+      .from('campus_sessions')
+      .update({
+        presenter_name: name ? name.slice(0, 200) : null,
+        presenter_avatar_url: safeUrl(avatarUrl),
+        presenter_linkedin_url: safeUrl(linkedinUrl),
+      })
+      .eq('id', sessionId)
+    if (error) return { ok: false, message: error.message }
+
+    revalidateChecklist(asText(formData.get('year')), asText(formData.get('month')))
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to save presenter.' }
+  }
 }
