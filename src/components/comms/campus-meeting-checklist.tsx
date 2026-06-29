@@ -9,6 +9,7 @@ import {
   updateCampusChecklistTask,
 } from '@/app/app/comms/campus-log/actions'
 import { UNIFIED_STATUS_ORDER, UNIFIED_STATUS_META } from '@/lib/comms-status'
+import { ConfettiBurst } from '@/components/ui/confetti-burst'
 import type { CommsTaskRecord } from '@/lib/comms-tasks'
 import type { TeamMemberOption } from '@/lib/comms-dashboard-data'
 
@@ -40,6 +41,23 @@ export function CampusMeetingChecklist({
   const [newTitle, setNewTitle] = useState('')
   const [newOwner, setNewOwner] = useState('')
   const [newDue, setNewDue] = useState('')
+  // Transient animation state: which row is "popping", and a counter to fire
+  // confetti when the last open task gets completed.
+  const [poppingId, setPoppingId] = useState<string | null>(null)
+  const [fireKey, setFireKey] = useState(0)
+
+  const isClosed = (status: string) => status === 'completed' || status === 'skipped'
+
+  const changeStatus = (task: CommsTaskRecord, value: string) => {
+    if (value === 'completed' && task.status !== 'completed') {
+      setPoppingId(task.id)
+      window.setTimeout(() => setPoppingId((id) => (id === task.id ? null : id)), 450)
+      // Celebrate when this completion clears the last open task.
+      const everyOtherClosed = tasks.every((t) => t.id === task.id || isClosed(t.status))
+      if (everyOtherClosed) setFireKey((k) => k + 1)
+    }
+    run(updateCampusChecklistTask, { task_id: task.id, status: value })
+  }
 
   const withContext = (fields: Record<string, string>) => {
     const fd = new FormData()
@@ -110,17 +128,22 @@ export function CampusMeetingChecklist({
   }
 
   return (
-    <div>
+    <div className="relative">
+      <ConfettiBurst fireKey={fireKey} />
       <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
-        {tasks.map((task) => (
-          <li key={task.id} className="flex flex-wrap items-center gap-2 px-4 py-3">
+        {tasks.map((task, index) => (
+          <li
+            key={task.id}
+            className="flex flex-wrap items-center gap-2 px-4 py-3 animate-fade-up"
+            style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
+          >
             {/* Status */}
             <select
               value={task.status}
-              onChange={(e) => run(updateCampusChecklistTask, { task_id: task.id, status: e.target.value })}
+              onChange={(e) => changeStatus(task, e.target.value)}
               disabled={pending}
               aria-label={`Status of ${task.title}`}
-              className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold focus:outline-none ${UNIFIED_STATUS_META[task.status].badgeClass}`}
+              className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold transition-transform focus:outline-none ${UNIFIED_STATUS_META[task.status].badgeClass} ${poppingId === task.id ? 'animate-check-pop' : ''}`}
             >
               {UNIFIED_STATUS_ORDER.map((s) => (
                 <option key={s} value={s}>
@@ -149,10 +172,12 @@ export function CampusMeetingChecklist({
                   setEditingId(task.id)
                   setEditingTitle(task.title)
                 }}
-                className="min-w-0 flex-1 truncate text-left text-sm font-medium text-neutral-900 hover:text-blue-800"
+                className={`min-w-0 flex-1 truncate text-left text-sm font-medium transition-colors hover:text-blue-800 ${task.status === 'completed' ? 'text-neutral-400' : 'text-neutral-900'}`}
                 title="Click to edit"
               >
-                {task.title}
+                <span className="strike-sweep" data-struck={task.status === 'completed'}>
+                  {task.title}
+                </span>
               </button>
             )}
 

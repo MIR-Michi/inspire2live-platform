@@ -219,8 +219,8 @@ export default async function CommsCampusPage({
             <div className="space-y-3">
               <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">Previous meetings</h2>
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {smallTiles.map((meeting) => (
-                  <SmallMeetingTile key={meeting.key} meeting={meeting} />
+                {smallTiles.map((meeting, index) => (
+                  <SmallMeetingTile key={meeting.key} meeting={meeting} index={index} />
                 ))}
               </div>
               {hasMore && !showAll && (
@@ -271,7 +271,7 @@ function BigMeetingTile({ meeting, label, tone }: { meeting: Meeting; label: str
     <Link
       href={`/app/comms/campus/${meeting.year}/${meeting.month}`}
       className={[
-        'flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+        'flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition-all duration-200 animate-fade-up hover:-translate-y-0.5 hover:shadow-md active:translate-y-0 active:scale-[0.995]',
         isNext ? 'border-blue-900 ring-1 ring-blue-900/40' : 'border-neutral-200',
       ].join(' ')}
     >
@@ -322,11 +322,12 @@ function BigMeetingTile({ meeting, label, tone }: { meeting: Meeting; label: str
   )
 }
 
-function SmallMeetingTile({ meeting }: { meeting: Meeting }) {
+function SmallMeetingTile({ meeting, index }: { meeting: Meeting; index: number }) {
   return (
     <Link
       href={`/app/comms/campus/${meeting.year}/${meeting.month}`}
-      className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm transition hover:border-orange-300 hover:shadow-md"
+      style={{ animationDelay: `${Math.min(index, 10) * 40}ms` }}
+      className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm transition-all duration-200 animate-fade-up hover:-translate-y-0.5 hover:border-orange-300 hover:shadow-md active:translate-y-0"
     >
       <PresenterAvatar
         src={meeting.presenterAvatarUrl}

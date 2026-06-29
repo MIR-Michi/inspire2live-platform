@@ -5,6 +5,7 @@ import Link from 'next/link'
 import { useFormStatus } from 'react-dom'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
 import { OptionalField } from '@/components/comms/optional-field'
+import { ConfettiBurst } from '@/components/ui/confetti-burst'
 import {
   CONFERENCE_STAGES,
   CONFERENCE_STAGE_LABELS,
@@ -811,6 +812,8 @@ function ConferenceTasks({
   const [adding, setAdding] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newOwner, setNewOwner] = useState('')
+  const [poppingId, setPoppingId] = useState<string | null>(null)
+  const [fireKey, setFireKey] = useState(0)
   const [pending, start] = useTransition()
 
   const attendeeProfileIds = new Set(attendees.map((a) => a.id))
@@ -834,6 +837,12 @@ function ConferenceTasks({
 
   const handleToggle = (task: ConferenceTask) => {
     const next: ConferenceTask['status'] = task.status === 'completed' ? 'not_started' : 'completed'
+    if (next === 'completed') {
+      setPoppingId(task.id)
+      window.setTimeout(() => setPoppingId((id) => (id === task.id ? null : id)), 450)
+      // Celebrate when this completion clears the last open task.
+      if (tasks.every((t) => t.id === task.id || t.status === 'completed')) setFireKey((k) => k + 1)
+    }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: next } : t)))
     start(async () => { await updateConferenceTaskStatus(task.id, next) })
   }
@@ -865,19 +874,26 @@ function ConferenceTasks({
       </div>
 
       {tasks.length > 0 && (
-        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
-          {tasks.map((task) => (
-            <div key={task.id} className="flex items-center gap-3 px-3 py-2.5">
+        <div className="relative divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
+          <ConfettiBurst fireKey={fireKey} />
+          {tasks.map((task, index) => (
+            <div
+              key={task.id}
+              className="flex items-center gap-3 px-3 py-2.5 animate-fade-up"
+              style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
+            >
               <button
                 type="button"
                 disabled={pending}
                 onClick={() => handleToggle(task)}
-                className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold transition', task.status === 'completed' ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'border-neutral-300 bg-white text-transparent'].join(' ')}
+                className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold transition-transform', task.status === 'completed' ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'border-neutral-300 bg-white text-transparent', poppingId === task.id ? 'animate-check-pop' : ''].join(' ')}
               >
                 ✓
               </button>
-              <span className={['flex-1 text-sm', task.status === 'completed' ? 'text-neutral-400 line-through' : 'text-neutral-700'].join(' ')}>
-                {task.title}
+              <span className={['flex-1 text-sm transition-colors', task.status === 'completed' ? 'text-neutral-400' : 'text-neutral-700'].join(' ')}>
+                <span className="strike-sweep" data-struck={task.status === 'completed'}>
+                  {task.title}
+                </span>
               </span>
               <select
                 value={task.ownerId ?? ''}
