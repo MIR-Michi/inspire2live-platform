@@ -169,8 +169,8 @@ function isMissingAssignmentTable(error: DbError | null | undefined): boolean {
   )
 }
 
-function assignmentSummary(conferenceId: string, conferenceName: string, notification: { status: string; detail: string }): string {
-  return `${assignmentToken(conferenceId)} Assigned to attend/contact ${conferenceName}. Notification status: ${notification.status}. ${notification.detail}`
+function assignmentSummary(conferenceId: string, conferenceName: string): string {
+  return `${assignmentToken(conferenceId)} Assigned to attend/contact ${conferenceName}.`
 }
 
 function notificationStatusFromSummary(summary: string): string {
@@ -732,14 +732,13 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
   }
 
   const conferenceName = String(conferenceResult.data.name)
-  const notification = await notifyConferenceContact(contact, conferenceName, input.conferenceId, auth.userId)
   const assignedAt = new Date().toISOString()
   const assignment = await db.from('conference_contact_assignments').upsert({
     conference_id: input.conferenceId,
     contact_id: contact.id,
     role: 'attendee',
-    notification_status: notification.status,
-    notification_detail: notification.detail,
+    notification_status: 'skipped',
+    notification_detail: null,
     assigned_by: auth.userId,
     assigned_at: assignedAt,
     updated_at: assignedAt,
@@ -749,7 +748,7 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
   const interaction = await db.from('comms_crm_interactions').insert({
     contact_id: contact.id,
     interaction_type: 'event',
-    summary: assignmentSummary(input.conferenceId, conferenceName, notification),
+    summary: assignmentSummary(input.conferenceId, conferenceName),
     occurred_at: assignedAt,
     created_by: auth.userId,
   })
@@ -765,7 +764,152 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
   revalidatePath(CONFERENCES_PATH)
   revalidatePath('/app/comms/crm')
   revalidatePath('/app/comms/crm/people')
-  revalidatePath('/app/comms/whatsapp')
 
-  return { ok: true, contact, message: `Assigned ${contact.fullName} to ${conferenceName}. ${notification.detail}` }
+  return { ok: true, contact, message: `Assigned ${contact.fullName} to ${conferenceName}.` }
+}
+
+export async function removeConferenceContact(assignmentId: string): Promise<ActionResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const db = createAdminClient() as unknown as ConferenceContactDb
+  const assignmentResult = await db
+    .from('conference_contact_assignments')
+    .select('id, conference_id, contact_id')
+    .eq('id', assignmentId)
+    .maybeSingle()
+
+  if (assignmentResult.error) return { ok: false, message: assignmentResult.error.message }
+  if (!assignmentResult.data) return { ok: false, message: 'Assignment not found.' }
+
+  const conferenceId = String(assignmentResult.data.conference_id)
+
+  const looseDb = auth.supabase as unknown as LooseDb
+  const { error } = await looseDb.from('conference_contact_assignments').delete().eq('id', assignmentId)
+  if (error) return { ok: false, message: error.message }
+
+  revalidatePath(CONFERENCES_PATH)
+  revalidatePath(`${CONFERENCES_PATH}/${conferenceId}`)
+  revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
+
+  return { ok: true, message: 'Attendee removed from conference.' }
+}
+
+export type ConferenceTask = {
+  id: string
+  title: string
+  status: 'not_started' | 'in_progress' | 'completed' | 'skipped'
+  ownerId: string | null
+  ownerName: string | null
+  dueDate: string | null
+}
+
+export async function loadConferenceTasks(conferenceId: string): Promise<ConferenceTask[]> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return []
+
+  const db = auth.supabase as unknown as {
+    from: (table: string) => {
+      select: (columns: string) => {
+        eq: (col: string, val: string) => {
+          order: (col: string, opts: { ascending: boolean }) => Promise<{ data: Array<Record<string, unknown>> | null }>
+        }
+      }
+    }
+  }
+  const { data } = await db
+    .from('comms_tasks')
+    .select('id, title, status, owner_id, due_date, profiles:owner_id(name)')
+    .eq('conference_id', conferenceId)
+    .order('created_at', { ascending: true })
+
+  return (data ?? []).map((row) => ({
+    id: String(row.id),
+    title: String(row.title ?? ''),
+    status: (['not_started', 'in_progress', 'completed', 'skipped'].includes(String(row.status)) ? String(row.status) : 'not_started') as ConferenceTask['status'],
+    ownerId: row.owner_id ? String(row.owner_id) : null,
+    ownerName: (row.profiles as { name?: string } | null)?.name ?? null,
+    dueDate: row.due_date ? String(row.due_date) : null,
+  }))
+}
+
+export async function createConferenceTask(input: {
+  conferenceId: string
+  title: string
+  ownerId?: string | null
+}): Promise<ActionResult & { task?: ConferenceTask }> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const title = input.title.trim().slice(0, 300)
+  if (!title) return { ok: false, message: 'Task title is required.' }
+
+  const db = auth.supabase as unknown as {
+    from: (table: string) => {
+      insert: (payload: Record<string, unknown>) => {
+        select: (columns: string) => { maybeSingle: () => Promise<{ data: Record<string, unknown> | null; error: { message: string } | null }> }
+      }
+    }
+  }
+  const { data, error } = await db.from('comms_tasks').insert({
+    title,
+    conference_id: input.conferenceId,
+    owner_id: input.ownerId ?? null,
+    status: 'not_started',
+    created_by: auth.userId,
+    updated_at: new Date().toISOString(),
+  }).select('id, title, status, owner_id, due_date').maybeSingle()
+
+  if (error) return { ok: false, message: error.message }
+  if (!data) return { ok: false, message: 'Could not create task.' }
+
+  revalidateConference(input.conferenceId)
+  return {
+    ok: true,
+    task: {
+      id: String(data.id),
+      title: String(data.title),
+      status: 'not_started',
+      ownerId: data.owner_id ? String(data.owner_id) : null,
+      ownerName: null,
+      dueDate: null,
+    },
+  }
+}
+
+export async function updateConferenceTaskStatus(taskId: string, status: ConferenceTask['status']): Promise<ActionResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const db = auth.supabase as unknown as LooseDb
+  const { error } = await db.from('comms_tasks').update({ status, updated_at: new Date().toISOString() }).eq('id', taskId)
+  if (error) return { ok: false, message: error.message }
+
+  revalidatePath(CONFERENCES_PATH)
+  return { ok: true }
+}
+
+export async function updateConferenceTaskOwner(taskId: string, ownerId: string | null, conferenceId: string): Promise<ActionResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const db = auth.supabase as unknown as LooseDb
+  const { error } = await db.from('comms_tasks').update({ owner_id: ownerId, updated_at: new Date().toISOString() }).eq('id', taskId)
+  if (error) return { ok: false, message: error.message }
+
+  revalidateConference(conferenceId)
+  return { ok: true }
+}
+
+export async function deleteConferenceTask(taskId: string, conferenceId: string): Promise<ActionResult> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return auth
+
+  const db = auth.supabase as unknown as LooseDb
+  const { error } = await db.from('comms_tasks').delete().eq('id', taskId)
+  if (error) return { ok: false, message: error.message }
+
+  revalidateConference(conferenceId)
+  return { ok: true }
 }

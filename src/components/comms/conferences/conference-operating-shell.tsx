@@ -8,6 +8,7 @@ import { OptionalField } from '@/components/comms/optional-field'
 import {
   CONFERENCE_STAGES,
   CONFERENCE_STAGE_LABELS,
+  type ConferenceAssignedContact,
   type ConferenceStage,
   type ConferenceView,
 } from '@/lib/comms-conferences'
@@ -22,9 +23,14 @@ import {
 import {
   addConferenceToShortlist,
   advanceConferenceStage,
+  createConferenceTask,
+  deleteConferenceTask,
   saveConferencePrep,
   setConferenceNotes,
   toggleConferencePrepFlag,
+  updateConferenceTaskOwner,
+  updateConferenceTaskStatus,
+  type ConferenceTask,
 } from '@/app/app/comms/conferences/actions'
 
 type Profile = { id: string; name: string | null; email: string }
@@ -66,6 +72,23 @@ function formatDateRange(start: string | null, end: string | null): string {
 
 // ─── Page ─────────────────────────────────────────────────────────────────────
 
+const AVATAR_COLORS = [
+  'bg-violet-100 text-violet-700',
+  'bg-orange-100 text-orange-700',
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-rose-100 text-rose-700',
+]
+
+function nameInitials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
 export function ConferenceOperatingShell({
   conference,
   stage,
@@ -74,6 +97,8 @@ export function ConferenceOperatingShell({
   profiles,
   podcastEvents,
   campusSessions,
+  assignedContacts = [],
+  initialTasks = [],
 }: {
   conference: ConferenceView
   stage: ConferenceStage | null
@@ -82,6 +107,8 @@ export function ConferenceOperatingShell({
   profiles: Profile[]
   podcastEvents: Option[]
   campusSessions: Option[]
+  assignedContacts?: ConferenceAssignedContact[]
+  initialTasks?: ConferenceTask[]
 }) {
   const [realStage, setRealStage] = useState<ConferenceStage | null>(stage)
   const [activeStage, setActiveStage] = useState<ConferenceStage>(stage ?? 'intended')
@@ -100,10 +127,30 @@ export function ConferenceOperatingShell({
 
       {/* Header */}
       <div className="space-y-1.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StatusBadge label={conference.regionLabel} tone="neutral" />
-          {conference.mainFocus && <StatusBadge label={conference.mainFocus} tone="blue" />}
-          {realStage && <StatusBadge label={CONFERENCE_STAGE_LABELS[realStage]} tone={STAGE_TONES[realStage]} />}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge label={conference.regionLabel} tone="neutral" />
+            {conference.mainFocus && <StatusBadge label={conference.mainFocus} tone="blue" />}
+            {realStage && <StatusBadge label={CONFERENCE_STAGE_LABELS[realStage]} tone={STAGE_TONES[realStage]} />}
+          </div>
+          {assignedContacts.length > 0 && (
+            <div className="flex -space-x-1.5 shrink-0">
+              {assignedContacts.slice(0, 5).map((c, i) => (
+                <span
+                  key={c.id}
+                  title={c.fullName}
+                  className={['flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-bold', AVATAR_COLORS[i % AVATAR_COLORS.length]].join(' ')}
+                >
+                  {nameInitials(c.fullName)}
+                </span>
+              ))}
+              {assignedContacts.length > 5 && (
+                <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[10px] font-bold text-neutral-500">
+                  +{assignedContacts.length - 5}
+                </span>
+              )}
+            </div>
+          )}
         </div>
         <h1 className="text-2xl font-semibold text-neutral-900">{conference.name}</h1>
         <p className="text-sm text-neutral-500">
@@ -142,6 +189,17 @@ export function ConferenceOperatingShell({
             <FollowUpPanel conference={conference} prep={prep} podcastEvents={podcastEvents} campusSessions={campusSessions} onAdvanced={handleAdvanced} />
           )}
           {activeStage === 'archived' && <ArchivedPanel conference={conference} prep={prep} profiles={profiles} />}
+
+          {realStage !== null && (
+            <div className="mt-6">
+              <ConferenceTasks
+                conferenceId={conference.id}
+                initialTasks={initialTasks}
+                profiles={profiles}
+                attendees={assignedContacts}
+              />
+            </div>
+          )}
         </div>
 
         <Sidebar conference={conference} prep={prep} profiles={profiles} />
@@ -731,6 +789,158 @@ function Sidebar({ conference, prep, profiles }: { conference: ConferenceView; p
             )}
           </div>
         </div>
+      )}
+    </div>
+  )
+}
+
+// ─── Conference tasks ──────────────────────────────────────────────────────────
+
+function ConferenceTasks({
+  conferenceId,
+  initialTasks,
+  profiles,
+  attendees,
+}: {
+  conferenceId: string
+  initialTasks: ConferenceTask[]
+  profiles: Profile[]
+  attendees: ConferenceAssignedContact[]
+}) {
+  const [tasks, setTasks] = useState<ConferenceTask[]>(initialTasks)
+  const [adding, setAdding] = useState(false)
+  const [newTitle, setNewTitle] = useState('')
+  const [newOwner, setNewOwner] = useState('')
+  const [pending, start] = useTransition()
+
+  const attendeeProfileIds = new Set(attendees.map((a) => a.id))
+  const attendeeProfiles = profiles.filter((p) => attendeeProfileIds.has(p.id))
+  const defaultOwner = attendeeProfiles[0]?.id ?? ''
+
+  const handleAdd = () => {
+    const title = newTitle.trim()
+    if (!title) return
+    start(async () => {
+      const result = await createConferenceTask({ conferenceId, title, ownerId: newOwner || null })
+      if (result.ok && result.task) {
+        const ownerProfile = profiles.find((p) => p.id === (newOwner || null))
+        setTasks((prev) => [...prev, { ...result.task!, ownerName: ownerProfile?.name ?? null }])
+        setNewTitle('')
+        setNewOwner(defaultOwner)
+        setAdding(false)
+      }
+    })
+  }
+
+  const handleToggle = (task: ConferenceTask) => {
+    const next: ConferenceTask['status'] = task.status === 'completed' ? 'not_started' : 'completed'
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: next } : t)))
+    start(async () => { await updateConferenceTaskStatus(task.id, next) })
+  }
+
+  const handleOwnerChange = (task: ConferenceTask, ownerId: string) => {
+    const ownerProfile = profiles.find((p) => p.id === ownerId)
+    setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, ownerId: ownerId || null, ownerName: ownerProfile?.name ?? null } : t)))
+    start(async () => { await updateConferenceTaskOwner(task.id, ownerId || null, conferenceId) })
+  }
+
+  const handleDelete = (taskId: string) => {
+    setTasks((prev) => prev.filter((t) => t.id !== taskId))
+    start(async () => { await deleteConferenceTask(taskId, conferenceId) })
+  }
+
+  return (
+    <div>
+      <div className="mb-2 flex items-center justify-between px-1">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tasks</p>
+        {!adding && (
+          <button
+            type="button"
+            onClick={() => { setAdding(true); setNewOwner(defaultOwner) }}
+            className="text-xs font-semibold text-neutral-400 hover:text-orange-700"
+          >
+            + Add task
+          </button>
+        )}
+      </div>
+
+      {tasks.length > 0 && (
+        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
+          {tasks.map((task) => (
+            <div key={task.id} className="flex items-center gap-3 px-3 py-2.5">
+              <button
+                type="button"
+                disabled={pending}
+                onClick={() => handleToggle(task)}
+                className={['flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold transition', task.status === 'completed' ? 'border-emerald-400 bg-emerald-50 text-emerald-600' : 'border-neutral-300 bg-white text-transparent'].join(' ')}
+              >
+                ✓
+              </button>
+              <span className={['flex-1 text-sm', task.status === 'completed' ? 'text-neutral-400 line-through' : 'text-neutral-700'].join(' ')}>
+                {task.title}
+              </span>
+              <select
+                value={task.ownerId ?? ''}
+                onChange={(e) => handleOwnerChange(task, e.target.value)}
+                disabled={pending}
+                className="rounded border border-neutral-200 px-1.5 py-1 text-xs text-neutral-600 focus:border-orange-400 focus:outline-none"
+              >
+                <option value="">Unassigned</option>
+                {profiles.map((p) => (
+                  <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+                ))}
+              </select>
+              <button
+                type="button"
+                onClick={() => handleDelete(task.id)}
+                disabled={pending}
+                className="text-neutral-300 hover:text-red-500 disabled:opacity-40"
+                aria-label="Delete task"
+              >
+                ×
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {adding && (
+        <div className="mt-2 flex gap-2 rounded-xl border border-violet-100 bg-violet-50/50 p-3">
+          <input
+            type="text"
+            value={newTitle}
+            onChange={(e) => setNewTitle(e.target.value)}
+            onKeyDown={(e) => { if (e.key === 'Enter') handleAdd() }}
+            placeholder="Task title…"
+            autoFocus
+            className="flex-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm focus:border-violet-400 focus:outline-none"
+          />
+          <select
+            value={newOwner}
+            onChange={(e) => setNewOwner(e.target.value)}
+            className="rounded-lg border border-neutral-200 px-2 py-1.5 text-xs text-neutral-600 focus:border-violet-400 focus:outline-none"
+          >
+            <option value="">Unassigned</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+            ))}
+          </select>
+          <button
+            type="button"
+            onClick={handleAdd}
+            disabled={pending || !newTitle.trim()}
+            className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
+          >
+            Add
+          </button>
+          <button type="button" onClick={() => setAdding(false)} className="text-xs text-neutral-400 hover:text-neutral-700">
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {tasks.length === 0 && !adding && (
+        <p className="px-1 text-xs text-neutral-400">No tasks yet. Add one above.</p>
       )}
     </div>
   )

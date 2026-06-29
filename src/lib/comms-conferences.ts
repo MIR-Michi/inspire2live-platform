@@ -369,6 +369,68 @@ export async function loadConferenceTracking(
   }
 }
 
+type SingleConferenceDb = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (column: string, value: string) => {
+        order: (column: string, opts: { ascending: boolean }) => RowsResult
+        limit: (n: number) => RowsResult
+        maybeSingle: () => RowResult
+      }
+      in: (column: string, values: string[]) => { limit: (n: number) => RowsResult }
+    }
+  }
+}
+
+/** Load assigned contacts for a single conference (for the operating page). */
+export async function loadConferenceAssignedContacts(
+  supabase: SupabaseClient<Database>,
+  conferenceId: string
+): Promise<ConferenceAssignedContact[]> {
+  const db = supabase as unknown as SingleConferenceDb
+  try {
+    const assignmentResult = await db
+      .from('conference_contact_assignments')
+      .select(ASSIGNMENT_COLUMNS)
+      .eq('conference_id', conferenceId)
+      .order('assigned_at', { ascending: false })
+
+    if (assignmentResult.error) return []
+    const assignments = assignmentResult.data ?? []
+    if (assignments.length === 0) return []
+
+    const contactIds = Array.from(new Set(assignments.map((row) => String(row.contact_id ?? '')).filter(Boolean)))
+    const contactResult = await db
+      .from('comms_crm_contacts')
+      .select(CONTACT_COLUMNS)
+      .in('id', contactIds)
+      .limit(Math.max(contactIds.length, 1))
+
+    if (contactResult.error) return []
+    const contacts = new Map((contactResult.data ?? []).map((row) => [String(row.id), row]))
+
+    return assignments.flatMap((assignment) => {
+      const contact = contacts.get(String(assignment.contact_id))
+      if (!contact) return []
+      return [{
+        id: String(contact.id),
+        fullName: String(contact.full_name ?? 'Unnamed contact'),
+        email: cleanText(contact.email),
+        whatsappId: cleanText(contact.whatsapp_id),
+        meta: contactMeta(contact),
+        assignmentId: String(assignment.id),
+        role: String(assignment.role ?? 'attendee'),
+        notificationStatus: String(assignment.notification_status ?? 'queued'),
+        notificationDetail: cleanText(assignment.notification_detail),
+        assignedAt: String(assignment.assigned_at),
+      }]
+    })
+  } catch (error) {
+    console.error('[conferences] loadConferenceAssignedContacts failed', error)
+    return []
+  }
+}
+
 // ── Pure filtering / grouping (shared with unit tests) ───────────────────────
 
 /** Apply the region / focus / format / search filters to a conference list. */

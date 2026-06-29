@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { saveCampusSession } from '@/app/app/comms/campus-log/actions'
+import { saveCampusSession, addCampusSessionFile, deleteCampusSessionFile } from '@/app/app/comms/campus-log/actions'
 import { triggerSessionTeamsStub } from '@/app/app/comms/integration-actions'
 import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
 import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-panel'
@@ -12,6 +12,8 @@ import { createClient } from '@/lib/supabase/server'
 
 const CAMPUS_SESSION_DETAIL_SELECT =
   'id, session_date, theme, summary, decisions_for_publication, action_items_for_publication, recording_url, slides_media_id, participating_hub_ids, initiative_ids, published_outputs'
+
+const FILE_ASSET_TYPES = ['slides', 'document', 'recording', 'photo', 'video', 'report'] as const
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(new Date(value))
@@ -28,13 +30,11 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
     .maybeSingle()
   if (!session) notFound()
 
-  const [{ data: hubs }, { data: initiatives }, { data: contentEntries }, { data: slidesAsset }] = await Promise.all([
+  const [{ data: hubs }, { data: initiatives }, { data: contentEntries }, { data: sessionFiles }] = await Promise.all([
     supabase.from('hubs').select('id, name').order('name'),
     supabase.from('initiatives').select('id, title').order('title'),
     supabase.from('content_calendar').select('id, title, status').order('title'),
-    session.slides_media_id
-      ? supabase.from('media_assets').select('id, title').eq('id', session.slides_media_id).maybeSingle()
-      : Promise.resolve({ data: null }),
+    supabase.from('media_assets').select('id, title, asset_type, sharepoint_url').eq('session_id', session.id).order('created_at', { ascending: true }),
   ])
 
   const [transcript, teamMembers] = await Promise.all([
@@ -110,18 +110,10 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
           />
         </label>
 
-        <div className="grid gap-4 md:grid-cols-2">
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold text-neutral-800">Recording URL</span>
-            <input type="url" name="recording_url" defaultValue={session.recording_url ?? ''} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" />
-          </label>
-
-          <label className="block space-y-2">
-            <span className="text-sm font-semibold text-neutral-800">Slides reference (media asset ID)</span>
-            <input name="slides_media_id" defaultValue={session.slides_media_id ?? ''} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" />
-            {slidesAsset && <span className="text-xs text-neutral-500">Current slide asset: {slidesAsset.title}</span>}
-          </label>
-        </div>
+        <label className="block space-y-2">
+          <span className="text-sm font-semibold text-neutral-800">Recording URL</span>
+          <input type="url" name="recording_url" defaultValue={session.recording_url ?? ''} className="w-full rounded-xl border border-neutral-200 px-3 py-2 text-sm" />
+        </label>
 
         {stubFlags.teams && (
           <div className="rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
@@ -185,6 +177,56 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
           </button>
         </div>
       </form>
+
+      <section className="space-y-4 rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
+        <h2 className="text-sm font-semibold text-neutral-900">Session files</h2>
+
+        {(sessionFiles ?? []).length > 0 ? (
+          <ul className="space-y-2">
+            {(sessionFiles ?? []).map((file) => (
+              <li key={file.id} className="flex items-center justify-between gap-3 rounded-xl border border-neutral-200 px-4 py-2 text-sm">
+                <div className="min-w-0">
+                  <p className="truncate font-semibold text-neutral-800">{file.title}</p>
+                  <p className="truncate text-xs text-neutral-500">
+                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-600">{file.asset_type}</span>
+                    {file.sharepoint_url && (
+                      <a href={file.sharepoint_url} target="_blank" rel="noopener noreferrer" className="ml-2 text-orange-700 hover:underline">
+                        Open ↗
+                      </a>
+                    )}
+                  </p>
+                </div>
+                <form action={deleteCampusSessionFile}>
+                  <input type="hidden" name="file_id" value={file.id} />
+                  <input type="hidden" name="session_id" value={session.id} />
+                  <button type="submit" className="shrink-0 text-xs font-semibold text-neutral-400 hover:text-red-600">
+                    Remove
+                  </button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="text-sm text-neutral-500">No files attached yet.</p>
+        )}
+
+        <form action={addCampusSessionFile} className="space-y-3 rounded-xl border border-dashed border-orange-200 bg-orange-50/40 px-4 py-4">
+          <input type="hidden" name="session_id" value={session.id} />
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Add file</p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <input name="title" required placeholder="Title (e.g. Slides June 2026)" className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:outline-none" />
+            <select name="asset_type" className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:outline-none">
+              {FILE_ASSET_TYPES.map((t) => (
+                <option key={t} value={t}>{t.charAt(0).toUpperCase() + t.slice(1)}</option>
+              ))}
+            </select>
+            <input name="url" required type="url" placeholder="SharePoint or external URL" className="rounded-xl border border-neutral-200 bg-white px-3 py-2 text-sm focus:border-orange-400 focus:outline-none sm:col-span-2" />
+          </div>
+          <button type="submit" className="rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
+            Attach file
+          </button>
+        </form>
+      </section>
     </div>
   )
 }
