@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createCampusSession } from '@/app/app/comms/campus-log/actions'
+import { PresenterAvatar } from '@/components/comms/presenter-avatar'
 
 function monthKey(value: string) {
   return value.slice(0, 7)
@@ -9,11 +10,6 @@ function monthKey(value: string) {
 function formatMonth(key: string) {
   const [year, month] = key.split('-').map(Number)
   return new Intl.DateTimeFormat('en-GB', { month: 'long', year: 'numeric' }).format(new Date(year, month - 1, 1))
-}
-
-function currentMonthKey() {
-  const now = new Date()
-  return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 }
 
 function lastWednesdayLabel(key: string) {
@@ -27,6 +23,10 @@ function formatMeetingTitle(key: string) {
   return `${formatMonth(key)} - ${lastWednesdayLabel(key)}`
 }
 
+function dateOnly(value: Date) {
+  return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, '0')}-${String(value.getDate()).padStart(2, '0')}`
+}
+
 function formatMemberMeta(member: { organisation: string | null; country: string | null; date_welcomed: string | null }) {
   const parts = [member.organisation, member.country].filter(Boolean)
   if (member.date_welcomed) {
@@ -35,20 +35,36 @@ function formatMemberMeta(member: { organisation: string | null; country: string
   return parts.join(' - ') || 'Campus member'
 }
 
+type Meeting = {
+  id: string
+  key: string
+  year: string
+  month: string
+  date: string
+  title: string
+  description: string | null
+  presenterName: string | null
+  presenterAvatarUrl: string | null
+  unreviewed: number
+}
+
+const SMALL_TILE_LIMIT = 6
+
 export default async function CommsCampusPage({
   searchParams,
 }: {
-  searchParams?: Promise<{ tab?: string }>
+  searchParams?: Promise<{ tab?: string; show?: string }>
 }) {
   const params = (await searchParams) ?? {}
   const activeTab = params.tab === 'members' ? 'members' : 'meetings'
+  const showAll = params.show === 'all'
   const supabase = await createClient()
   const [{ data: sessions }, { data: intakeItems }, { data: members }] = await Promise.all([
     supabase
       .from('campus_sessions')
       .select('id, session_date, theme, summary')
       .order('session_date', { ascending: false })
-      .limit(12),
+      .limit(24),
     supabase
       .from('intake_items')
       .select('id, status, content_type, captured_at, raw_content')
@@ -63,39 +79,52 @@ export default async function CommsCampusPage({
       .limit(80),
   ])
 
-  const monthKeys = new Set<string>([currentMonthKey()])
-  for (const session of sessions ?? []) monthKeys.add(monthKey(session.session_date))
-  for (const item of intakeItems ?? []) monthKeys.add(monthKey(item.captured_at))
-  for (const member of members ?? []) {
-    if (member.date_welcomed) monthKeys.add(monthKey(member.date_welcomed))
+  // Presenter info lives in migration-00105 columns that aren't in the generated
+  // types yet; fetch separately and tolerate a not-yet-applied migration.
+  const presenterById = new Map<string, { name: string | null; avatar: string | null }>()
+  const sessionIds = (sessions ?? []).map((s) => s.id)
+  if (sessionIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: presenterRows } = await (supabase as any)
+      .from('campus_sessions')
+      .select('id, presenter_name, presenter_avatar_url')
+      .in('id', sessionIds)
+    for (const row of (presenterRows ?? []) as Array<{ id: string; presenter_name: string | null; presenter_avatar_url: string | null }>) {
+      presenterById.set(row.id, { name: row.presenter_name ?? null, avatar: row.presenter_avatar_url ?? null })
+    }
   }
 
-  const currentKey = currentMonthKey()
-  const cards = Array.from(monthKeys)
-    .sort((a, b) => b.localeCompare(a))
-    .slice(0, 8)
-    .map((key) => {
-      const monthSessions = (sessions ?? []).filter((session) => monthKey(session.session_date) === key)
-      const monthIntake = (intakeItems ?? []).filter((item) => monthKey(item.captured_at) === key)
-      const unreviewedCount = monthIntake.filter((item) => item.status === 'unreviewed').length
-      const articleCount = monthIntake.filter((item) => item.content_type === 'article_share').length
-      const mediaCount = monthIntake.filter((item) => item.content_type === 'media_request').length
-      const memberCount = (members ?? []).filter((member) => member.date_welcomed && monthKey(member.date_welcomed) === key).length
-      const latestSession = monthSessions[0]
-      const [year, month] = key.split('-')
-      return {
-        key,
-        year,
-        month,
-        monthSessions,
-        intakeCount: monthIntake.length,
-        unreviewedCount,
-        articleCount,
-        mediaCount,
-        memberCount,
-        latestSession,
-      }
+  // One meeting per month (most recent session of the month wins on tie).
+  const byMonth = new Map<string, Meeting>()
+  for (const session of sessions ?? []) {
+    const key = monthKey(session.session_date)
+    if (byMonth.has(key)) continue
+    const [year, month] = key.split('-')
+    const monthIntake = (intakeItems ?? []).filter((item) => monthKey(item.captured_at) === key)
+    const presenter = presenterById.get(session.id)
+    byMonth.set(key, {
+      id: session.id,
+      key,
+      year,
+      month,
+      date: session.session_date,
+      title: formatMeetingTitle(key),
+      description: session.summary || session.theme || null,
+      presenterName: presenter?.name ?? null,
+      presenterAvatarUrl: presenter?.avatar ?? null,
+      unreviewed: monthIntake.filter((item) => item.status === 'unreviewed').length,
     })
+  }
+
+  const meetings = Array.from(byMonth.values()) // session_date desc
+  const today = dateOnly(new Date())
+  const upcoming = meetings.filter((m) => m.date >= today).sort((a, b) => a.date.localeCompare(b.date))
+  const past = meetings.filter((m) => m.date < today) // already desc
+  const nextMeeting = upcoming[0] ?? null
+  const previousMeeting = past[0] ?? null
+  const olderMeetings = past.slice(1)
+  const smallTiles = showAll ? olderMeetings : olderMeetings.slice(0, SMALL_TILE_LIMIT)
+  const hasMore = olderMeetings.length > SMALL_TILE_LIMIT
 
   return (
     <section className="mx-auto max-w-5xl space-y-5">
@@ -146,54 +175,40 @@ export default async function CommsCampusPage({
       </nav>
 
       {activeTab === 'meetings' ? (
-        <div className="space-y-4">
-          {cards.map((card) => {
-            const isCurrent = card.key === currentKey
-            const isPast = card.key < currentKey
-            return (
-              <Link
-                key={card.key}
-                href={`/app/comms/campus/${card.year}/${card.month}`}
-                className={[
-                  'block overflow-hidden rounded-xl border bg-white shadow-sm transition hover:border-orange-300',
-                  isCurrent ? 'border-blue-900 ring-1 ring-blue-900' : 'border-neutral-200',
-                ].join(' ')}
-              >
-                <div className={isCurrent ? 'bg-blue-900 px-5 py-4 text-white' : 'bg-neutral-50 px-5 py-4 text-neutral-900'}>
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div>
-                      <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${isCurrent ? 'text-blue-200' : 'text-neutral-400'}`}>
-                        {isPast ? 'Past meeting' : 'Next meeting'}
-                      </p>
-                      <h2 className="mt-1 text-xl font-semibold">{formatMeetingTitle(card.key)}</h2>
-                    </div>
-                    {card.unreviewedCount > 0 ? (
-                      <span className="rounded-full bg-orange-600 px-3 py-1 text-xs font-bold text-white">
-                        {card.unreviewedCount} incoming items
-                      </span>
-                    ) : (
-                      <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700">
-                        {isPast ? 'Completed' : 'Ready'}
-                      </span>
-                    )}
-                  </div>
+        <div className="space-y-6">
+          {/* Dominant tiles: previous + next */}
+          {previousMeeting || nextMeeting ? (
+            <div className="grid gap-4 md:grid-cols-2">
+              {previousMeeting && <BigMeetingTile meeting={previousMeeting} label="Previous meeting" tone="past" />}
+              {nextMeeting && <BigMeetingTile meeting={nextMeeting} label="Next meeting" tone="next" />}
+            </div>
+          ) : (
+            <p className="rounded-xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
+              No campus meetings yet. Use “+ New meeting” to create the first one.
+            </p>
+          )}
+
+          {/* Smaller tiles: older previous meetings */}
+          {smallTiles.length > 0 && (
+            <div className="space-y-3">
+              <h2 className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">Previous meetings</h2>
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {smallTiles.map((meeting) => (
+                  <SmallMeetingTile key={meeting.key} meeting={meeting} />
+                ))}
+              </div>
+              {hasMore && !showAll && (
+                <div className="pt-1">
+                  <Link
+                    href="/app/comms/campus?show=all"
+                    className="inline-flex items-center gap-1 text-sm font-semibold text-orange-700 hover:text-orange-800"
+                  >
+                    Show all meetings &rarr;
+                  </Link>
                 </div>
-                <div className="grid gap-3 px-5 py-4 md:grid-cols-[1fr_auto] md:items-center">
-                  <p className="text-sm leading-5 text-neutral-700">
-                    {card.latestSession?.summary ||
-                      card.latestSession?.theme ||
-                      'Agenda building in progress from current-month intake, welcomes, and campus session notes.'}
-                  </p>
-                  <div className="flex flex-wrap items-center gap-2 text-sm">
-                    <span className="rounded-full bg-blue-50 px-3 py-1 font-medium text-blue-700">{card.articleCount} articles</span>
-                    <span className="rounded-full bg-violet-50 px-3 py-1 font-medium text-violet-700">{card.mediaCount} media</span>
-                    <span className="rounded-full bg-emerald-50 px-3 py-1 font-medium text-emerald-700">{card.monthSessions.length} sessions</span>
-                    <span className="pl-2 font-semibold text-blue-900">Open -&gt;</span>
-                  </div>
-                </div>
-              </Link>
-            )
-          })}
+              )}
+            </div>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -221,5 +236,75 @@ export default async function CommsCampusPage({
         </div>
       )}
     </section>
+  )
+}
+
+function BigMeetingTile({ meeting, label, tone }: { meeting: Meeting; label: string; tone: 'past' | 'next' }) {
+  const isNext = tone === 'next'
+  return (
+    <Link
+      href={`/app/comms/campus/${meeting.year}/${meeting.month}`}
+      className={[
+        'flex flex-col overflow-hidden rounded-2xl border bg-white shadow-sm transition hover:-translate-y-0.5 hover:shadow-md',
+        isNext ? 'border-blue-900 ring-1 ring-blue-900/40' : 'border-neutral-200',
+      ].join(' ')}
+    >
+      <div className={isNext ? 'bg-blue-900 px-5 py-3 text-white' : 'bg-neutral-50 px-5 py-3 text-neutral-900'}>
+        <div className="flex items-center justify-between gap-2">
+          <p className={`text-xs font-semibold uppercase tracking-[0.14em] ${isNext ? 'text-blue-200' : 'text-neutral-400'}`}>
+            {label}
+          </p>
+          {meeting.unreviewed > 0 ? (
+            <span className="rounded-full bg-orange-600 px-2.5 py-0.5 text-[11px] font-bold text-white">
+              {meeting.unreviewed} incoming
+            </span>
+          ) : (
+            <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold ${isNext ? 'bg-white/15 text-white' : 'bg-emerald-50 text-emerald-700'}`}>
+              {isNext ? 'Ready' : 'Completed'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="flex flex-1 gap-4 px-5 py-4">
+        <PresenterAvatar
+          src={meeting.presenterAvatarUrl}
+          name={meeting.presenterName}
+          className="h-20 w-20 shrink-0"
+          rounded="rounded-xl"
+        />
+        <div className="min-w-0 flex-1">
+          <h3 className="text-lg font-semibold leading-tight text-neutral-900">{meeting.title}</h3>
+          {meeting.presenterName && <p className="mt-0.5 text-sm font-medium text-blue-900">{meeting.presenterName}</p>}
+          <p className="mt-2 line-clamp-4 text-sm leading-5 text-neutral-600">
+            {meeting.description || 'Agenda building in progress from this month’s intake, welcomes, and session notes.'}
+          </p>
+        </div>
+      </div>
+
+      <div className="flex items-center justify-end px-5 pb-4">
+        <span className="text-sm font-semibold text-blue-900">Open -&gt;</span>
+      </div>
+    </Link>
+  )
+}
+
+function SmallMeetingTile({ meeting }: { meeting: Meeting }) {
+  return (
+    <Link
+      href={`/app/comms/campus/${meeting.year}/${meeting.month}`}
+      className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm transition hover:border-orange-300 hover:shadow-md"
+    >
+      <PresenterAvatar
+        src={meeting.presenterAvatarUrl}
+        name={meeting.presenterName}
+        className="h-12 w-12 shrink-0"
+        rounded="rounded-lg"
+      />
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-semibold text-neutral-900">{formatMonth(meeting.key)}</p>
+        <p className="truncate text-xs text-neutral-500">{meeting.presenterName || lastWednesdayLabel(meeting.key)}</p>
+      </div>
+    </Link>
   )
 }
