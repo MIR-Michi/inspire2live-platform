@@ -128,6 +128,13 @@ export type AssembleInput = {
     next_follow_up_at: string | null
   }>
   ownerLabels?: Map<string, string>
+  conferenceAssignments?: Array<{
+    contact_id: string
+    conference_id: string
+    conference_name: string
+    start_date: string | null
+    role: string
+  }>
 }
 
 function mergeText(primary: string | null | undefined, fallback: string | null | undefined) {
@@ -232,6 +239,7 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
       tags: [...(profile.expertise_tags ?? []), 'internal'].filter(Boolean),
       notes: null,
       recentInteractions: [],
+      conferences: [],
     })
     indexEmail(profile.email, key)
   }
@@ -259,6 +267,14 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
   for (const link of input.crmEventLinks) {
     eventIdsByContact.set(link.contact_id, [...(eventIdsByContact.get(link.contact_id) ?? []), link.event_id])
   }
+  const conferencesByContact = new Map<string, CrmContactRecord['conferences']>()
+  for (const ca of input.conferenceAssignments ?? []) {
+    conferencesByContact.set(ca.contact_id, [
+      ...(conferencesByContact.get(ca.contact_id) ?? []),
+      { id: ca.conference_id, name: ca.conference_name, startDate: ca.start_date, role: ca.role },
+    ])
+  }
+
   const interactionsByContact = new Map<string, CrmContactRecord['recentInteractions']>()
   for (const interaction of input.crmInteractions) {
     interactionsByContact.set(interaction.contact_id, [
@@ -353,6 +369,7 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
       tags,
       notes: contact.notes ?? base?.notes ?? null,
       recentInteractions: (interactionsByContact.get(contact.id) ?? []).slice(0, 12),
+      conferences: conferencesByContact.get(contact.id) ?? [],
     }
 
     if (key) records.delete(key)
@@ -381,6 +398,7 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     crmEventsResult,
     crmInteractionsResult,
     connectorBacklogResult,
+    conferenceAssignmentsResult,
   ] = await Promise.all([
     // Select status + onboarding_completed when present; fall back if 00053 isn't applied.
     supabase
@@ -400,6 +418,10 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
       .order('occurred_at', { ascending: false })
       .limit(200),
     crmSupabase.from('comms_crm_connector_backlog').select('*').order('integration_target'),
+    crmSupabase
+      .from('conference_contact_assignments')
+      .select('contact_id, conference_id, role, conferences(id, name, start_date)')
+      .order('assigned_at', { ascending: false }),
   ])
 
   // Graceful fallback for environments without the status/onboarding columns.
@@ -425,6 +447,18 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     crmEventLinks: crmEventsResult.error ? [] : crmEventsResult.data ?? [],
     crmInteractions: crmInteractionsResult.error ? [] : crmInteractionsResult.data ?? [],
     ownerLabels,
+    conferenceAssignments: conferenceAssignmentsResult.error ? [] : (conferenceAssignmentsResult.data ?? []).map((row: {
+      contact_id: string
+      conference_id: string
+      role: string
+      conferences: { id: string; name: string; start_date: string | null } | null
+    }) => ({
+      contact_id: String(row.contact_id),
+      conference_id: String(row.conference_id),
+      conference_name: row.conferences?.name ?? '',
+      start_date: row.conferences?.start_date ?? null,
+      role: String(row.role ?? 'attendee'),
+    })).filter((row: { conference_name: string }) => row.conference_name),
   })
 
   const connectorBacklog: CrmConnectorBacklogItem[] = connectorBacklogResult.error

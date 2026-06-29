@@ -169,8 +169,8 @@ function isMissingAssignmentTable(error: DbError | null | undefined): boolean {
   )
 }
 
-function assignmentSummary(conferenceId: string, conferenceName: string, notification: { status: string; detail: string }): string {
-  return `${assignmentToken(conferenceId)} Assigned to attend/contact ${conferenceName}. Notification status: ${notification.status}. ${notification.detail}`
+function assignmentSummary(conferenceId: string, conferenceName: string): string {
+  return `${assignmentToken(conferenceId)} Assigned to attend/contact ${conferenceName}.`
 }
 
 function notificationStatusFromSummary(summary: string): string {
@@ -732,14 +732,13 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
   }
 
   const conferenceName = String(conferenceResult.data.name)
-  const notification = await notifyConferenceContact(contact, conferenceName, input.conferenceId, auth.userId)
   const assignedAt = new Date().toISOString()
   const assignment = await db.from('conference_contact_assignments').upsert({
     conference_id: input.conferenceId,
     contact_id: contact.id,
     role: 'attendee',
-    notification_status: notification.status,
-    notification_detail: notification.detail,
+    notification_status: 'skipped',
+    notification_detail: null,
     assigned_by: auth.userId,
     assigned_at: assignedAt,
     updated_at: assignedAt,
@@ -749,7 +748,7 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
   const interaction = await db.from('comms_crm_interactions').insert({
     contact_id: contact.id,
     interaction_type: 'event',
-    summary: assignmentSummary(input.conferenceId, conferenceName, notification),
+    summary: assignmentSummary(input.conferenceId, conferenceName),
     occurred_at: assignedAt,
     created_by: auth.userId,
   })
@@ -765,7 +764,6 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
   revalidatePath(CONFERENCES_PATH)
   revalidatePath('/app/comms/crm')
   revalidatePath('/app/comms/crm/people')
-  revalidatePath('/app/comms/whatsapp')
 
-  return { ok: true, contact, message: `Assigned ${contact.fullName} to ${conferenceName}. ${notification.detail}` }
+  return { ok: true, contact, message: `Assigned ${contact.fullName} to ${conferenceName}.` }
 }

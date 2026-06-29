@@ -746,6 +746,23 @@ function ContactDetail({
             </div>
           )}
 
+          {contact.conferences.length > 0 && (
+            <div className="mt-4 space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Conferences</p>
+              <div className="flex flex-wrap gap-2">
+                {contact.conferences.map((conf) => (
+                  <Link
+                    key={conf.id}
+                    href={`/app/comms/conferences/${conf.id}`}
+                    className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+                  >
+                    {conf.name} ↗
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           {contact.links.length > 0 && (
             <div className="mt-4 space-y-2">
               <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-500">Public footprint</p>
