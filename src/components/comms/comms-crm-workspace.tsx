@@ -859,8 +859,8 @@ export function CommsCrmWorkspace({
   const externalCount = records.filter((record) => record.contactKind === 'external').length
 
   return (
-    <section className="space-y-6">
-      <header className="space-y-2">
+    <section className="flex flex-col gap-6 xl:h-[calc(100vh-7rem)] xl:min-h-0 xl:overflow-hidden">
+      <header className="space-y-2 xl:shrink-0">
         <Link href="/app/comms/crm" className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700 hover:text-orange-900">
           ← CRM
         </Link>
@@ -886,12 +886,12 @@ export function CommsCrmWorkspace({
       </header>
 
       {!crmReady && (
-        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900 xl:shrink-0">
           CRM schema migration is not applied yet. Existing platform records are still visible, but saving CRM enrichment requires migration 00048.
         </div>
       )}
 
-      <form className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm">
+      <form className="rounded-lg border border-neutral-200 bg-white p-4 shadow-sm xl:shrink-0">
         <input type="hidden" name="kind" value={activeKind === 'all' ? '' : activeKind} />
         <input type="hidden" name="type" value={activePersonType} />
         <input type="hidden" name="filter" value={activeFilter ?? ''} />
@@ -906,7 +906,7 @@ export function CommsCrmWorkspace({
         </label>
       </form>
 
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm">
+      <div className="flex flex-wrap items-center gap-x-4 gap-y-2 rounded-lg border border-neutral-200 bg-white px-4 py-3 shadow-sm xl:shrink-0">
         <NavSelect
           label="Contact type"
           value={activeKind}
@@ -941,9 +941,9 @@ export function CommsCrmWorkspace({
         />
       </div>
 
-      <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
-        {/* Left: compact one-line list */}
-        <div className="space-y-2">
+      <div className="grid gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        {/* Left: compact one-line list — scrolls independently */}
+        <div className="space-y-2 xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pr-1">
           {visibleRecords.length === 0 && (
             <div className="rounded-lg border border-dashed border-neutral-300 bg-white px-6 py-12">
               <p className="text-sm font-semibold text-neutral-900">No people match this filter yet.</p>
@@ -981,8 +981,8 @@ export function CommsCrmWorkspace({
           </ul>
         </div>
 
-        {/* Right: detail pane */}
-        <div className="xl:sticky xl:top-4 xl:self-start">
+        {/* Right: detail pane — scrolls independently */}
+        <div className="xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pl-1">
           {selected ? (
             <ContactDetail
               key={selected.id}

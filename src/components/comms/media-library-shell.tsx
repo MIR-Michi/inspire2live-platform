@@ -349,8 +349,8 @@ export function MediaLibraryShell({
   }, [assets])
 
   return (
-    <section className="space-y-6">
-      <header className="flex flex-wrap items-start justify-between gap-4">
+    <section className="flex flex-col gap-6 xl:h-[calc(100vh-7rem)] xl:min-h-0 xl:overflow-hidden">
+      <header className="flex flex-wrap items-start justify-between gap-4 xl:shrink-0">
         <div className="space-y-2">
           <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">SharePoint-linked media</p>
           <h2 className="text-2xl font-semibold text-neutral-900">Media library</h2>
@@ -387,7 +387,7 @@ export function MediaLibraryShell({
         initiatives={initiatives}
       />
 
-      <section className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm md:grid-cols-4">
+      <section className="grid gap-4 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm md:grid-cols-4 xl:shrink-0">
         <label className="block space-y-2 md:col-span-2">
           <span className="text-sm font-semibold text-neutral-800">Search assets</span>
           <input
@@ -447,8 +447,8 @@ export function MediaLibraryShell({
         </label>
       </section>
 
-      <div className="grid gap-6 xl:grid-cols-[1.25fr_0.95fr]">
-        <section className="space-y-4">
+      <div className="grid gap-6 xl:min-h-0 xl:flex-1 xl:grid-cols-[1.25fr_0.95fr]">
+        <section className="space-y-4 xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pr-1">
           {filteredAssets.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-neutral-300 bg-white px-6 py-14 text-center">
               <p className="text-base font-semibold text-neutral-900">No media assets match these filters.</p>
@@ -506,7 +506,7 @@ export function MediaLibraryShell({
           )}
         </section>
 
-        <section className="space-y-4">
+        <section className="space-y-4 xl:h-full xl:min-h-0 xl:overflow-y-auto xl:pl-1">
           <div className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <h3 className="text-lg font-semibold text-neutral-900">Media recovery queue</h3>
             <p className="mt-1 text-sm text-neutral-500">
