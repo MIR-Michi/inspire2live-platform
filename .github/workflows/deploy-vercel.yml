@@ -2,21 +2,36 @@ name: Deploy to Vercel (Production)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Triggers:
-#   • Manual trigger from the GitHub Actions UI (workflow_dispatch)
+#   • push to main touching supabase/** → apply remote database migrations
+#     automatically (the gap that previously required a manual run). The Vercel
+#     GitHub integration already deploys the app code on merge, so on push we
+#     ONLY apply migrations and deliberately skip the Vercel CLI deploy to avoid
+#     double-deploying.
+#   • workflow_dispatch → full manual path: apply migrations AND deploy to Vercel
+#     via the CLI (e.g. to force a redeploy or deploy without a code change).
 #
-# Branch health is handled by CI plus the Vercel GitHub integration. Production
-# deployment applies remote database migrations and depends on deployment
-# secrets/remote Supabase state, so it must not keep the main branch red.
+# Trade-off: a broken migration on main will now mark the main commit red. That
+# is the intended signal — production schema is out of sync until it's fixed —
+# and PR-time validation (db-migrations.yml) exists to catch most breakage first.
 #
 # Required GitHub Secrets  (Settings → Secrets → Actions):
-#   VERCEL_TOKEN              – https://vercel.com/account/tokens
-#   VERCEL_ORG_ID             – vercel.com → project → Settings → General
-#   VERCEL_PROJECT_ID         – same page
 #   SUPABASE_ACCESS_TOKEN     – https://supabase.com/dashboard/account/tokens
 #   SUPABASE_DB_PASSWORD      – Supabase project → Settings → Database → Database password
+#   VERCEL_TOKEN              – https://vercel.com/account/tokens   (manual deploy only)
+#   VERCEL_ORG_ID             – vercel.com → project → Settings → General (manual deploy only)
+#   VERCEL_PROJECT_ID         – same page                          (manual deploy only)
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "supabase/migrations/**"
+      - "supabase/seed.sql"
+      - "supabase/config.toml"
+      # Re-sync the remote DB whenever this workflow changes too — handy to apply
+      # a migration that landed on main before auto-push existed.
+      - ".github/workflows/deploy-vercel.yml"
   workflow_dispatch:
     inputs:
       reason:
@@ -24,9 +39,14 @@ on:
         required: false
         default: "Manual trigger"
 
+# Never let two production pushes apply migrations concurrently.
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
 jobs:
   deploy-production:
-    name: Deploy to Vercel Production
+    name: Apply migrations & (manual) deploy
     runs-on: ubuntu-latest
 
     env:
@@ -37,13 +57,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Validate required secrets
+      - name: Validate migration secrets
         shell: bash
         run: |
           missing=""
-          [ -z "${{ secrets.VERCEL_TOKEN }}" ]           && missing="$missing VERCEL_TOKEN"
-          [ -z "${{ secrets.VERCEL_ORG_ID }}" ]          && missing="$missing VERCEL_ORG_ID"
-          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]      && missing="$missing VERCEL_PROJECT_ID"
           [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]  && missing="$missing SUPABASE_ACCESS_TOKEN"
           [ -z "${{ secrets.SUPABASE_DB_PASSWORD }}" ]   && missing="$missing SUPABASE_DB_PASSWORD"
           if [ -n "$missing" ]; then
@@ -64,11 +81,30 @@ jobs:
           supabase link --project-ref bvccuypipogprmjxctxp
           supabase db push --include-all --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
 
+      # ── Vercel CLI deploy: manual dispatch only ──────────────────────────────
+      # On push, the Vercel GitHub integration already deploys the app, so these
+      # steps are skipped to avoid a duplicate deployment.
+      - name: Validate Vercel secrets
+        if: github.event_name == 'workflow_dispatch'
+        shell: bash
+        run: |
+          missing=""
+          [ -z "${{ secrets.VERCEL_TOKEN }}" ]           && missing="$missing VERCEL_TOKEN"
+          [ -z "${{ secrets.VERCEL_ORG_ID }}" ]          && missing="$missing VERCEL_ORG_ID"
+          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]      && missing="$missing VERCEL_PROJECT_ID"
+          if [ -n "$missing" ]; then
+            echo "::error::Missing required secrets:$missing"
+            echo "Add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
+            exit 1
+          fi
+
       - name: Setup pnpm
+        if: github.event_name == 'workflow_dispatch'
         uses: pnpm/action-setup@v4
         # version is read from packageManager field in package.json
 
       - name: Setup Node.js
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -76,27 +112,43 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
+        if: github.event_name == 'workflow_dispatch'
         run: pnpm install --frozen-lockfile
 
       - name: Pull Vercel environment
+        if: github.event_name == 'workflow_dispatch'
         run: pnpm vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
+        if: github.event_name == 'workflow_dispatch'
         run: pnpm vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
         id: deploy
+        if: github.event_name == 'workflow_dispatch'
         run: |
           DEPLOY_URL=$(pnpm vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
           echo "::notice title=Deployed to Vercel::$DEPLOY_URL"
 
       - name: Job summary
+        if: always()
         run: |
-          echo "## ✅ Deployed to Vercel Production" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| | |" >> $GITHUB_STEP_SUMMARY
-          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-          echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "## ✅ Migrations applied & deployed to Vercel" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| | |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+            echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ✅ Database migrations applied" >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "App deploy handled by the Vercel GitHub integration." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "| | |" >> $GITHUB_STEP_SUMMARY
+            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+            echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+            echo "| **Trigger** | push to main (supabase/**) |" >> $GITHUB_STEP_SUMMARY
+          fi
