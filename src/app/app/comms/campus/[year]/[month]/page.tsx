@@ -61,15 +61,12 @@ function typeLabel(value: string) {
   return value.replaceAll('_', ' ')
 }
 
-function categoryFor(value: string) {
-  if (value === 'article_share') return 'Articles and research'
-  if (value === 'media_request') return 'Media'
-  if (value === 'member_intro') return 'Members'
-  if (value === 'noise') return 'Miscellaneous'
-  return 'Other incoming'
-}
+const SOURCES = ['Field newsfeed', 'WhatsApp'] as const
+type SourceTab = (typeof SOURCES)[number]
 
-const FILTERS = ['All', 'Articles', 'Media', 'LinkedIn', 'Sessions', 'Members', 'Social']
+function sourceKey(value: string | undefined): SourceTab {
+  return SOURCES.find((s) => s.toLowerCase() === value?.toLowerCase()) ?? 'Field newsfeed'
+}
 
 function sourceLinkFor(item: { source_url?: string | null; raw_content: string }) {
   if (item.source_url) return item.source_url
@@ -83,25 +80,9 @@ function parseDecisionItem(value: string) {
   return { decision, owner }
 }
 
-function filterKey(value: string | undefined) {
-  return FILTERS.find((filter) => filter.toLowerCase() === value?.toLowerCase()) ?? 'All'
-}
-
-function matchesFilter(item: { content_type: string; raw_content: string; source_url?: string | null }, filter: string) {
-  const haystack = `${item.content_type} ${item.raw_content} ${item.source_url ?? ''}`.toLowerCase()
-  if (filter === 'All') return true
-  if (filter === 'Articles') return item.content_type === 'article_share'
-  if (filter === 'Media') return item.content_type === 'media_request'
-  if (filter === 'LinkedIn') return haystack.includes('linkedin')
-  if (filter === 'Sessions') return haystack.includes('session') || haystack.includes('world campus')
-  if (filter === 'Members') return item.content_type === 'member_intro' || haystack.includes('welcome')
-  if (filter === 'Social') return haystack.includes('facebook') || haystack.includes('instagram') || haystack.includes('social')
-  return true
-}
-
 type CampusMonthPageProps = {
   params: Promise<{ year: string; month: string }>
-  searchParams?: Promise<{ filter?: string }>
+  searchParams?: Promise<{ source?: string }>
 }
 
 export default async function CampusMonthPage(props: CampusMonthPageProps) {
@@ -127,19 +108,27 @@ export default async function CampusMonthPage(props: CampusMonthPageProps) {
 
 async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
   const { year, month } = await params
-  const selectedFilter = filterKey((await searchParams)?.filter)
+  const selectedSource = sourceKey((await searchParams)?.source)
   const { start, end } = monthBounds(year, month)
   const startDate = dateOnly(start)
   const endDate = dateOnly(end)
   const supabase = await createClient()
 
-  const [{ data: intakeItems }, { data: sessions }, { data: members }] = await Promise.all([
+  const [{ data: whatsappData }, { data: newsfeedData }, { data: sessions }, { data: members }] = await Promise.all([
     supabase
       .from('intake_items')
       .select('id, sender_name, content_type, raw_content, source_url, status, captured_at')
+      .eq('channel', 'campus')
       .gte('captured_at', start.toISOString())
       .lt('captured_at', end.toISOString())
       .order('captured_at', { ascending: false }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    (supabase as any)
+      .from('news_feed_items')
+      .select('id, headline, summary, category, region, source_url, source_name, published_at, created_at')
+      .order('published_at', { ascending: false, nullsFirst: false })
+      .order('created_at', { ascending: false })
+      .limit(20),
     supabase
       .from('campus_sessions')
       .select('id, session_date, theme, summary, action_items_for_publication, decisions_for_publication')
@@ -154,15 +143,15 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
       .order('date_welcomed', { ascending: false }),
   ])
 
-  const incomingItems = intakeItems ?? []
+  type NewsfeedItem = {
+    id: string; headline: string; summary: string | null; category: string | null
+    region: string | null; source_url: string | null; source_name: string | null
+    published_at: string | null; created_at: string | null
+  }
+  const whatsappItems = whatsappData ?? []
+  const newsfeedItems: NewsfeedItem[] = (newsfeedData ?? []) as NewsfeedItem[]
   const meetingTitle = `${formatMonth(start)} meeting`
   const returnPath = `/app/comms/campus/${year}/${month}`
-  const visibleIncomingItems = incomingItems.filter((item) => matchesFilter(item, selectedFilter))
-  const groupedIncoming = visibleIncomingItems.reduce<Record<string, typeof visibleIncomingItems>>((groups, item) => {
-    const category = categoryFor(item.content_type)
-    groups[category] = [...(groups[category] ?? []), item]
-    return groups
-  }, {})
 
   const primarySession = sessions?.[0]
 
@@ -190,7 +179,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
     : (sessions ?? []).flatMap((session) => session.summary ? [`Decision: ${session.summary} | Owner: Session summary`] : []))
 
   return (
-    <div className="mx-auto max-w-6xl space-y-4">
+    <div className="space-y-4">
       <header className="grid gap-3 border-b border-neutral-200 pb-4 lg:grid-cols-[auto_1fr_auto] lg:items-center">
         <Link href="/app/comms/campus" className="rounded-lg border border-blue-900 px-3 py-2 text-sm font-semibold text-blue-900 hover:bg-blue-50">
           &lt;- Campus
@@ -213,96 +202,138 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
         <section className="border-r border-neutral-200">
           <div className="border-b border-neutral-200 bg-neutral-50 px-5 py-3">
             <div className="flex items-center gap-2">
-              <h2 className="text-base font-semibold text-neutral-900">Incoming this month</h2>
-              <span className="rounded-full bg-orange-600 px-2.5 py-0.5 text-xs font-bold text-white">{incomingItems.length}</span>
+              <h2 className="text-base font-semibold text-neutral-900">Incoming</h2>
+              <span className="rounded-full bg-orange-600 px-2.5 py-0.5 text-xs font-bold text-white">
+                {selectedSource === 'Field newsfeed' ? newsfeedItems.length : whatsappItems.length}
+              </span>
             </div>
-            <div className="mt-3 flex flex-wrap gap-2">
-              {FILTERS.map((filter, index) => {
-                const isActive = selectedFilter === filter
-                const href = filter === 'All' ? `${returnPath}#raw-feed` : `${returnPath}?filter=${encodeURIComponent(filter)}#raw-feed`
+            <div className="mt-3 flex gap-2">
+              {SOURCES.map((source) => {
+                const isActive = selectedSource === source
+                const href = `${returnPath}?source=${encodeURIComponent(source)}#raw-feed`
                 return (
-                <Link
-                  key={filter}
-                  href={href}
-                  className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive || (index === 0 && selectedFilter === 'All') ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-300 bg-white text-neutral-950 hover:bg-neutral-100'}`}
-                >
-                  {filter}
-                </Link>
+                  <Link
+                    key={source}
+                    href={href}
+                    className={`rounded-full border px-3 py-1 text-xs font-semibold ${isActive ? 'border-neutral-950 bg-neutral-950 text-white' : 'border-neutral-300 bg-white text-neutral-950 hover:bg-neutral-100'}`}
+                  >
+                    {source}
+                  </Link>
                 )
               })}
             </div>
           </div>
 
-          <div id="raw-feed" className="scroll-mt-24 max-h-[680px] space-y-5 overflow-y-auto px-5 py-4">
-            {Object.entries(groupedIncoming).map(([category, items]) => (
-              <section key={category} className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-blue-900">{category}</h3>
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">{items.length}</span>
-                </div>
-                {items.map((item) => {
-                  const sourceLink = sourceLinkFor(item)
-                  return (
+          <div id="raw-feed" className="scroll-mt-24 max-h-[680px] space-y-3 overflow-y-auto px-5 py-4">
+            {selectedSource === 'Field newsfeed' && (
+              <>
+                {newsfeedItems.map((item) => (
                   <article key={item.id} className="rounded-lg border border-neutral-200 bg-neutral-50">
                     <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 px-4 py-2">
                       <div className="flex flex-wrap items-center gap-2">
-                        <span className="rounded-full bg-blue-900 px-2 py-0.5 text-xs font-bold text-white">{typeLabel(item.content_type)}</span>
-                        <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">{item.status}</span>
+                        {item.category && (
+                          <span className="rounded-full bg-blue-900 px-2 py-0.5 text-xs font-bold text-white">{item.category}</span>
+                        )}
+                        {item.region && (
+                          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">{item.region}</span>
+                        )}
                       </div>
-                      <p className="text-xs font-medium text-neutral-500">{item.sender_name} - {formatDate(item.captured_at)}</p>
+                      <p className="text-xs font-medium text-neutral-500">
+                        {item.source_name ?? ''}{item.published_at ? ` · ${formatDate(item.published_at)}` : ''}
+                      </p>
                     </div>
                     <div className="px-4 py-3">
-                      <p className="text-sm font-semibold text-neutral-950">{(item.raw_content ?? '').slice(0, 90)}</p>
-                      <p className="mt-1 line-clamp-3 text-sm leading-5 text-neutral-600">{item.raw_content}</p>
-                      <div className="mt-3 flex flex-wrap gap-2">
-                        {item.status === 'unreviewed' && (
-                          <form action={markReviewedAction}>
-                            <input type="hidden" name="intake_item_id" value={item.id} />
-                            <input type="hidden" name="return_path" value={returnPath} />
-                            <button type="submit" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
-                              Review
-                            </button>
-                          </form>
-                        )}
-                        {primarySession && (
-                          <form action={addAgendaItem}>
-                            <input type="hidden" name="campus_session_id" value={primarySession.id} />
-                            <input type="hidden" name="meeting_date" value={primarySession.session_date} />
-                            <input type="hidden" name="title" value={(item.raw_content ?? '').slice(0, 160)} />
-                            <button type="submit" className="rounded-lg bg-blue-900 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-800">
-                              + Agenda
-                            </button>
-                          </form>
-                        )}
-                        {sourceLink && (
+                      <p className="text-sm font-semibold text-neutral-950">{item.headline}</p>
+                      {item.summary && (
+                        <p className="mt-1 line-clamp-3 text-sm leading-5 text-neutral-600">{item.summary}</p>
+                      )}
+                      {item.source_url && (
+                        <div className="mt-3">
                           <a
-                            href={sourceLink}
+                            href={item.source_url}
                             target="_blank"
                             rel="noreferrer"
                             className="rounded-lg border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-50"
                           >
                             Open link
                           </a>
-                        )}
-                        <form action={deleteIntakeAction}>
-                          <input type="hidden" name="intake_item_id" value={item.id} />
-                          <input type="hidden" name="return_path" value={returnPath} />
-                          <button type="submit" className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">
-                            Delete
-                          </button>
-                        </form>
-                      </div>
+                        </div>
+                      )}
                     </div>
                   </article>
+                ))}
+                {newsfeedItems.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-neutral-300 py-10 text-center text-sm text-neutral-500">
+                    No field newsfeed items yet.
+                  </p>
+                )}
+              </>
+            )}
+
+            {selectedSource === 'WhatsApp' && (
+              <>
+                {whatsappItems.map((item) => {
+                  const sourceLink = sourceLinkFor(item)
+                  return (
+                    <article key={item.id} className="rounded-lg border border-neutral-200 bg-neutral-50">
+                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 px-4 py-2">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="rounded-full bg-blue-900 px-2 py-0.5 text-xs font-bold text-white">{typeLabel(item.content_type)}</span>
+                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">{item.status}</span>
+                        </div>
+                        <p className="text-xs font-medium text-neutral-500">{item.sender_name} · {formatDate(item.captured_at)}</p>
+                      </div>
+                      <div className="px-4 py-3">
+                        <p className="text-sm font-semibold text-neutral-950">{(item.raw_content ?? '').slice(0, 90)}</p>
+                        <p className="mt-1 line-clamp-3 text-sm leading-5 text-neutral-600">{item.raw_content}</p>
+                        <div className="mt-3 flex flex-wrap gap-2">
+                          {item.status === 'unreviewed' && (
+                            <form action={markReviewedAction}>
+                              <input type="hidden" name="intake_item_id" value={item.id} />
+                              <input type="hidden" name="return_path" value={returnPath} />
+                              <button type="submit" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
+                                Review
+                              </button>
+                            </form>
+                          )}
+                          {primarySession && (
+                            <form action={addAgendaItem}>
+                              <input type="hidden" name="campus_session_id" value={primarySession.id} />
+                              <input type="hidden" name="meeting_date" value={primarySession.session_date} />
+                              <input type="hidden" name="title" value={(item.raw_content ?? '').slice(0, 160)} />
+                              <button type="submit" className="rounded-lg bg-blue-900 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-800">
+                                + Agenda
+                              </button>
+                            </form>
+                          )}
+                          {sourceLink && (
+                            <a
+                              href={sourceLink}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="rounded-lg border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-50"
+                            >
+                              Open link
+                            </a>
+                          )}
+                          <form action={deleteIntakeAction}>
+                            <input type="hidden" name="intake_item_id" value={item.id} />
+                            <input type="hidden" name="return_path" value={returnPath} />
+                            <button type="submit" className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">
+                              Delete
+                            </button>
+                          </form>
+                        </div>
+                      </div>
+                    </article>
                   )
                 })}
-              </section>
-            ))}
-
-            {visibleIncomingItems.length === 0 && (
-              <p className="rounded-lg border border-dashed border-neutral-300 py-10 text-center text-sm text-neutral-500">
-                No incoming feed items match this filter.
-              </p>
+                {whatsappItems.length === 0 && (
+                  <p className="rounded-lg border border-dashed border-neutral-300 py-10 text-center text-sm text-neutral-500">
+                    No WhatsApp messages from the campus group this month.
+                  </p>
+                )}
+              </>
             )}
           </div>
         </section>
@@ -331,7 +362,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
               </div>
               <p className="mt-3 text-sm leading-6 text-neutral-900">
                 {primarySession?.summary ||
-                  incomingItems.slice(0, 3).map((item) => `${item.sender_name} shared ${typeLabel(item.content_type)}`).join('. ') ||
+                  whatsappItems.slice(0, 3).map((item) => `${item.sender_name} shared ${typeLabel(item.content_type)}`).join('. ') ||
                   'Briefing summary will be built from routed intake, session notes, and member welcomes.'}
               </p>
             </section>
@@ -342,12 +373,12 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
               bodyClassName="px-0 pb-0"
               actions={
                 <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                  {incomingItems.length + (members?.length ?? 0)} items
+                  {whatsappItems.length + (members?.length ?? 0)} items
                 </span>
               }
             >
               <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
-                {incomingItems.slice(0, 5).map((item) => (
+                {whatsappItems.slice(0, 5).map((item) => (
                   <li key={item.id} className="px-4 py-3 text-sm leading-5 text-neutral-700">
                     {item.sender_name} shared {typeLabel(item.content_type)} - {(item.raw_content ?? '').slice(0, 88)}
                   </li>
