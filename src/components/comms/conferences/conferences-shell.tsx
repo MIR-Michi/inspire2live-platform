@@ -49,6 +49,45 @@ const TABS: Array<{ key: ConferenceTab; label: string }> = [
 
 type DetailState = { status: 'idle' | 'loading' | 'ready' | 'error'; detail?: ConferenceDetail; message?: string }
 
+const AVATAR_COLORS = [
+  'bg-violet-100 text-violet-700',
+  'bg-orange-100 text-orange-700',
+  'bg-blue-100 text-blue-700',
+  'bg-emerald-100 text-emerald-700',
+  'bg-rose-100 text-rose-700',
+]
+
+function initials(name: string): string {
+  return name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0]?.toUpperCase() ?? '')
+    .join('')
+}
+
+function AttendeeAvatars({ contacts }: { contacts: Array<{ id: string; fullName: string }> }) {
+  if (contacts.length === 0) return null
+  return (
+    <div className="flex -space-x-1.5">
+      {contacts.slice(0, 5).map((c, i) => (
+        <span
+          key={c.id}
+          title={c.fullName}
+          className={['flex h-7 w-7 items-center justify-center rounded-full border-2 border-white text-[10px] font-bold', AVATAR_COLORS[i % AVATAR_COLORS.length]].join(' ')}
+        >
+          {initials(c.fullName)}
+        </span>
+      ))}
+      {contacts.length > 5 && (
+        <span className="flex h-7 w-7 items-center justify-center rounded-full border-2 border-white bg-neutral-100 text-[10px] font-bold text-neutral-500">
+          +{contacts.length - 5}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function formatDateRange(start: string | null, end: string | null): string {
   const fmt = (value: string, withYear = true) => {
     const ms = Date.parse(value)
@@ -216,7 +255,11 @@ export function ConferencesShell({
             <button
               key={key}
               type="button"
-              onClick={() => setTab(key)}
+              onClick={() => {
+                setTab(key)
+                const next = key === 'upcoming' ? filteredUpcoming : partitions[key]
+                setSelectedId(next[0]?.id ?? null)
+              }}
               className={[
                 'relative -mb-px rounded-t-lg px-4 py-2 text-sm font-semibold transition',
                 active ? 'border border-b-white border-neutral-200 bg-white text-orange-700' : 'text-neutral-500 hover:text-neutral-800',
@@ -485,14 +528,18 @@ function ConferenceDetailPane({
   }
 
   const d = detail?.detail
+  const attendees = conf.assignedContacts ?? []
   return (
     <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
       <div className="space-y-1.5">
-        <div className="flex flex-wrap items-center gap-1.5">
-          <StatusBadge label={conf.regionLabel} tone="neutral" />
-          {conf.mainFocus && <StatusBadge label={conf.mainFocus} tone="blue" />}
-          <StatusBadge label={FORMAT_LABELS[conf.format] ?? conf.format} tone="neutral" />
-          {conf.tracking && <StatusBadge label={CONFERENCE_STAGE_LABELS[conf.tracking.stage]} tone={STAGE_TONES[conf.tracking.stage]} />}
+        <div className="flex items-start justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <StatusBadge label={conf.regionLabel} tone="neutral" />
+            {conf.mainFocus && <StatusBadge label={conf.mainFocus} tone="blue" />}
+            <StatusBadge label={FORMAT_LABELS[conf.format] ?? conf.format} tone="neutral" />
+            {conf.tracking && <StatusBadge label={CONFERENCE_STAGE_LABELS[conf.tracking.stage]} tone={STAGE_TONES[conf.tracking.stage]} />}
+          </div>
+          {attendees.length > 0 && <AttendeeAvatars contacts={attendees} />}
         </div>
         <h2 className="text-lg font-semibold leading-snug text-neutral-900">{conf.name}</h2>
         <p className="text-sm text-neutral-500">

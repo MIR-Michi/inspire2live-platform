@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import {
   assignConferenceContact,
   getConferenceContacts,
+  removeConferenceContact,
   searchConferenceContacts,
   type AssignedConferenceContact,
   type ConferenceContactOption,
@@ -74,6 +75,21 @@ export function ConferenceContactAssignment({
     if (value.trim().length < 2) setOptions([])
   }
 
+  const unassign = (assignmentId: string) => {
+    setError(null)
+    setMessage(null)
+    startTransition(async () => {
+      const result = await removeConferenceContact(assignmentId)
+      if (!result.ok) {
+        setError(result.message ?? null)
+        return
+      }
+      setMessage(result.message ?? null)
+      await loadAssigned()
+      router.refresh()
+    })
+  }
+
   const assignExisting = (contact: ConferenceContactOption) => {
     setError(null)
     setMessage(null)
@@ -131,7 +147,18 @@ export function ConferenceContactAssignment({
                   <p className="font-semibold text-neutral-800">{contact.fullName}</p>
                   <p className="text-xs text-neutral-500">{contact.meta ?? contact.email ?? 'CRM contact'}</p>
                 </div>
-                <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-600">{contact.notificationStatus}</span>
+                <div className="flex items-center gap-2">
+                  <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-600">{contact.notificationStatus}</span>
+                  <button
+                    type="button"
+                    onClick={() => unassign(contact.assignmentId)}
+                    disabled={pending}
+                    className="text-xs font-semibold text-neutral-400 hover:text-red-600 disabled:opacity-60"
+                    aria-label={`Remove ${contact.fullName}`}
+                  >
+                    Remove
+                  </button>
+                </div>
               </div>
               {contact.notificationDetail && <p className="mt-1 text-xs text-neutral-500">{contact.notificationDetail}</p>}
             </li>

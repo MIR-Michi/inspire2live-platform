@@ -127,14 +127,14 @@ export type AssembleInput = {
     occurred_at: string
     next_follow_up_at: string | null
   }>
-  ownerLabels?: Map<string, string>
   conferenceAssignments?: Array<{
     contact_id: string
     conference_id: string
     conference_name: string
-    start_date: string | null
+    conference_start_date: string | null
     role: string
   }>
+  ownerLabels?: Map<string, string>
 }
 
 function mergeText(primary: string | null | undefined, fallback: string | null | undefined) {
@@ -267,14 +267,6 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
   for (const link of input.crmEventLinks) {
     eventIdsByContact.set(link.contact_id, [...(eventIdsByContact.get(link.contact_id) ?? []), link.event_id])
   }
-  const conferencesByContact = new Map<string, CrmContactRecord['conferences']>()
-  for (const ca of input.conferenceAssignments ?? []) {
-    conferencesByContact.set(ca.contact_id, [
-      ...(conferencesByContact.get(ca.contact_id) ?? []),
-      { id: ca.conference_id, name: ca.conference_name, startDate: ca.start_date, role: ca.role },
-    ])
-  }
-
   const interactionsByContact = new Map<string, CrmContactRecord['recentInteractions']>()
   for (const interaction of input.crmInteractions) {
     interactionsByContact.set(interaction.contact_id, [
@@ -285,6 +277,19 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
         summary: interaction.summary,
         occurredAt: interaction.occurred_at,
         nextFollowUpAt: interaction.next_follow_up_at,
+      },
+    ])
+  }
+
+  const conferencesByContact = new Map<string, CrmContactRecord['conferences']>()
+  for (const assignment of input.conferenceAssignments ?? []) {
+    conferencesByContact.set(assignment.contact_id, [
+      ...(conferencesByContact.get(assignment.contact_id) ?? []),
+      {
+        id: assignment.conference_id,
+        name: assignment.conference_name,
+        startDate: assignment.conference_start_date,
+        role: assignment.role,
       },
     ])
   }
@@ -420,7 +425,7 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     crmSupabase.from('comms_crm_connector_backlog').select('*').order('integration_target'),
     crmSupabase
       .from('conference_contact_assignments')
-      .select('contact_id, conference_id, role, conferences(id, name, start_date)')
+      .select('contact_id, role, conference_id, conferences(id, name, start_date)')
       .order('assigned_at', { ascending: false }),
   ])
 
@@ -436,6 +441,19 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
 
   const ownerLabels = new Map((profiles ?? []).map((p) => [p.id, p.name ?? p.email ?? '']))
 
+  const rawAssignments: Array<Record<string, unknown>> = conferenceAssignmentsResult.error ? [] : (conferenceAssignmentsResult.data ?? [])
+  const conferenceAssignments = rawAssignments.flatMap((row) => {
+    const conf = row.conferences as { id: string; name: string; start_date: string | null } | null
+    if (!row.contact_id || !conf?.id) return []
+    return [{
+      contact_id: String(row.contact_id),
+      conference_id: String(conf.id),
+      conference_name: String(conf.name ?? 'Unnamed conference'),
+      conference_start_date: conf.start_date ? String(conf.start_date) : null,
+      role: String(row.role ?? 'attendee'),
+    }]
+  })
+
   const records = assembleCrmRecords({
     profiles: profiles ?? [],
     initiativeMembers: (initiativeMembers ?? []) as Array<{ user_id: string; initiative_id: string }>,
@@ -446,19 +464,8 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     crmInitiatives: crmInitiativesResult.error ? [] : crmInitiativesResult.data ?? [],
     crmEventLinks: crmEventsResult.error ? [] : crmEventsResult.data ?? [],
     crmInteractions: crmInteractionsResult.error ? [] : crmInteractionsResult.data ?? [],
+    conferenceAssignments,
     ownerLabels,
-    conferenceAssignments: conferenceAssignmentsResult.error ? [] : (conferenceAssignmentsResult.data ?? []).map((row: {
-      contact_id: string
-      conference_id: string
-      role: string
-      conferences: { id: string; name: string; start_date: string | null } | null
-    }) => ({
-      contact_id: String(row.contact_id),
-      conference_id: String(row.conference_id),
-      conference_name: row.conferences?.name ?? '',
-      start_date: row.conferences?.start_date ?? null,
-      role: String(row.role ?? 'attendee'),
-    })).filter((row: { conference_name: string }) => row.conference_name),
   })
 
   const connectorBacklog: CrmConnectorBacklogItem[] = connectorBacklogResult.error

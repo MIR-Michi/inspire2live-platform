@@ -268,6 +268,43 @@ export async function updateCampusDecisionItem(formData: FormData) {
   revalidatePath(returnPath)
 }
 
+export async function addCampusSessionFile(formData: FormData) {
+  const { supabase, user } = await requireCommsOperator()
+  const sessionId = asText(formData.get('session_id'))
+  const title = asText(formData.get('title'))
+  const assetType = asText(formData.get('asset_type'))
+  const url = asText(formData.get('url'))
+
+  if (!sessionId || !title || !url) throw new Error('Session, title, and URL are required.')
+  const validTypes = ['slides', 'document', 'recording', 'photo', 'video', 'report']
+  const type = validTypes.includes(assetType) ? assetType : 'document'
+
+  const { error } = await supabase.from('media_assets').insert({
+    title: title.slice(0, 200),
+    asset_type: type,
+    sharepoint_url: url.slice(0, 1000),
+    session_id: sessionId,
+    contributed_by: user.id,
+    rights_status: 'internal_only',
+  })
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/app/comms/campus-log/sessions/${sessionId}`)
+}
+
+export async function deleteCampusSessionFile(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const fileId = asText(formData.get('file_id'))
+  const sessionId = asText(formData.get('session_id'))
+
+  if (!fileId || !sessionId) throw new Error('File and session are required.')
+
+  const { error } = await supabase.from('media_assets').delete().eq('id', fileId).eq('session_id', sessionId)
+  if (error) throw new Error(error.message)
+
+  revalidatePath(`/app/comms/campus-log/sessions/${sessionId}`)
+}
+
 export async function addCampusActionItem(formData: FormData) {
   const { supabase } = await requireCommsOperator()
   const sessionId = asText(formData.get('session_id'))
