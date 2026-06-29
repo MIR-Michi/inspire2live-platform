@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
-import { FounderBadge } from '@/components/comms/founder-badge'
+import { CampusMemberSummaryCard } from '@/components/comms/campus-member-summary-card'
 import { memberAppearsInCalendar, memberMatchesSignal } from '@/lib/comms-routing'
 import { getIntakeTypeMeta } from '@/lib/comms-workflow'
 import { createClient } from '@/lib/supabase/server'
@@ -75,43 +75,20 @@ export default async function CampusMemberDetailPage({ params }: { params: Promi
         ← Back to campus members
       </Link>
 
-      <div className="rounded-2xl border border-neutral-200 bg-white p-6 shadow-sm">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div className="space-y-3">
-            <div className="flex flex-wrap items-center gap-2">
-              {member.welcomed_by_peter && <FounderBadge label="Welcomed by Peter" />}
-              {member.country && (
-                <span className="rounded-full border border-neutral-200 bg-neutral-50 px-3 py-1 text-xs font-semibold text-neutral-700">
-                  {member.country}
-                </span>
-              )}
-            </div>
-            <div>
-              <h1 className="text-3xl font-semibold text-neutral-900">{member.name}</h1>
-              <p className="text-sm text-neutral-500">
-                {[member.organisation, member.role_description].filter(Boolean).join(' · ') || 'Role details still to be refined'}
-              </p>
-            </div>
-            <div className="flex flex-wrap gap-3 text-xs text-neutral-500">
-              <span>Date welcomed: {formatDate(member.date_welcomed)}</span>
-              <span>Last channel activity: {formatDate(member.last_channel_activity)}</span>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {(member.initiative_affiliations ?? []).map((initiativeId) => (
-                <span key={initiativeId} className="rounded-full border border-violet-200 bg-violet-50 px-3 py-1 text-xs font-semibold text-violet-700">
-                  {initiativeMap.get(initiativeId) ?? initiativeId}
-                </span>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {member.notes && (
-          <div className="mt-5 rounded-2xl border border-neutral-200 bg-neutral-50 p-4">
-            <p className="text-sm leading-6 text-neutral-700">{member.notes}</p>
-          </div>
-        )}
-      </div>
+      <CampusMemberSummaryCard
+        id={member.id}
+        name={member.name}
+        country={member.country}
+        organisation={member.organisation}
+        role_description={member.role_description}
+        date_welcomed={member.date_welcomed}
+        last_channel_activity={member.last_channel_activity}
+        welcomed_by_peter={member.welcomed_by_peter}
+        initiative_affiliations={member.initiative_affiliations}
+        notes={member.notes}
+        initiativeMap={Object.fromEntries(initiativeMap)}
+        initiatives={(initiatives ?? []).map((i) => ({ id: i.id, title: i.title }))}
+      />
 
       <div className="grid gap-6 lg:grid-cols-2">
         <section className="rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">

@@ -421,6 +421,37 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
   }
 }
 
+export async function saveCampusMember(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const memberId = asText(formData.get('member_id'))
+  if (!memberId) throw new Error('Member is required.')
+
+  const name = asText(formData.get('name'))
+  if (!name) throw new Error('Name is required.')
+
+  const { error } = await supabase
+    .from('campus_members')
+    .update({
+      name,
+      country: asText(formData.get('country')) || null,
+      organisation: asText(formData.get('organisation')) || null,
+      role_description: asText(formData.get('role_description')) || null,
+      date_welcomed: asText(formData.get('date_welcomed')) || null,
+      last_channel_activity: asText(formData.get('last_channel_activity')) || null,
+      welcomed_by_peter: formData.get('welcomed_by_peter') === 'true',
+      initiative_affiliations: parseValues(formData, 'initiative_affiliations'),
+      notes: asText(formData.get('notes')) || null,
+      updated_at: new Date().toISOString(),
+    })
+    .eq('id', memberId)
+
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/app/comms/campus-log')
+  revalidatePath(`/app/comms/campus-log/members/${memberId}`)
+  redirect(`/app/comms/campus-log/members/${memberId}`)
+}
+
 export async function addCampusActionItem(formData: FormData) {
   const { supabase } = await requireCommsOperator()
   const sessionId = asText(formData.get('session_id'))
