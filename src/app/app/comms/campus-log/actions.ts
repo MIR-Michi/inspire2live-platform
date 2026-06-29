@@ -310,8 +310,8 @@ export async function deleteCampusSessionFile(formData: FormData) {
 
 type BriefingResult = { ok: boolean; message?: string; briefing?: CampusBriefing }
 
-const BRIEFING_NOT_PERSISTED =
-  'Briefing generated, but it could not be saved (database migration 00104 has not been applied yet). It will not persist across reloads until the migration runs.'
+const BRIEFING_MIGRATION_MISSING =
+  'Briefing generated, but it can’t be saved yet: the database is missing the briefing columns. Apply migration 00104 by running the "Deploy to Vercel (Production)" GitHub Action (or `pnpm db:push` against the linked project), then regenerate. It will not persist across reloads until then.'
 
 /**
  * Generates an educational pre-meeting briefing about a campus session's
@@ -377,10 +377,12 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
     })
 
     if (!briefingColumnExists) {
-      return { ok: true, briefing, message: BRIEFING_NOT_PERSISTED }
+      return { ok: true, briefing, message: BRIEFING_MIGRATION_MISSING }
     }
 
-    const { error: updateError } = await db
+    // `.select('id')` confirms a row was actually written — a 0-row result with
+    // no error means row-level security silently blocked the update.
+    const { data: updated, error: updateError } = await db
       .from('campus_sessions')
       .update({
         briefing,
@@ -390,10 +392,23 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
         briefing_generated_by: user.id,
       })
       .eq('id', sessionId)
+      .select('id')
 
     if (updateError) {
-      // Schema partially missing — still surface the generated briefing.
-      return { ok: true, briefing, message: BRIEFING_NOT_PERSISTED }
+      // Surface the real cause (e.g. a stale PostgREST schema cache reports
+      // "Could not find the 'briefing' column ... in the schema cache").
+      const message = /schema cache|does not exist|column/i.test(updateError.message)
+        ? BRIEFING_MIGRATION_MISSING
+        : `Briefing generated, but saving failed: ${updateError.message}`
+      return { ok: true, briefing, message }
+    }
+
+    if (!updated || updated.length === 0) {
+      return {
+        ok: true,
+        briefing,
+        message: 'Briefing generated, but no row was saved — your account may not have permission to update this session (row-level security).',
+      }
     }
 
     revalidatePath('/app/comms/campus')
