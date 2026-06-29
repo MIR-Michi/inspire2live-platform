@@ -8,9 +8,12 @@ import { AgendaItemList } from '@/components/comms/agenda-item-list'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
 import { CampusMeetingChecklist } from '@/components/comms/campus-meeting-checklist'
 import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-panel'
+import { CampusBriefingPanel } from '@/components/comms/campus-briefing-panel'
 import { loadCampusMeetingTasks, loadCampusSessionAgenda, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { loadCampusSessionTranscript } from '@/lib/comms-meeting-transcripts'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
+import type { CampusBriefing } from '@/lib/ai/campus-briefing'
+import { normalizeRole } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 
 async function markReviewedAction(formData: FormData) {
@@ -61,11 +64,11 @@ function typeLabel(value: string) {
   return value.replaceAll('_', ' ')
 }
 
-const SOURCES = ['Field newsfeed', 'WhatsApp'] as const
-type SourceTab = (typeof SOURCES)[number]
+const TABS = ['Briefing', 'Field newsfeed', 'WhatsApp'] as const
+type IncomingTab = (typeof TABS)[number]
 
-function sourceKey(value: string | undefined): SourceTab {
-  return SOURCES.find((s) => s.toLowerCase() === value?.toLowerCase()) ?? 'Field newsfeed'
+function tabKey(value: string | undefined): IncomingTab {
+  return TABS.find((s) => s.toLowerCase() === value?.toLowerCase()) ?? 'Briefing'
 }
 
 function sourceLinkFor(item: { source_url?: string | null; raw_content: string }) {
@@ -108,7 +111,7 @@ export default async function CampusMonthPage(props: CampusMonthPageProps) {
 
 async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
   const { year, month } = await params
-  const selectedSource = sourceKey((await searchParams)?.source)
+  const selectedTab = tabKey((await searchParams)?.source)
   const { start, end } = monthBounds(year, month)
   const startDate = dateOnly(start)
   const endDate = dateOnly(end)
@@ -178,6 +181,32 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
     ? primarySession.decisions_for_publication
     : (sessions ?? []).flatMap((session) => session.summary ? [`Decision: ${session.summary} | Owner: Session summary`] : []))
 
+  // Audience briefing (presenter/topic background) + admin flag for regeneration.
+  // briefing* columns are not in the generated Database types yet.
+  let briefing: CampusBriefing | null = null
+  let briefingGeneratedAt: string | null = null
+  let briefingPresenter = ''
+  if (primarySession) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: briefingRow } = await (supabase as any)
+      .from('campus_sessions')
+      .select('briefing, briefing_generated_at, briefing_presenter')
+      .eq('id', primarySession.id)
+      .maybeSingle()
+    briefing = (briefingRow?.briefing as CampusBriefing | null) ?? null
+    briefingGeneratedAt = (briefingRow?.briefing_generated_at as string | null) ?? null
+    briefingPresenter = (briefingRow?.briefing_presenter as string | null) ?? ''
+  }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  let isAdmin = false
+  if (user) {
+    const { data: profileRow } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+    isAdmin = normalizeRole(profileRow?.role) === 'PlatformAdmin'
+  }
+
   return (
     <div className="space-y-4">
       <header className="grid gap-3 border-b border-neutral-200 pb-4 lg:grid-cols-[auto_1fr_auto] lg:items-center">
@@ -198,18 +227,20 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
         </div>
       </header>
 
-      <div className="grid min-h-[720px] overflow-hidden rounded-xl border border-neutral-200 bg-white lg:grid-cols-[1.1fr_0.9fr]">
-        <section className="border-r border-neutral-200">
+      <div className="grid min-h-[720px] overflow-hidden rounded-xl border border-neutral-200 bg-white lg:grid-cols-[7fr_3fr]">
+        <section className="border-neutral-200 lg:order-last lg:border-l">
           <div className="border-b border-neutral-200 bg-neutral-50 px-5 py-3">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold text-neutral-900">Incoming</h2>
-              <span className="rounded-full bg-orange-600 px-2.5 py-0.5 text-xs font-bold text-white">
-                {selectedSource === 'Field newsfeed' ? newsfeedItems.length : whatsappItems.length}
-              </span>
+              {selectedTab !== 'Briefing' && (
+                <span className="rounded-full bg-orange-600 px-2.5 py-0.5 text-xs font-bold text-white">
+                  {selectedTab === 'Field newsfeed' ? newsfeedItems.length : whatsappItems.length}
+                </span>
+              )}
             </div>
-            <div className="mt-3 flex gap-2">
-              {SOURCES.map((source) => {
-                const isActive = selectedSource === source
+            <div className="mt-3 flex flex-wrap gap-2">
+              {TABS.map((source) => {
+                const isActive = selectedTab === source
                 const href = `${returnPath}?source=${encodeURIComponent(source)}#raw-feed`
                 return (
                   <Link
@@ -225,7 +256,20 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
           </div>
 
           <div id="raw-feed" className="scroll-mt-24 max-h-[680px] space-y-3 overflow-y-auto px-5 py-4">
-            {selectedSource === 'Field newsfeed' && (
+            {selectedTab === 'Briefing' && (
+              <CampusBriefingPanel
+                sessionId={primarySession?.id ?? null}
+                returnPath={returnPath}
+                briefing={briefing}
+                generatedAt={briefingGeneratedAt}
+                defaultPresenter={briefingPresenter}
+                defaultTopic={primarySession?.theme ?? ''}
+                isAdmin={isAdmin}
+                aiEnabled={aiEnabled}
+              />
+            )}
+
+            {selectedTab === 'Field newsfeed' && (
               <>
                 {newsfeedItems.map((item) => (
                   <article key={item.id} className="rounded-lg border border-neutral-200 bg-neutral-50">
@@ -270,7 +314,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
               </>
             )}
 
-            {selectedSource === 'WhatsApp' && (
+            {selectedTab === 'WhatsApp' && (
               <>
                 {whatsappItems.map((item) => {
                   const sourceLink = sourceLinkFor(item)
@@ -338,9 +382,9 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
           </div>
         </section>
 
-        <aside className="bg-white">
+        <aside className="bg-white lg:order-first">
           <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-3">
-            <h2 className="text-base font-semibold text-neutral-900">Meeting briefing</h2>
+            <h2 className="text-base font-semibold text-neutral-900">Meeting details</h2>
             <div className="flex gap-2">
               <span className="rounded-lg border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-neutral-700">Export</span>
               <span className="rounded-lg border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-blue-700">Share to Teams</span>

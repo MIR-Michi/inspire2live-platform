@@ -4,7 +4,10 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
+import { normalizeRole } from '@/lib/role-access'
 import { CAMPUS_MEETING_TASK_TEMPLATE } from '@/lib/campus-meeting-tasks'
+import { isAiEnabled } from '@/lib/ai/feature-flag'
+import { generateCampusBriefing } from '@/lib/ai/campus-briefing'
 
 /**
  * Seeds the standard campus-meeting checklist as comms_tasks tied to a newly
@@ -74,7 +77,7 @@ async function requireCommsOperator() {
     throw new Error('Not authorized for the communications workspace')
   }
 
-  return { supabase, user }
+  return { supabase, user, role: profile.role as string | null }
 }
 
 export async function createCampusSession(formData: FormData) {
@@ -303,6 +306,74 @@ export async function deleteCampusSessionFile(formData: FormData) {
   if (error) throw new Error(error.message)
 
   revalidatePath(`/app/comms/campus-log/sessions/${sessionId}`)
+}
+
+type BriefingResult = { ok: boolean; message?: string }
+
+/**
+ * Generates an educational pre-meeting briefing about a campus session's
+ * presenter and topic. Never runs automatically — only on explicit request.
+ * The first generation is open to any comms operator; regenerating an existing
+ * briefing is restricted to platform admins.
+ */
+export async function generateCampusBriefingAction(formData: FormData): Promise<BriefingResult> {
+  try {
+    const { supabase, user, role } = await requireCommsOperator()
+    const sessionId = asText(formData.get('session_id'))
+    const presenter = asText(formData.get('presenter'))
+    const topic = asText(formData.get('topic'))
+    const returnPath = safeReturnPath(formData)
+
+    if (!sessionId) return { ok: false, message: 'Session is required.' }
+    if (!topic) return { ok: false, message: 'A topic is required to generate a briefing.' }
+    if (!isAiEnabled()) return { ok: false, message: 'AI features are disabled for this environment.' }
+
+    // briefing* columns are not in the generated Database types yet.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabase as any
+    const { data: session, error: loadError } = await db
+      .from('campus_sessions')
+      .select('id, theme, session_date, briefing')
+      .eq('id', sessionId)
+      .maybeSingle()
+
+    if (loadError) return { ok: false, message: loadError.message }
+    if (!session) return { ok: false, message: 'Campus session not found.' }
+
+    // Regenerating an existing briefing is admin-only.
+    if (session.briefing && normalizeRole(role) !== 'PlatformAdmin') {
+      return { ok: false, message: 'Only admins can regenerate an existing briefing.' }
+    }
+
+    const briefing = await generateCampusBriefing({
+      presenter,
+      topic,
+      theme: session.theme ?? null,
+      sessionDate: session.session_date ?? null,
+      createdBy: user.id,
+    })
+
+    const { error: updateError } = await db
+      .from('campus_sessions')
+      .update({
+        briefing,
+        briefing_presenter: presenter || null,
+        briefing_topic: topic,
+        briefing_generated_at: new Date().toISOString(),
+        briefing_generated_by: user.id,
+      })
+      .eq('id', sessionId)
+
+    if (updateError) return { ok: false, message: updateError.message }
+
+    revalidatePath('/app/comms/campus')
+    revalidatePath('/app/comms/campus-log')
+    revalidatePath(returnPath)
+    revalidatePath(`/app/comms/campus-log/sessions/${sessionId}`)
+    return { ok: true, message: 'Briefing generated.' }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to generate briefing.' }
+  }
 }
 
 export async function addCampusActionItem(formData: FormData) {
