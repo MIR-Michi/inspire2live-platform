@@ -1,15 +1,13 @@
 import Link from 'next/link'
-import { addCampusDecisionItem, startCampusMeeting, updateCampusDecisionItem } from '@/app/app/comms/campus-log/actions'
-import { addAgendaItem } from '@/app/app/comms/dashboard/actions'
+import { startCampusMeeting } from '@/app/app/comms/campus-log/actions'
 import { deleteIntakeItem, markIntakeReviewed } from '@/app/app/comms/intake/actions'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
-import { AgendaAddForm } from '@/components/comms/agenda-add-form'
-import { AgendaItemList } from '@/components/comms/agenda-item-list'
-import { TaskCreateForm } from '@/components/comms/task-create-form'
 import { CampusMeetingChecklist } from '@/components/comms/campus-meeting-checklist'
+import { CampusHighlight } from '@/components/comms/campus-highlight'
+import { CampusDecisionsActions } from '@/components/comms/campus-decisions-actions'
 import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-panel'
 import { CampusBriefingPanel } from '@/components/comms/campus-briefing-panel'
-import { loadCampusMeetingTasks, loadCampusSessionAgenda, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
+import { loadCampusMeetingTasks, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { loadCampusSessionTranscript } from '@/lib/comms-meeting-transcripts'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import type { CampusBriefing } from '@/lib/ai/campus-briefing'
@@ -76,13 +74,6 @@ function sourceLinkFor(item: { source_url?: string | null; raw_content: string }
   return (item.raw_content ?? '').match(/https?:\/\/[^\s)]+/i)?.[0] ?? null
 }
 
-function parseDecisionItem(value: string) {
-  const parts = value.split('|').map((part) => part.trim())
-  const decision = parts[0]?.replace(/^Decision:\s*/i, '').trim() || value
-  const owner = parts.find((part) => /^Owner:/i.test(part))?.replace(/^Owner:\s*/i, '').trim() || 'Unassigned'
-  return { decision, owner }
-}
-
 type CampusMonthPageProps = {
   params: Promise<{ year: string; month: string }>
   searchParams?: Promise<{ source?: string }>
@@ -117,7 +108,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
   const endDate = dateOnly(end)
   const supabase = await createClient()
 
-  const [{ data: whatsappData }, { data: newsfeedData }, { data: sessions }, { data: members }] = await Promise.all([
+  const [{ data: whatsappData }, { data: newsfeedData }, { data: sessions }] = await Promise.all([
     supabase
       .from('intake_items')
       .select('id, sender_name, content_type, raw_content, source_url, status, captured_at')
@@ -141,16 +132,9 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
       // Wednesday), so without a deterministic tiebreaker Postgres can return
       // tied rows in a different order after any update — making the "primary"
       // session flip between reloads. created_at asc consistently picks the
-      // first-created session (the one its checklist was seeded on), so the
-      // briefing and checklist always render for the same session.
+      // first-created session (the one its checklist was seeded on).
       .order('session_date', { ascending: false })
       .order('created_at', { ascending: true }),
-    supabase
-      .from('campus_members')
-      .select('id, name, country, organisation, date_welcomed, notes')
-      .gte('date_welcomed', startDate)
-      .lt('date_welcomed', endDate)
-      .order('date_welcomed', { ascending: false }),
   ])
 
   type NewsfeedItem = {
@@ -165,37 +149,32 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
 
   const primarySession = sessions?.[0]
 
-  // Structured agenda for this monthly meeting — same framework as the weekly
-  // comms meeting: shared agenda items (owner + drag order + meeting notes) with
-  // assignable, linkable tasks. Loaded only when a session exists to attach to.
-  const [campusAgenda, teamMembers, meetingTasks, transcript] = primarySession
+  const [teamMembers, meetingTasks, transcript] = primarySession
     ? await Promise.all([
-        loadCampusSessionAgenda(supabase, primarySession.id),
         loadCommsTeamMembers(supabase),
         loadCampusMeetingTasks(supabase, primarySession.id),
         loadCampusSessionTranscript(supabase, primarySession.id),
       ])
-    : [[], [], [], null]
+    : [[], [], null]
   const transcriptOwners = teamMembers.map((member) => ({ id: member.id, label: member.label }))
   const aiEnabled = isAiEnabled()
   const completedMeetingTasks = meetingTasks.filter((task) => task.status === 'completed').length
-  const campusAgendaOptions = primarySession
-    ? campusAgenda.map((item) => ({ id: item.id, label: item.title, meetingDate: primarySession.session_date }))
-    : []
   const monthLastWednesday = lastWednesdayOf(year, month)
 
-  const decisions = (primarySession?.decisions_for_publication?.length
-    ? primarySession.decisions_for_publication
-    : (sessions ?? []).flatMap((session) => session.summary ? [`Decision: ${session.summary} | Owner: Session summary`] : []))
-
-  // Audience briefing (presenter/topic background) + admin flag for regeneration.
-  // briefing* columns are not in the generated Database types yet.
+  // Audience briefing + presenter (highlight of the month). briefing*/presenter*
+  // columns are not in the generated Database types yet.
   let briefing: CampusBriefing | null = null
   let briefingGeneratedAt: string | null = null
   let briefingPresenter = ''
+  let presenterName: string | null = null
+  let presenterAvatarUrl: string | null = null
+  let presenterLinkedinUrl: string | null = null
   if (primarySession) {
+    // Two separate selects so a missing migration on one feature (e.g. 00105
+    // presenter columns) can't break the read of the other (00104 briefing).
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: briefingRow } = await (supabase as any)
+    const db = supabase as any
+    const { data: briefingRow } = await db
       .from('campus_sessions')
       .select('briefing, briefing_generated_at, briefing_presenter')
       .eq('id', primarySession.id)
@@ -203,6 +182,15 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
     briefing = (briefingRow?.briefing as CampusBriefing | null) ?? null
     briefingGeneratedAt = (briefingRow?.briefing_generated_at as string | null) ?? null
     briefingPresenter = (briefingRow?.briefing_presenter as string | null) ?? ''
+
+    const { data: presenterRow } = await db
+      .from('campus_sessions')
+      .select('presenter_name, presenter_avatar_url, presenter_linkedin_url')
+      .eq('id', primarySession.id)
+      .maybeSingle()
+    presenterName = (presenterRow?.presenter_name as string | null) ?? null
+    presenterAvatarUrl = (presenterRow?.presenter_avatar_url as string | null) ?? null
+    presenterLinkedinUrl = (presenterRow?.presenter_linkedin_url as string | null) ?? null
   }
 
   const {
@@ -213,6 +201,8 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
     const { data: profileRow } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
     isAdmin = normalizeRole(profileRow?.role) === 'PlatformAdmin'
   }
+
+  const decisionCount = (transcript?.summary?.decisions.length ?? 0) + (transcript?.followUpProposals.length ?? 0)
 
   return (
     <div className="space-y-4">
@@ -347,16 +337,6 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
                               </button>
                             </form>
                           )}
-                          {primarySession && (
-                            <form action={addAgendaItem}>
-                              <input type="hidden" name="campus_session_id" value={primarySession.id} />
-                              <input type="hidden" name="meeting_date" value={primarySession.session_date} />
-                              <input type="hidden" name="title" value={(item.raw_content ?? '').slice(0, 160)} />
-                              <button type="submit" className="rounded-lg bg-blue-900 px-3 py-1 text-xs font-semibold text-white hover:bg-blue-800">
-                                + Agenda
-                              </button>
-                            </form>
-                          )}
                           {sourceLink && (
                             <a
                               href={sourceLink}
@@ -392,211 +372,97 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
         <aside className="bg-white lg:order-first">
           <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-3">
             <h2 className="text-base font-semibold text-neutral-900">Meeting details</h2>
-            <div className="flex gap-2">
-              <span className="rounded-lg border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-neutral-700">Export</span>
-              <span className="rounded-lg border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-blue-700">Share to Teams</span>
-            </div>
           </div>
 
           <div className="max-h-[680px] space-y-4 overflow-y-auto px-5 py-4">
-            <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-blue-900">What happened this month</h3>
-                {primarySession && (
-                  <Link
-                    href={`/app/comms/campus-log/sessions/${primarySession.id}`}
-                    className="text-xs font-bold uppercase text-blue-900 hover:underline"
-                  >
-                    Edit
-                  </Link>
-                )}
-              </div>
-              <p className="mt-3 text-sm leading-6 text-neutral-900">
-                {primarySession?.summary ||
-                  whatsappItems.slice(0, 3).map((item) => `${item.sender_name} shared ${typeLabel(item.content_type)}`).join('. ') ||
-                  'Briefing summary will be built from routed intake, session notes, and member welcomes.'}
-              </p>
-            </section>
-
-            <CollapsibleCard
-              title={`What happened - ${formatMonth(start)}`}
-              storageKey="campus-happened"
-              bodyClassName="px-0 pb-0"
-              actions={
-                <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
-                  {whatsappItems.length + (members?.length ?? 0)} items
-                </span>
-              }
-            >
-              <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
-                {whatsappItems.slice(0, 5).map((item) => (
-                  <li key={item.id} className="px-4 py-3 text-sm leading-5 text-neutral-700">
-                    {item.sender_name} shared {typeLabel(item.content_type)} - {(item.raw_content ?? '').slice(0, 88)}
-                  </li>
-                ))}
-                {(members ?? []).slice(0, 3).map((member) => (
-                  <li key={member.id} className="px-4 py-3 text-sm leading-5 text-neutral-700">
-                    Welcome {member.name}{member.country ? ` from ${member.country}` : ''}
-                  </li>
-                ))}
-              </ul>
-            </CollapsibleCard>
-
-            {primarySession && (
-              <CollapsibleCard
-                title="Meeting checklist"
-                storageKey="campus-checklist"
-                bodyClassName="px-0 pb-0"
-                actions={
-                  <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
-                    {completedMeetingTasks}/{meetingTasks.length} done
-                  </span>
-                }
-              >
-                <CampusMeetingChecklist tasks={meetingTasks} teamMembers={teamMembers} />
-                <p className="px-4 py-3 text-[11px] text-neutral-500">
-                  Standard tasks for every campus meeting. Reassign an owner or update status; each
-                  task also appears on its owner&apos;s personal dashboard.
-                </p>
-              </CollapsibleCard>
-            )}
-
-            {primarySession && (
-              <CollapsibleCard
-                title="Meeting transcript & AI summary"
-                storageKey="campus-transcript"
-                bodyClassName="px-0 pb-0"
-                actions={
-                  <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
-                    {transcript?.summary ? 'Summary ready' : transcript ? 'Transcript uploaded' : 'No transcript'}
-                  </span>
-                }
-              >
-                <div className="border-t border-neutral-200 px-4 py-3">
-                  <MeetingTranscriptPanel
-                    context={{ kind: 'campus', campusSessionId: primarySession.id }}
-                    transcript={transcript}
-                    owners={transcriptOwners}
-                    aiEnabled={aiEnabled}
-                  />
-                </div>
-              </CollapsibleCard>
-            )}
-
-            <CollapsibleCard
-              title="Agenda & tasks"
-              storageKey="campus-agenda"
-              bodyClassName="px-0 pb-0"
-              actions={
-                primarySession ? (
-                  <TaskCreateForm teamMembers={teamMembers} agendaItems={campusAgendaOptions} />
-                ) : (
-                  <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
-                    {campusAgenda.length} items
-                  </span>
-                )
-              }
-            >
-              {primarySession ? (
-                <div className="space-y-3 border-t border-neutral-200 px-4 py-3">
-                  {campusAgenda.length > 0 ? (
-                    <AgendaItemList items={campusAgenda} />
-                  ) : (
-                    <p className="rounded-lg border border-dashed border-neutral-300 py-6 text-center text-sm text-neutral-500">
-                      No agenda topics yet. Add the first one for this meeting, or use “+ Agenda” on an incoming item.
-                    </p>
-                  )}
-                  <AgendaAddForm meetingDate={primarySession.session_date} campusSessionId={primarySession.id} />
-                  <p className="text-[11px] text-neutral-500">
-                    Use “+ New task” to assign action items to a comms team member and link them to an agenda topic.
-                  </p>
-                </div>
-              ) : (
-                <div className="border-t border-neutral-200 px-4 py-4">
-                  <p className="text-sm text-neutral-600">
-                    No campus meeting exists for this month yet. Create one to start its agenda.
-                  </p>
-                  <form action={startCampusMeeting} className="mt-3">
-                    <input type="hidden" name="return_path" value={returnPath} />
-                    <input type="hidden" name="session_date" value={monthLastWednesday} />
-                    <button
-                      type="submit"
-                      className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
-                    >
-                      Create this month&apos;s meeting
-                    </button>
-                  </form>
-                </div>
-              )}
-            </CollapsibleCard>
-
-            <CollapsibleCard
-              title="Decisions"
-              storageKey="campus-decisions"
-              bodyClassName="px-0 pb-0"
-              actions={<span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">{decisions.length} decisions</span>}
-            >
-              <ul className="divide-y divide-neutral-100 border-t border-neutral-200">
-                {decisions.slice(0, 5).map((decision, index) => {
-                  const parsedDecision = parseDecisionItem(decision)
-                  return (
-                    <li key={`${decision}-${index}`} className="px-4 py-3">
-                      <p className="text-sm leading-5 text-neutral-800">{parsedDecision.decision}</p>
-                      <p className="mt-1 text-xs font-medium text-neutral-500">Decided by: {parsedDecision.owner}</p>
-                      {primarySession && (
-                        <details className="mt-2">
-                          <summary className="cursor-pointer text-xs font-semibold text-blue-700">Edit decision</summary>
-                          <form action={updateCampusDecisionItem} className="mt-2 grid gap-2 rounded-lg border border-neutral-200 bg-neutral-50 p-3">
-                            <input type="hidden" name="session_id" value={primarySession.id} />
-                            <input type="hidden" name="decision_index" value={String(index)} />
-                            <input type="hidden" name="return_path" value={returnPath} />
-                            <textarea
-                              name="decision_item"
-                              rows={3}
-                              defaultValue={parsedDecision.decision}
-                              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                            />
-                            <input
-                              name="decision_owner"
-                              defaultValue={parsedDecision.owner}
-                              className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                            />
-                            <button type="submit" className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">
-                              Save decision
-                            </button>
-                          </form>
-                        </details>
-                      )}
-                    </li>
-                  )
-                })}
-                {decisions.length === 0 && (
-                  <li className="px-4 py-8 text-center text-sm text-neutral-500">No decisions captured yet.</li>
-                )}
-              </ul>
-              {primarySession && (
-                <form action={addCampusDecisionItem} className="grid gap-3 border-t border-neutral-200 p-4">
-                  <input type="hidden" name="session_id" value={primarySession.id} />
+            {!primarySession ? (
+              <div className="rounded-lg border border-dashed border-neutral-300 bg-white px-4 py-6">
+                <p className="text-sm text-neutral-600">No campus meeting exists for this month yet.</p>
+                <form action={startCampusMeeting} className="mt-3">
                   <input type="hidden" name="return_path" value={returnPath} />
-                  <textarea
-                    name="decision_item"
-                    rows={3}
-                    required
-                    placeholder="Add one decision point"
-                    className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                  />
-                  <input
-                    name="decision_owner"
-                    required
-                    placeholder="Who decided"
-                    className="rounded-lg border border-neutral-200 px-3 py-2 text-sm"
-                  />
-                  <button type="submit" className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800">
-                    Add decision
+                  <input type="hidden" name="session_date" value={monthLastWednesday} />
+                  <button
+                    type="submit"
+                    className="rounded-lg bg-blue-900 px-3 py-2 text-sm font-semibold text-white hover:bg-blue-800"
+                  >
+                    Create this month&apos;s meeting
                   </button>
                 </form>
-              )}
-            </CollapsibleCard>
+              </div>
+            ) : (
+              <>
+                {/* Highlight of the month — presenter + highlight text */}
+                <CampusHighlight
+                  sessionId={primarySession.id}
+                  year={year}
+                  month={month}
+                  uploaderId={user?.id ?? ''}
+                  summary={primarySession.summary ?? null}
+                  editHref={`/app/comms/campus-log/sessions/${primarySession.id}`}
+                  presenterName={presenterName}
+                  presenterAvatarUrl={presenterAvatarUrl}
+                  presenterLinkedinUrl={presenterLinkedinUrl}
+                />
+
+                {/* Campus checklist */}
+                <CollapsibleCard
+                  title="Meeting checklist"
+                  storageKey="campus-checklist"
+                  bodyClassName="px-0 pb-0"
+                  actions={
+                    <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+                      {completedMeetingTasks}/{meetingTasks.length} done
+                    </span>
+                  }
+                >
+                  <CampusMeetingChecklist
+                    sessionId={primarySession.id}
+                    year={year}
+                    month={month}
+                    tasks={meetingTasks}
+                    teamMembers={teamMembers}
+                  />
+                </CollapsibleCard>
+
+                {/* Meeting AI summary with transcript */}
+                <CollapsibleCard
+                  title="Meeting AI summary & transcript"
+                  storageKey="campus-transcript"
+                  bodyClassName="px-0 pb-0"
+                  actions={
+                    <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                      {transcript?.summary ? 'Summary ready' : transcript ? 'Transcript uploaded' : 'No transcript'}
+                    </span>
+                  }
+                >
+                  <div className="border-t border-neutral-200 px-4 py-3">
+                    <MeetingTranscriptPanel
+                      context={{ kind: 'campus', campusSessionId: primarySession.id }}
+                      transcript={transcript}
+                      owners={transcriptOwners}
+                      aiEnabled={aiEnabled}
+                    />
+                  </div>
+                </CollapsibleCard>
+
+                {/* Decisions & action items (AI-extracted from the transcript) */}
+                <CollapsibleCard
+                  title="Decisions & action items"
+                  storageKey="campus-decisions"
+                  bodyClassName="px-0 pb-0"
+                  actions={
+                    <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-xs font-semibold text-neutral-600">
+                      {decisionCount} items
+                    </span>
+                  }
+                >
+                  <CampusDecisionsActions
+                    summary={transcript?.summary ?? null}
+                    proposals={transcript?.followUpProposals ?? []}
+                  />
+                </CollapsibleCard>
+              </>
+            )}
           </div>
         </aside>
       </div>
