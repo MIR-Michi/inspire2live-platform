@@ -137,7 +137,14 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
       .select('id, session_date, theme, summary, action_items_for_publication, decisions_for_publication')
       .gte('session_date', startDate)
       .lt('session_date', endDate)
-      .order('session_date', { ascending: false }),
+      // Stable ordering: monthly meetings share a session_date (the last
+      // Wednesday), so without a deterministic tiebreaker Postgres can return
+      // tied rows in a different order after any update — making the "primary"
+      // session flip between reloads. created_at asc consistently picks the
+      // first-created session (the one its checklist was seeded on), so the
+      // briefing and checklist always render for the same session.
+      .order('session_date', { ascending: false })
+      .order('created_at', { ascending: true }),
     supabase
       .from('campus_members')
       .select('id, name, country, organisation, date_welcomed, notes')
