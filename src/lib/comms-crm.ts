@@ -259,6 +259,12 @@ export type CrmContactRecord = {
     occurredAt: string
     nextFollowUpAt: string | null
   }>
+  conferences: Array<{
+    id: string
+    name: string
+    startDate: string | null
+    role: string
+  }>
 }
 
 export const CRM_FIELD_GROUPS = [
