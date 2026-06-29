@@ -476,6 +476,30 @@ function ConferenceListItem({ conf, active, onSelect }: { conf: ConferenceView; 
   )
 }
 
+function AssignmentSection({ conf }: { conf: ConferenceView }) {
+  const [open, setOpen] = useState(false)
+  return (
+    <div>
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
+      >
+        {open ? 'Hide attendees ↑' : 'Assign attendees →'}
+      </button>
+      {open && (
+        <div className="mt-3">
+          <ConferenceContactAssignment
+            conferenceId={conf.id}
+            conferenceName={conf.name}
+            initialContacts={conf.assignedContacts ?? []}
+          />
+        </div>
+      )}
+    </div>
+  )
+}
+
 function ConferenceDetailPane({
   conf,
   detail,

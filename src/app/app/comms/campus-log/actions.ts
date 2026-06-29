@@ -159,6 +159,7 @@ export async function saveCampusSession(formData: FormData) {
 
   revalidatePath('/app/comms/campus-log')
   revalidatePath(`/app/comms/campus-log/sessions/${sessionId}`)
+  redirect(`/app/comms/campus-log/sessions/${sessionId}`)
 }
 
 export async function addCampusAgendaItem(formData: FormData) {
