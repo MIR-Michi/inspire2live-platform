@@ -7,7 +7,7 @@ import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { normalizeRole } from '@/lib/role-access'
 import { CAMPUS_MEETING_TASK_TEMPLATE } from '@/lib/campus-meeting-tasks'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
-import { generateCampusBriefing } from '@/lib/ai/campus-briefing'
+import { generateCampusBriefing, type CampusBriefing } from '@/lib/ai/campus-briefing'
 
 /**
  * Seeds the standard campus-meeting checklist as comms_tasks tied to a newly
@@ -308,13 +308,20 @@ export async function deleteCampusSessionFile(formData: FormData) {
   revalidatePath(`/app/comms/campus-log/sessions/${sessionId}`)
 }
 
-type BriefingResult = { ok: boolean; message?: string }
+type BriefingResult = { ok: boolean; message?: string; briefing?: CampusBriefing }
+
+const BRIEFING_NOT_PERSISTED =
+  'Briefing generated, but it could not be saved (database migration 00104 has not been applied yet). It will not persist across reloads until the migration runs.'
 
 /**
  * Generates an educational pre-meeting briefing about a campus session's
  * presenter and topic. Never runs automatically — only on explicit request.
  * The first generation is open to any comms operator; regenerating an existing
  * briefing is restricted to platform admins.
+ *
+ * Degrades gracefully when the `briefing*` columns are not yet present in the
+ * database (migration 00104 lands in production only on merge to main): the
+ * briefing is still generated and returned for display, just not persisted.
  */
 export async function generateCampusBriefingAction(formData: FormData): Promise<BriefingResult> {
   try {
@@ -333,15 +340,31 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
     const db = supabase as any
     const { data: session, error: loadError } = await db
       .from('campus_sessions')
-      .select('id, theme, session_date, briefing')
+      .select('id, theme, session_date')
       .eq('id', sessionId)
       .maybeSingle()
 
     if (loadError) return { ok: false, message: loadError.message }
     if (!session) return { ok: false, message: 'Campus session not found.' }
 
-    // Regenerating an existing briefing is admin-only.
-    if (session.briefing && normalizeRole(role) !== 'PlatformAdmin') {
+    // Probe whether the briefing column exists, and whether one is already saved.
+    // A query error here means migration 00104 hasn't been applied — in that case
+    // we treat it as a first-time generation and skip persistence below.
+    let briefingColumnExists = true
+    let hasExistingBriefing = false
+    const { data: existing, error: existingError } = await db
+      .from('campus_sessions')
+      .select('briefing')
+      .eq('id', sessionId)
+      .maybeSingle()
+    if (existingError) {
+      briefingColumnExists = false
+    } else {
+      hasExistingBriefing = Boolean(existing?.briefing)
+    }
+
+    // Regenerating an existing (persisted) briefing is admin-only.
+    if (hasExistingBriefing && normalizeRole(role) !== 'PlatformAdmin') {
       return { ok: false, message: 'Only admins can regenerate an existing briefing.' }
     }
 
@@ -352,6 +375,10 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
       sessionDate: session.session_date ?? null,
       createdBy: user.id,
     })
+
+    if (!briefingColumnExists) {
+      return { ok: true, briefing, message: BRIEFING_NOT_PERSISTED }
+    }
 
     const { error: updateError } = await db
       .from('campus_sessions')
@@ -364,13 +391,16 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
       })
       .eq('id', sessionId)
 
-    if (updateError) return { ok: false, message: updateError.message }
+    if (updateError) {
+      // Schema partially missing — still surface the generated briefing.
+      return { ok: true, briefing, message: BRIEFING_NOT_PERSISTED }
+    }
 
     revalidatePath('/app/comms/campus')
     revalidatePath('/app/comms/campus-log')
     revalidatePath(returnPath)
     revalidatePath(`/app/comms/campus-log/sessions/${sessionId}`)
-    return { ok: true, message: 'Briefing generated.' }
+    return { ok: true, briefing }
   } catch (error) {
     return { ok: false, message: error instanceof Error ? error.message : 'Failed to generate briefing.' }
   }
