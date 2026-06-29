@@ -122,6 +122,32 @@ export async function startCampusMeeting(formData: FormData) {
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(sessionDate)) throw new Error('A valid session date is required.')
 
+  // Idempotent per month: if a meeting already exists for this month, reuse it
+  // instead of creating a duplicate. Duplicate sessions sharing a month split a
+  // meeting's data (checklist on one row, briefing on another) and make the
+  // briefing workspace's "primary" session ambiguous.
+  const [yearPart, monthPart] = sessionDate.split('-').map(Number)
+  const monthStart = `${yearPart}-${String(monthPart).padStart(2, '0')}-01`
+  const nextMonth =
+    monthPart === 12
+      ? `${yearPart + 1}-01-01`
+      : `${yearPart}-${String(monthPart + 1).padStart(2, '0')}-01`
+
+  const { data: existing } = await supabase
+    .from('campus_sessions')
+    .select('id')
+    .gte('session_date', monthStart)
+    .lt('session_date', nextMonth)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (existing?.id) {
+    revalidatePath('/app/comms/campus')
+    revalidatePath(returnPath)
+    redirect(returnPath)
+  }
+
   const { data, error } = await supabase
     .from('campus_sessions')
     .insert({ session_date: sessionDate, created_by: user.id })
