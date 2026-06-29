@@ -46,9 +46,15 @@ type Meeting = {
   presenterName: string | null
   presenterAvatarUrl: string | null
   unreviewed: number
+  openTasks: number
 }
 
 const SMALL_TILE_LIMIT = 6
+
+function truncate(text: string, max = 180) {
+  const t = text.trim()
+  return t.length > max ? `${t.slice(0, max).trimEnd()}…` : t
+}
 
 export default async function CommsCampusPage({
   searchParams,
@@ -63,7 +69,10 @@ export default async function CommsCampusPage({
     supabase
       .from('campus_sessions')
       .select('id, session_date, theme, summary')
+      // Match the meeting-detail page's primary-session pick (session_date desc,
+      // then created_at asc) so the overview shows the same session's content.
       .order('session_date', { ascending: false })
+      .order('created_at', { ascending: true })
       .limit(24),
     supabase
       .from('intake_items')
@@ -94,6 +103,22 @@ export default async function CommsCampusPage({
     }
   }
 
+  // Open checklist tasks per session (not completed / skipped). comms_tasks isn't
+  // in the generated types, so this goes through an untyped client.
+  const openTasksById = new Map<string, number>()
+  if (sessionIds.length > 0) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: taskRows } = await (supabase as any)
+      .from('comms_tasks')
+      .select('campus_session_id, status')
+      .in('campus_session_id', sessionIds)
+    for (const row of (taskRows ?? []) as Array<{ campus_session_id: string | null; status: string | null }>) {
+      if (!row.campus_session_id) continue
+      if (row.status === 'completed' || row.status === 'skipped') continue
+      openTasksById.set(row.campus_session_id, (openTasksById.get(row.campus_session_id) ?? 0) + 1)
+    }
+  }
+
   // One meeting per month (most recent session of the month wins on tie).
   const byMonth = new Map<string, Meeting>()
   for (const session of sessions ?? []) {
@@ -113,6 +138,7 @@ export default async function CommsCampusPage({
       presenterName: presenter?.name ?? null,
       presenterAvatarUrl: presenter?.avatar ?? null,
       unreviewed: monthIntake.filter((item) => item.status === 'unreviewed').length,
+      openTasks: openTasksById.get(session.id) ?? 0,
     })
   }
 
@@ -179,7 +205,7 @@ export default async function CommsCampusPage({
           {/* Dominant tiles: previous + next */}
           {previousMeeting || nextMeeting ? (
             <div className="grid gap-4 md:grid-cols-2">
-              {previousMeeting && <BigMeetingTile meeting={previousMeeting} label="Previous meeting" tone="past" />}
+              {previousMeeting && <BigMeetingTile meeting={previousMeeting} label="Last meeting" tone="past" />}
               {nextMeeting && <BigMeetingTile meeting={nextMeeting} label="Next meeting" tone="next" />}
             </div>
           ) : (
@@ -275,14 +301,21 @@ function BigMeetingTile({ meeting, label, tone }: { meeting: Meeting; label: str
         />
         <div className="min-w-0 flex-1">
           <h3 className="text-lg font-semibold leading-tight text-neutral-900">{meeting.title}</h3>
-          {meeting.presenterName && <p className="mt-0.5 text-sm font-medium text-blue-900">{meeting.presenterName}</p>}
-          <p className="mt-2 line-clamp-4 text-sm leading-5 text-neutral-600">
-            {meeting.description || 'Agenda building in progress from this month’s intake, welcomes, and session notes.'}
+          <p className="mt-0.5 text-sm font-medium text-blue-900">
+            {meeting.presenterName || 'Presenter to be announced'}
+          </p>
+          <p className="mt-2 text-sm leading-5 text-neutral-600">
+            {meeting.description
+              ? truncate(meeting.description)
+              : 'Agenda building in progress from this month’s intake, welcomes, and session notes.'}
           </p>
         </div>
       </div>
 
-      <div className="flex items-center justify-end px-5 pb-4">
+      <div className="flex items-center justify-between px-5 pb-4">
+        <span className="rounded-full bg-neutral-100 px-2.5 py-0.5 text-xs font-semibold text-neutral-600">
+          {meeting.openTasks} open {meeting.openTasks === 1 ? 'task' : 'tasks'}
+        </span>
         <span className="text-sm font-semibold text-blue-900">Open -&gt;</span>
       </div>
     </Link>
@@ -304,6 +337,9 @@ function SmallMeetingTile({ meeting }: { meeting: Meeting }) {
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-semibold text-neutral-900">{formatMonth(meeting.key)}</p>
         <p className="truncate text-xs text-neutral-500">{meeting.presenterName || lastWednesdayLabel(meeting.key)}</p>
+        <p className="mt-0.5 text-[11px] font-medium text-neutral-400">
+          {meeting.openTasks} open {meeting.openTasks === 1 ? 'task' : 'tasks'}
+        </p>
       </div>
     </Link>
   )
