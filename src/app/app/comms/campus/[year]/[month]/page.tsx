@@ -320,7 +320,14 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
             <section className="rounded-lg border border-blue-200 bg-blue-50 p-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold uppercase tracking-[0.14em] text-blue-900">What happened this month</h3>
-                <span className="text-xs font-bold uppercase text-blue-900">Edit</span>
+                {primarySession && (
+                  <Link
+                    href={`/app/comms/campus-log/sessions/${primarySession.id}`}
+                    className="text-xs font-bold uppercase text-blue-900 hover:underline"
+                  >
+                    Edit
+                  </Link>
+                )}
               </div>
               <p className="mt-3 text-sm leading-6 text-neutral-900">
                 {primarySession?.summary ||
