@@ -5,6 +5,7 @@ import { useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { saveCampusPresenter } from '@/app/app/comms/campus-log/actions'
+import { PresenterAvatar } from '@/components/comms/presenter-avatar'
 
 /**
  * "Highlight of the month" — a compact block (not full column width) that
@@ -93,8 +94,6 @@ export function CampusHighlight({
     setEditing(false)
   }
 
-  const initials = (name ?? '').trim().slice(0, 2).toUpperCase() || '👤'
-
   return (
     <section className="max-w-2xl rounded-lg border border-blue-200 bg-blue-50 p-4">
       <div className="flex items-start justify-between gap-2">
@@ -107,14 +106,7 @@ export function CampusHighlight({
       <div className="mt-3 flex gap-4">
         {/* Presenter avatar + LinkedIn (top-left) */}
         <div className="flex w-24 shrink-0 flex-col items-center gap-1.5">
-          {avatarUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={avatarUrl} alt={name || 'Presenter'} className="h-20 w-20 rounded-lg border border-blue-200 object-cover" />
-          ) : (
-            <div className="flex h-20 w-20 items-center justify-center rounded-lg border border-dashed border-blue-300 bg-white text-lg font-bold text-blue-300">
-              {initials}
-            </div>
-          )}
+          <PresenterAvatar src={avatarUrl || null} name={name} className="h-20 w-20" rounded="rounded-lg" />
 
           <label className="cursor-pointer text-[11px] font-semibold text-blue-700 hover:underline">
             {uploading ? 'Uploading…' : avatarUrl ? 'Change photo' : 'Upload photo'}
