@@ -135,13 +135,6 @@ export type AssembleInput = {
     role: string
   }>
   ownerLabels?: Map<string, string>
-  conferenceAssignments?: Array<{
-    contact_id: string
-    conference_id: string
-    conference_name: string
-    start_date: string | null
-    role: string
-  }>
 }
 
 function mergeText(primary: string | null | undefined, fallback: string | null | undefined) {
@@ -274,14 +267,6 @@ export function assembleCrmRecords(input: AssembleInput): CrmContactRecord[] {
   for (const link of input.crmEventLinks) {
     eventIdsByContact.set(link.contact_id, [...(eventIdsByContact.get(link.contact_id) ?? []), link.event_id])
   }
-  const conferencesByContact = new Map<string, CrmContactRecord['conferences']>()
-  for (const ca of input.conferenceAssignments ?? []) {
-    conferencesByContact.set(ca.contact_id, [
-      ...(conferencesByContact.get(ca.contact_id) ?? []),
-      { id: ca.conference_id, name: ca.conference_name, startDate: ca.start_date, role: ca.role },
-    ])
-  }
-
   const interactionsByContact = new Map<string, CrmContactRecord['recentInteractions']>()
   for (const interaction of input.crmInteractions) {
     interactionsByContact.set(interaction.contact_id, [
@@ -481,18 +466,6 @@ export async function loadCrmDirectory(supabase: SupabaseClient<Database>): Prom
     crmInteractions: crmInteractionsResult.error ? [] : crmInteractionsResult.data ?? [],
     conferenceAssignments,
     ownerLabels,
-    conferenceAssignments: conferenceAssignmentsResult.error ? [] : (conferenceAssignmentsResult.data ?? []).map((row: {
-      contact_id: string
-      conference_id: string
-      role: string
-      conferences: { id: string; name: string; start_date: string | null } | null
-    }) => ({
-      contact_id: String(row.contact_id),
-      conference_id: String(row.conference_id),
-      conference_name: row.conferences?.name ?? '',
-      start_date: row.conferences?.start_date ?? null,
-      role: String(row.role ?? 'attendee'),
-    })).filter((row: { conference_name: string }) => row.conference_name),
   })
 
   const connectorBacklog: CrmConnectorBacklogItem[] = connectorBacklogResult.error

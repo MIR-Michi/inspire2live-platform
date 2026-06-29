@@ -724,30 +724,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   )
 }
 
-function AssignmentSection({ conf }: { conf: ConferenceView }) {
-  const [open, setOpen] = useState(false)
-  return (
-    <div>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="rounded-lg border border-violet-200 bg-violet-50 px-3 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-100"
-      >
-        {open ? 'Hide attendees ↑' : 'Assign attendees →'}
-      </button>
-      {open && (
-        <div className="mt-3">
-          <ConferenceContactAssignment
-            conferenceId={conf.id}
-            conferenceName={conf.name}
-            initialContacts={conf.assignedContacts ?? []}
-          />
-        </div>
-      )}
-    </div>
-  )
-}
-
 function Spinner() {
   return <span className="h-4 w-4 animate-spin rounded-full border-2 border-neutral-300 border-t-orange-500" aria-hidden="true" />
 }
