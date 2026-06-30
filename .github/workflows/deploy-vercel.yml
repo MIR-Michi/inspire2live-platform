@@ -2,36 +2,30 @@ name: Deploy to Vercel (Production)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Triggers:
-#   • push to main touching supabase/** → apply remote database migrations
-#     automatically (the gap that previously required a manual run). The Vercel
-#     GitHub integration already deploys the app code on merge, so on push we
-#     ONLY apply migrations and deliberately skip the Vercel CLI deploy to avoid
-#     double-deploying.
-#   • workflow_dispatch → full manual path: apply migrations AND deploy to Vercel
-#     via the CLI (e.g. to force a redeploy or deploy without a code change).
+#   • push to main → apply remote database migrations AND deploy the app to
+#     Vercel production via the CLI. This is the single, authoritative path that
+#     ships every merge to main (migrations first, then deploy).
+#   • workflow_dispatch → same thing on demand (force a redeploy, or deploy
+#     without a code change).
 #
-# Trade-off: a broken migration on main will now mark the main commit red. That
-# is the intended signal — production schema is out of sync until it's fixed —
-# and PR-time validation (db-migrations.yml) exists to catch most breakage first.
+# `supabase db push --include-all` is idempotent (only new migrations are
+# applied), so it is safe to run on every push even when nothing changed.
+#
+# Trade-off: a broken migration on main will mark the main commit red. That is
+# the intended signal — production is out of sync until it's fixed — and PR-time
+# validation (db-migrations.yml) exists to catch most breakage first.
 #
 # Required GitHub Secrets  (Settings → Secrets → Actions):
 #   SUPABASE_ACCESS_TOKEN     – https://supabase.com/dashboard/account/tokens
 #   SUPABASE_DB_PASSWORD      – Supabase project → Settings → Database → Database password
-#   VERCEL_TOKEN              – https://vercel.com/account/tokens   (manual deploy only)
-#   VERCEL_ORG_ID             – vercel.com → project → Settings → General (manual deploy only)
-#   VERCEL_PROJECT_ID         – same page                          (manual deploy only)
+#   VERCEL_TOKEN              – https://vercel.com/account/tokens
+#   VERCEL_ORG_ID             – vercel.com → project → Settings → General
+#   VERCEL_PROJECT_ID         – same page
 # ──────────────────────────────────────────────────────────────────────────────
 
 on:
   push:
     branches: [main]
-    paths:
-      - "supabase/migrations/**"
-      - "supabase/seed.sql"
-      - "supabase/config.toml"
-      # Re-sync the remote DB whenever this workflow changes too — handy to apply
-      # a migration that landed on main before auto-push existed.
-      - ".github/workflows/deploy-vercel.yml"
   workflow_dispatch:
     inputs:
       reason:
@@ -39,14 +33,15 @@ on:
         required: false
         default: "Manual trigger"
 
-# Never let two production pushes apply migrations concurrently.
+# Never let two production deploys run concurrently; let an in-flight deploy
+# finish rather than cancelling it mid-migration.
 concurrency:
   group: deploy-production
   cancel-in-progress: false
 
 jobs:
   deploy-production:
-    name: Apply migrations & (manual) deploy
+    name: Apply migrations & deploy to Vercel
     runs-on: ubuntu-latest
 
     env:
@@ -57,12 +52,15 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
-      - name: Validate migration secrets
+      - name: Validate required secrets
         shell: bash
         run: |
           missing=""
           [ -z "${{ secrets.SUPABASE_ACCESS_TOKEN }}" ]  && missing="$missing SUPABASE_ACCESS_TOKEN"
           [ -z "${{ secrets.SUPABASE_DB_PASSWORD }}" ]   && missing="$missing SUPABASE_DB_PASSWORD"
+          [ -z "${{ secrets.VERCEL_TOKEN }}" ]           && missing="$missing VERCEL_TOKEN"
+          [ -z "${{ secrets.VERCEL_ORG_ID }}" ]          && missing="$missing VERCEL_ORG_ID"
+          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]      && missing="$missing VERCEL_PROJECT_ID"
           if [ -n "$missing" ]; then
             echo "::error::Missing required secrets:$missing"
             echo "Add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
@@ -81,30 +79,11 @@ jobs:
           supabase link --project-ref bvccuypipogprmjxctxp
           supabase db push --include-all --password "${{ secrets.SUPABASE_DB_PASSWORD }}"
 
-      # ── Vercel CLI deploy: manual dispatch only ──────────────────────────────
-      # On push, the Vercel GitHub integration already deploys the app, so these
-      # steps are skipped to avoid a duplicate deployment.
-      - name: Validate Vercel secrets
-        if: github.event_name == 'workflow_dispatch'
-        shell: bash
-        run: |
-          missing=""
-          [ -z "${{ secrets.VERCEL_TOKEN }}" ]           && missing="$missing VERCEL_TOKEN"
-          [ -z "${{ secrets.VERCEL_ORG_ID }}" ]          && missing="$missing VERCEL_ORG_ID"
-          [ -z "${{ secrets.VERCEL_PROJECT_ID }}" ]      && missing="$missing VERCEL_PROJECT_ID"
-          if [ -n "$missing" ]; then
-            echo "::error::Missing required secrets:$missing"
-            echo "Add them at: https://github.com/${{ github.repository }}/settings/secrets/actions"
-            exit 1
-          fi
-
       - name: Setup pnpm
-        if: github.event_name == 'workflow_dispatch'
         uses: pnpm/action-setup@v4
         # version is read from packageManager field in package.json
 
       - name: Setup Node.js
-        if: github.event_name == 'workflow_dispatch'
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -112,20 +91,16 @@ jobs:
           cache-dependency-path: pnpm-lock.yaml
 
       - name: Install dependencies
-        if: github.event_name == 'workflow_dispatch'
         run: pnpm install --frozen-lockfile
 
       - name: Pull Vercel environment
-        if: github.event_name == 'workflow_dispatch'
         run: pnpm vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Build
-        if: github.event_name == 'workflow_dispatch'
         run: pnpm vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
 
       - name: Deploy
         id: deploy
-        if: github.event_name == 'workflow_dispatch'
         run: |
           DEPLOY_URL=$(pnpm vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }})
           echo "url=$DEPLOY_URL" >> $GITHUB_OUTPUT
@@ -134,21 +109,10 @@ jobs:
       - name: Job summary
         if: always()
         run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            echo "## ✅ Migrations applied & deployed to Vercel" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| | |" >> $GITHUB_STEP_SUMMARY
-            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-            echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ✅ Database migrations applied" >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "App deploy handled by the Vercel GitHub integration." >> $GITHUB_STEP_SUMMARY
-            echo "" >> $GITHUB_STEP_SUMMARY
-            echo "| | |" >> $GITHUB_STEP_SUMMARY
-            echo "|---|---|" >> $GITHUB_STEP_SUMMARY
-            echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
-            echo "| **Trigger** | push to main (supabase/**) |" >> $GITHUB_STEP_SUMMARY
-          fi
+          echo "## ✅ Migrations applied & deployed to Vercel" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| | |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| **URL** | ${{ steps.deploy.outputs.url }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Commit** | \`${{ github.sha }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| **Trigger** | ${{ github.event_name }} |" >> $GITHUB_STEP_SUMMARY
