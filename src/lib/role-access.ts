@@ -155,8 +155,9 @@ export const MASTER_NAV: NavSection[] = [
   {
     label: 'Account',
     items: [
-      { id: 'admin',    label: 'User Management', href: '/app/admin/users',     space: 'admin', icon: 'admin',    minLevel: 'manage' },
-      { id: 'feedback', label: 'Feedback',         href: '/app/admin/feedback',  space: 'admin', icon: 'feedback', minLevel: 'manage' },
+      { id: 'admin',    label: 'User Management', href: '/app/admin/users',     space: 'admin', icon: 'admin',     minLevel: 'manage' },
+      { id: 'activity', label: 'User Activity',   href: '/app/admin/activity',  space: 'admin', icon: 'dashboard', minLevel: 'manage' },
+      { id: 'feedback', label: 'Feedback',         href: '/app/admin/feedback',  space: 'admin', icon: 'feedback',  minLevel: 'manage' },
     ],
   },
 ]

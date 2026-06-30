@@ -8,6 +8,7 @@ import { getViewAsRole } from '@/lib/view-as'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
 import { TestModeProvider } from '@/components/feedback/test-mode-context'
 import { FeedbackOverlay } from '@/components/feedback/feedback-overlay'
+import { ActivityTracker } from '@/components/activity/activity-tracker'
 
 function getInitials(name: string): string {
   return name
@@ -111,6 +112,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           </div>
         </div>
         <FeedbackOverlay />
+        <ActivityTracker />
       </TestModeProvider>
     </RoleLayersProvider>
   )
