@@ -1,7 +1,6 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { HEARTBEAT_SECONDS } from '@/lib/activity-spaces'
-import { createAdminClient } from '@/lib/supabase/admin'
 
 export type SpaceUsage = {
   space: string
@@ -100,28 +99,40 @@ export async function loadUserActivityMetrics(
     // function not present yet (migration 00107) — degrade silently
   }
 
+  // Read the activity logs with the caller's (admin) client — no service role
+  // needed: admins can select activity_log via RLS, and any authenticated user
+  // can read congress_activity_log.
   const actionByUser = new Map<string, { count: number; last: string | null }>()
-  try {
-    const admin = createAdminClient() // service role: bypasses RLS to see all logs
-    const addActions = (rows: Array<{ actor_id: string | null; created_at: string }> | null | undefined) => {
-      for (const row of rows ?? []) {
-        if (!row.actor_id) continue
-        const cur = actionByUser.get(row.actor_id) ?? { count: 0, last: null }
-        cur.count += 1
-        if (!cur.last || row.created_at > cur.last) cur.last = row.created_at
-        actionByUser.set(row.actor_id, cur)
-      }
+  const addActions = (rows: Array<{ actor_id: string | null; created_at: string }> | null | undefined) => {
+    for (const row of rows ?? []) {
+      if (!row.actor_id) continue
+      const cur = actionByUser.get(row.actor_id) ?? { count: 0, last: null }
+      cur.count += 1
+      if (!cur.last || row.created_at > cur.last) cur.last = row.created_at
+      actionByUser.set(row.actor_id, cur)
     }
-    const [initiativeActions, congressActions] = await Promise.all([
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (admin as any).from('activity_log').select('actor_id, created_at').gte('created_at', since).limit(100_000),
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      (admin as any).from('congress_activity_log').select('actor_id, created_at').gte('created_at', since).limit(100_000),
-    ])
-    addActions(initiativeActions.data)
-    addActions(congressActions.data)
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from('activity_log')
+      .select('actor_id, created_at')
+      .gte('created_at', since)
+      .limit(100_000)
+    addActions(data)
   } catch {
-    // service role not configured / tables absent — degrade silently
+    // table absent / not readable — skip
+  }
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
+      .from('congress_activity_log')
+      .select('actor_id, created_at')
+      .gte('created_at', since)
+      .limit(100_000)
+    addActions(data)
+  } catch {
+    // table absent / not readable — skip
   }
 
   const byUser = new Map<string, Agg>()

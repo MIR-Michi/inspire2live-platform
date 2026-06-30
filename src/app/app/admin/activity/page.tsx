@@ -31,6 +31,14 @@ function formatLastSeen(value: string | null): string {
   return new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(date)
 }
 
+function mostRecent(...values: Array<string | null>): string | null {
+  let best: string | null = null
+  for (const value of values) {
+    if (value && (!best || value > best)) best = value
+  }
+  return best
+}
+
 function initials(name: string): string {
   return name
     .split(' ')
@@ -68,7 +76,7 @@ export default async function AdminActivityPage({
   const requested = Number(params.days)
   const windowDays = WINDOWS.includes(requested as (typeof WINDOWS)[number]) ? requested : 30
 
-  const { users, tracking, totalActiveMinutes, totalLogins, totalActions } = await loadUserActivityMetrics(
+  const { users, tracking, totalActiveMinutes, totalPageviews, totalActions } = await loadUserActivityMetrics(
     supabase,
     windowDays
   )
@@ -83,11 +91,12 @@ export default async function AdminActivityPage({
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Admin</p>
         <h1 className="text-2xl font-semibold text-neutral-900">User activity</h1>
         <p className="max-w-3xl text-sm text-neutral-600">
-          Engagement per registered user. <strong>Logins</strong> and <strong>actions</strong> are backfilled from the
-          auth history and the platform&apos;s activity logs, so they reflect the past too. <strong>Active time</strong>{' '}
-          only counts minutes when someone is genuinely interacting (visible tab + recent activity) — idle
-          &ldquo;logged-in&rdquo; time is excluded — and, like page views and the per-space breakdown, is tracked from
-          when this feature went live onward.
+          Engagement per registered user, most-recently-seen first. <strong>Last seen</strong> is the latest of their
+          last sign-in and any tracked activity (so an active user shows &ldquo;just now&rdquo; even on a long-lived
+          session). <strong>Last sign-in</strong> is when they last authenticated. <strong>Actions</strong> are
+          backfilled from the platform&apos;s activity logs (initiatives, congress). <strong>Active time</strong> and{' '}
+          <strong>page views</strong> only count genuine interaction (visible tab + recent activity) and are tracked
+          from when this feature went live onward.
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <span className="text-xs font-semibold text-neutral-500">Window:</span>
@@ -115,9 +124,9 @@ export default async function AdminActivityPage({
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile label="Active users" value={String(activeUsers.length)} meta={`of ${users.length} registered`} />
-        <SummaryTile label="Logins" value={String(totalLogins)} meta="sign-ins (incl. history)" />
         <SummaryTile label="Actions" value={String(totalActions)} meta="recorded across the platform" />
         <SummaryTile label="Active time" value={formatMinutes(totalActiveMinutes)} meta="tracked from now on" />
+        <SummaryTile label="Page views" value={String(totalPageviews)} meta="tracked from now on" />
       </div>
 
       <div className="space-y-3">
@@ -165,13 +174,12 @@ function UserActivityCard({ activity, maxSpaceMinutes }: { activity: UserActivit
           </div>
         </div>
 
-        <dl className="grid grid-cols-3 gap-x-6 gap-y-2 text-sm sm:grid-cols-6">
-          <Metric label="Last login" value={formatLastSeen(activity.lastLogin)} />
-          <Metric label="Logins" value={String(activity.loginCount)} />
+        <dl className="grid grid-cols-3 gap-x-6 gap-y-2 text-sm sm:grid-cols-5">
+          <Metric label="Last seen" value={formatLastSeen(mostRecent(activity.lastSeen, activity.lastLogin, activity.lastAction))} />
+          <Metric label="Last sign-in" value={formatLastSeen(activity.lastLogin)} />
           <Metric label="Actions" value={String(activity.actionCount)} />
           <Metric label="Active time" value={formatMinutes(activity.activeMinutes)} />
           <Metric label="Page views" value={String(activity.pageviews)} />
-          <Metric label="Last active" value={formatLastSeen(activity.lastSeen)} />
         </dl>
       </div>
 
