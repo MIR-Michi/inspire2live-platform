@@ -68,8 +68,13 @@ export default async function AdminActivityPage({
   const requested = Number(params.days)
   const windowDays = WINDOWS.includes(requested as (typeof WINDOWS)[number]) ? requested : 30
 
-  const { users, tracking, totalActiveMinutes, totalPageviews } = await loadUserActivityMetrics(supabase, windowDays)
-  const activeUsers = users.filter((u) => u.activeMinutes > 0 || u.pageviews > 0)
+  const { users, tracking, totalActiveMinutes, totalLogins, totalActions } = await loadUserActivityMetrics(
+    supabase,
+    windowDays
+  )
+  const activeUsers = users.filter(
+    (u) => u.activeMinutes > 0 || u.pageviews > 0 || u.loginCount > 0 || u.actionCount > 0
+  )
   const maxSpaceMinutes = Math.max(1, ...users.flatMap((u) => u.perSpace.map((s) => s.minutes)))
 
   return (
@@ -78,9 +83,11 @@ export default async function AdminActivityPage({
         <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Admin</p>
         <h1 className="text-2xl font-semibold text-neutral-900">User activity</h1>
         <p className="max-w-3xl text-sm text-neutral-600">
-          Engagement per registered user. Active time only counts minutes when someone is genuinely interacting (visible
-          tab + recent activity), so idle &ldquo;logged-in&rdquo; time is excluded. Page views and the per-space
-          breakdown show where on the platform people actually work.
+          Engagement per registered user. <strong>Logins</strong> and <strong>actions</strong> are backfilled from the
+          auth history and the platform&apos;s activity logs, so they reflect the past too. <strong>Active time</strong>{' '}
+          only counts minutes when someone is genuinely interacting (visible tab + recent activity) — idle
+          &ldquo;logged-in&rdquo; time is excluded — and, like page views and the per-space breakdown, is tracked from
+          when this feature went live onward.
         </p>
         <div className="flex flex-wrap items-center gap-2 pt-1">
           <span className="text-xs font-semibold text-neutral-500">Window:</span>
@@ -106,10 +113,11 @@ export default async function AdminActivityPage({
         </div>
       )}
 
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         <SummaryTile label="Active users" value={String(activeUsers.length)} meta={`of ${users.length} registered`} />
-        <SummaryTile label="Active time" value={formatMinutes(totalActiveMinutes)} meta="across all users" />
-        <SummaryTile label="Page views" value={String(totalPageviews)} meta="navigations recorded" />
+        <SummaryTile label="Logins" value={String(totalLogins)} meta="sign-ins (incl. history)" />
+        <SummaryTile label="Actions" value={String(totalActions)} meta="recorded across the platform" />
+        <SummaryTile label="Active time" value={formatMinutes(totalActiveMinutes)} meta="tracked from now on" />
       </div>
 
       <div className="space-y-3">
@@ -137,7 +145,8 @@ function SummaryTile({ label, value, meta }: { label: string; value: string; met
 }
 
 function UserActivityCard({ activity, maxSpaceMinutes }: { activity: UserActivity; maxSpaceMinutes: number }) {
-  const idle = activity.activeMinutes === 0 && activity.pageviews === 0
+  const hasAny =
+    activity.loginCount > 0 || activity.actionCount > 0 || activity.activeMinutes > 0 || activity.pageviews > 0
   return (
     <div className="rounded-xl border border-neutral-200 bg-white shadow-sm">
       <div className="flex flex-wrap items-center gap-4 px-5 py-4">
@@ -156,15 +165,17 @@ function UserActivityCard({ activity, maxSpaceMinutes }: { activity: UserActivit
           </div>
         </div>
 
-        <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
-          <Metric label="Last active" value={formatLastSeen(activity.lastSeen)} />
+        <dl className="grid grid-cols-3 gap-x-6 gap-y-2 text-sm sm:grid-cols-6">
+          <Metric label="Last login" value={formatLastSeen(activity.lastLogin)} />
+          <Metric label="Logins" value={String(activity.loginCount)} />
+          <Metric label="Actions" value={String(activity.actionCount)} />
           <Metric label="Active time" value={formatMinutes(activity.activeMinutes)} />
-          <Metric label="Active days" value={String(activity.activeDays)} />
           <Metric label="Page views" value={String(activity.pageviews)} />
+          <Metric label="Last active" value={formatLastSeen(activity.lastSeen)} />
         </dl>
       </div>
 
-      {!idle && activity.perSpace.length > 0 && (
+      {activity.perSpace.length > 0 && (
         <details className="group border-t border-neutral-100 px-5 py-3">
           <summary className="cursor-pointer list-none text-xs font-semibold text-blue-800 hover:text-blue-900">
             <span className="group-open:hidden">Show {activity.spacesVisited} spaces ↓</span>
@@ -189,7 +200,7 @@ function UserActivityCard({ activity, maxSpaceMinutes }: { activity: UserActivit
         </details>
       )}
 
-      {idle && (
+      {!hasAny && (
         <p className="border-t border-neutral-100 px-5 py-2 text-xs text-neutral-400">No recorded activity in this window.</p>
       )}
     </div>

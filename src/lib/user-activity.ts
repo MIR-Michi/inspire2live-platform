@@ -1,6 +1,7 @@
 import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { HEARTBEAT_SECONDS } from '@/lib/activity-spaces'
+import { createAdminClient } from '@/lib/supabase/admin'
 
 export type SpaceUsage = {
   space: string
@@ -19,6 +20,11 @@ export type UserActivity = {
   pageviews: number
   spacesVisited: number
   perSpace: SpaceUsage[]
+  // Backfilled from data that predates activity tracking.
+  loginCount: number
+  lastLogin: string | null
+  actionCount: number
+  lastAction: string | null
 }
 
 export type UserActivityResult = {
@@ -27,6 +33,8 @@ export type UserActivityResult = {
   tracking: boolean
   totalActiveMinutes: number
   totalPageviews: number
+  totalLogins: number
+  totalActions: number
 }
 
 type EventRow = { user_id: string; kind: string; space: string; occurred_at: string }
@@ -77,6 +85,45 @@ export async function loadUserActivityMetrics(
   const tracking = !error
   const events = (eventData ?? []) as EventRow[]
 
+  // ── Backfill: logins (auth audit log) + actions (existing activity logs) ──
+  // These predate activity tracking, so they give the view real history now.
+  const loginByUser = new Map<string, { count: number; last: string | null }>()
+  try {
+    // RPC runs as the calling admin (auth.uid()), enforced inside the function.
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: loginRows } = await (supabase as any).rpc('admin_user_login_stats', { since })
+    for (const row of (loginRows ?? []) as Array<{ user_id: string; login_count: number; last_login: string | null }>) {
+      if (!row.user_id) continue
+      loginByUser.set(row.user_id, { count: Number(row.login_count) || 0, last: row.last_login ?? null })
+    }
+  } catch {
+    // function not present yet (migration 00107) — degrade silently
+  }
+
+  const actionByUser = new Map<string, { count: number; last: string | null }>()
+  try {
+    const admin = createAdminClient() // service role: bypasses RLS to see all logs
+    const addActions = (rows: Array<{ actor_id: string | null; created_at: string }> | null | undefined) => {
+      for (const row of rows ?? []) {
+        if (!row.actor_id) continue
+        const cur = actionByUser.get(row.actor_id) ?? { count: 0, last: null }
+        cur.count += 1
+        if (!cur.last || row.created_at > cur.last) cur.last = row.created_at
+        actionByUser.set(row.actor_id, cur)
+      }
+    }
+    const [initiativeActions, congressActions] = await Promise.all([
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (admin as any).from('activity_log').select('actor_id, created_at').gte('created_at', since).limit(100_000),
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (admin as any).from('congress_activity_log').select('actor_id, created_at').gte('created_at', since).limit(100_000),
+    ])
+    addActions(initiativeActions.data)
+    addActions(congressActions.data)
+  } catch {
+    // service role not configured / tables absent — degrade silently
+  }
+
   const byUser = new Map<string, Agg>()
   const ensure = (id: string): Agg => {
     let agg = byUser.get(id)
@@ -118,6 +165,9 @@ export async function loadUserActivityMetrics(
       }))
       .sort((a, b) => b.minutes - a.minutes || b.pageviews - a.pageviews)
 
+    const login = loginByUser.get(profile.id)
+    const action = actionByUser.get(profile.id)
+
     return {
       userId: profile.id,
       name: profile.name ?? profile.email ?? 'Unknown',
@@ -129,10 +179,21 @@ export async function loadUserActivityMetrics(
       pageviews: agg?.pageviews ?? 0,
       spacesVisited: spaces.size,
       perSpace,
+      loginCount: login?.count ?? 0,
+      lastLogin: login?.last ?? null,
+      actionCount: action?.count ?? 0,
+      lastAction: action?.last ?? null,
     }
   })
 
-  users.sort((a, b) => b.activeMinutes - a.activeMinutes || b.pageviews - a.pageviews)
+  // Most recently engaged first (login, in-app presence, or a recorded action).
+  const lastEngagedMs = (u: UserActivity) =>
+    Math.max(
+      u.lastLogin ? Date.parse(u.lastLogin) : 0,
+      u.lastSeen ? Date.parse(u.lastSeen) : 0,
+      u.lastAction ? Date.parse(u.lastAction) : 0
+    )
+  users.sort((a, b) => lastEngagedMs(b) - lastEngagedMs(a))
 
   return {
     users,
@@ -140,5 +201,7 @@ export async function loadUserActivityMetrics(
     tracking,
     totalActiveMinutes: users.reduce((sum, u) => sum + u.activeMinutes, 0),
     totalPageviews: users.reduce((sum, u) => sum + u.pageviews, 0),
+    totalLogins: users.reduce((sum, u) => sum + u.loginCount, 0),
+    totalActions: users.reduce((sum, u) => sum + u.actionCount, 0),
   }
 }
