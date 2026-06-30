@@ -952,10 +952,10 @@ export function CommsCrmWorkspace({
           )}
 
           <ul className="divide-y divide-neutral-100 overflow-hidden rounded-lg border border-neutral-200 bg-white shadow-sm">
-            {visibleRecords.map((contact) => {
+            {visibleRecords.map((contact, index) => {
               const active = contact.id === selectedId
               return (
-                <li key={contact.id}>
+                <li key={contact.id} className="animate-fade-up" style={{ animationDelay: `${Math.min(index, 14) * 25}ms` }}>
                   <button
                     type="button"
                     onClick={() => setSelectedId(contact.id)}

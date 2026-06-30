@@ -83,3 +83,99 @@ h3 + p[class*="text-sm"][class*="text-neutral-600"] {
 .text-balance {
   text-wrap: balance;
 }
+
+/* ─── Motion ──────────────────────────────────────────────────────────────
+   Nuanced, organic micro-interactions. Durations are short and easings are
+   natural (gentle ease-out / soft spring). Everything here is disabled under
+   prefers-reduced-motion (see the media query at the end). */
+
+@keyframes i2l-fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes i2l-check-pop {
+  0% {
+    transform: scale(1);
+  }
+  40% {
+    transform: scale(1.18);
+  }
+  70% {
+    transform: scale(0.94);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+@keyframes i2l-confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translate(0, 0) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--cx, 0), var(--cy, 80px)) rotate(var(--cr, 180deg));
+  }
+}
+
+/* Entrance: fade + rise. `both` keeps the element hidden until its delay starts,
+   so staggered lists reveal cleanly. */
+.animate-fade-up {
+  animation: i2l-fade-up 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* A soft spring "pop", e.g. when a task is checked off. */
+.animate-check-pop {
+  animation: i2l-check-pop 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+/* Strike-through that sweeps in left → right when data-struck flips to true. */
+.strike-sweep {
+  position: relative;
+}
+.strike-sweep::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 55%;
+  height: 1.5px;
+  width: 100%;
+  background: currentColor;
+  transform: scaleX(0);
+  transform-origin: left center;
+  transition: transform 0.28s ease;
+}
+.strike-sweep[data-struck="true"]::after {
+  transform: scaleX(1);
+}
+
+.confetti-piece {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  animation: i2l-confetti-fall 0.95s ease-out forwards;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-check-pop,
+  .confetti-piece {
+    animation: none !important;
+  }
+  .animate-fade-up {
+    opacity: 1;
+    transform: none;
+  }
+  .strike-sweep::after {
+    transition: none;
+  }
+}
