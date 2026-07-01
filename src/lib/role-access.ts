@@ -68,8 +68,8 @@ export function getRoleBadgeColor(role?: string | null): string {
 // Visibility rule per item: canAccess(spaces[item.space], item.minLevel ?? 'view').
 //
 // Deliberately NOT in the tree (still reachable elsewhere): Profile (top-right
-// account menu), Tasks / Bureau / Partners, and Annual Congress (currently hidden
-// from Communications navigation and surfaced only by direct workspace routes).
+// account menu), Tasks / Bureau / Partners, Annual Congress, and conference guest
+// submissions (now surfaced from the Conferences workspace).
 
 /** Icon keys resolved to an SVG in the sidebar. */
 export type NavIcon =
@@ -155,10 +155,9 @@ export const MASTER_NAV: NavSection[] = [
   {
     label: 'Account',
     items: [
-      { id: 'admin',             label: 'User Management',      href: '/app/admin/users',              space: 'admin', icon: 'admin',     minLevel: 'manage' },
-      { id: 'activity',          label: 'User Activity',        href: '/app/admin/activity',           space: 'admin', icon: 'dashboard', minLevel: 'manage' },
-      { id: 'guest-submissions', label: 'Conference submissions', href: '/app/admin/guest-submissions', space: 'admin', icon: 'feedback',  minLevel: 'manage' },
-      { id: 'feedback',          label: 'Feedback',             href: '/app/admin/feedback',           space: 'admin', icon: 'feedback',  minLevel: 'manage' },
+      { id: 'admin',    label: 'User Management', href: '/app/admin/users',    space: 'admin', icon: 'admin',     minLevel: 'manage' },
+      { id: 'activity', label: 'User Activity',   href: '/app/admin/activity', space: 'admin', icon: 'dashboard', minLevel: 'manage' },
+      { id: 'feedback', label: 'Feedback',        href: '/app/admin/feedback', space: 'admin', icon: 'feedback',  minLevel: 'manage' },
     ],
   },
 ]
@@ -191,9 +190,8 @@ const COMMS_NAV_SECTIONS: NavSection[] = [
   {
     label: 'Events',
     items: [
-      { id: 'comms-conferences',  label: 'Conferences',           href: '/app/comms/conferences',        space: 'comms', icon: 'events' },
-      { id: 'comms-podcast',      label: 'Podcast',              href: '/app/comms/podcast',            space: 'comms', icon: 'podcast' },
-      { id: 'guest-submissions',  label: 'Conf. submissions',    href: '/app/admin/guest-submissions',  space: 'comms', icon: 'feedback' },
+      { id: 'comms-conferences', label: 'Conferences', href: '/app/comms/conferences', space: 'comms', icon: 'events' },
+      { id: 'comms-podcast',     label: 'Podcast',     href: '/app/comms/podcast',     space: 'comms', icon: 'podcast' },
     ],
   },
   {
