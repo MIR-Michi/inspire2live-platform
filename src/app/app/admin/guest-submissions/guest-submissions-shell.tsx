@@ -50,7 +50,7 @@ export function GuestSubmissionsShell({ submissions }: { submissions: Submission
 
       {submissions.length === 0 && (
         <p className="rounded-xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
-          No attendance reports yet. Open a conference and use "Invite guest to submit attendance" to send a form link.
+          No attendance reports yet. Open a conference and send a guest invite to collect the first form.
         </p>
       )}
 
