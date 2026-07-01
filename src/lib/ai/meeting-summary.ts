@@ -229,6 +229,7 @@ async function summarizeSinglePass(
   const block = wrapExternalData('meeting.transcript', transcriptText)
   const result = await runAiMessage<unknown>({
     feature: 'meeting_summary',
+    workload: 'meeting_summary',
     model: input.model,
     effort: input.effort,
     maxTokens: 8000,
@@ -263,6 +264,7 @@ async function summarizeChunk(input: SummarizeMeetingInput, speakers: string[], 
   const block = wrapExternalData('meeting.transcript_segment', chunk)
   const result = await runAiMessage<string>({
     feature: 'meeting_summary_chunk',
+    workload: 'meeting_summary_chunk',
     model: input.model,
     effort: input.effort,
     maxTokens: 3000,
