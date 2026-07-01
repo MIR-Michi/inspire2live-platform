@@ -3,11 +3,6 @@ import 'server-only'
 import { runAiMessage, webSearchTool, wrapExternalData } from './client'
 import type { AiModelId, AiReasoningEffort } from './models'
 
-// Discovery is a web-search aggregation job (find real conferences with real
-// dates and URLs), best served by the fast balanced model rather than the
-// heavy reasoning default — same policy as the org news feed.
-const CONFERENCE_MODEL: AiModelId = 'claude-sonnet-4-6'
-
 // ── Region taxonomy (mirrors the DB check constraint + filter dropdown) ──────
 export const CONFERENCE_REGIONS = [
   'europe',
@@ -86,6 +81,8 @@ export type DiscoverConferencesInput = {
   createdBy?: string | null
   /** Restrict discovery to specific regions (defaults to all). */
   regions?: ConferenceRegion[]
+  model?: AiModelId
+  effort?: AiReasoningEffort
 }
 
 // ── Structured schemas ───────────────────────────────────────────────────────
@@ -489,7 +486,15 @@ async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T)
   return results
 }
 
-type GroupResult = { conferences: DiscoveredConference[]; candidates: number; validated: number; outputWasJson: boolean; error: boolean }
+type GroupResult = {
+  conferences: DiscoveredConference[]
+  candidates: number
+  validated: number
+  outputWasJson: boolean
+  error: boolean
+  model: string | null
+  effort: AiReasoningEffort | null
+}
 
 function buildDiscoveryLanes(regions: ConferenceRegion[]): DiscoveryLane[] {
   return regions.flatMap((region) => DISCOVERY_LENSES.map((lens) => ({ ...lens, region })))
@@ -519,7 +524,9 @@ async function discoverLane(
   system: string,
   monthsAhead: number,
   existingNames: string[],
-  createdBy: string | null
+  createdBy: string | null,
+  model?: AiModelId,
+  effort?: AiReasoningEffort
 ): Promise<GroupResult> {
   const existingContext = wrapExternalData(
     'conferences.existing',
@@ -528,8 +535,9 @@ async function discoverLane(
   try {
     const result = await runAiMessage<unknown>({
       feature: 'conference_discovery_lane',
-      model: CONFERENCE_MODEL,
-      effort: 'low',
+      workload: 'conference_discovery',
+      model,
+      effort,
       maxTokens: 5000,
       timeoutMs: GROUP_TIMEOUT_MS,
       retries: 0,
@@ -549,10 +557,18 @@ async function discoverLane(
     })
     const candidates = listFrom(result.output, 'conferences').length
     const validated = validateConferences(result.output, lane.region, monthsAhead)
-    return { conferences: validated, candidates, validated: validated.length, outputWasJson: typeof result.output !== 'string', error: false }
+    return {
+      conferences: validated,
+      candidates,
+      validated: validated.length,
+      outputWasJson: typeof result.output !== 'string',
+      error: false,
+      model: result.config.model,
+      effort: result.config.effort,
+    }
   } catch (error) {
     console.error(`[conferences] lane "${lane.region}/${lane.key}" failed`, error)
-    return { conferences: [], candidates: 0, validated: 0, outputWasJson: true, error: true }
+    return { conferences: [], candidates: 0, validated: 0, outputWasJson: true, error: true, model: null, effort: null }
   }
 }
 
@@ -569,19 +585,23 @@ export async function discoverConferences(input: DiscoverConferencesInput = {}):
   const existingNames = input.existingNames ?? []
 
   const groupResults = await mapWithConcurrency(lanes, GROUP_CONCURRENCY, (lane) =>
-    discoverLane(lane, system, monthsAhead, existingNames, input.createdBy ?? null)
+    discoverLane(lane, system, monthsAhead, existingNames, input.createdBy ?? null, input.model, input.effort)
   )
 
   let candidateCount = 0
   let validatedCount = 0
   let outputWasJson = true
   let groupErrors = 0
+  let model: string | null = null
+  let effort: AiReasoningEffort | null = null
   const all: DiscoveredConference[] = []
   for (const result of groupResults) {
     candidateCount += result.candidates
     validatedCount += result.validated
     if (!result.outputWasJson) outputWasJson = false
     if (result.error) groupErrors += 1
+    if (!model && result.model) model = result.model
+    if (!effort && result.effort) effort = result.effort
     all.push(...result.conferences)
   }
 
@@ -597,8 +617,8 @@ export async function discoverConferences(input: DiscoverConferencesInput = {}):
 
   return {
     conferences: deduped,
-    model: CONFERENCE_MODEL,
-    effort: 'low',
+    model,
+    effort,
     candidateCount,
     validatedCount,
     outputWasJson,
@@ -635,8 +655,7 @@ export async function enrichConference(conference: {
   try {
     const result = await runAiMessage<unknown>({
       feature: 'conference_detail',
-      model: CONFERENCE_MODEL,
-      effort: 'low',
+      workload: 'conference_detail',
       maxTokens: 3500,
       timeoutMs: 90_000,
       retries: 0,

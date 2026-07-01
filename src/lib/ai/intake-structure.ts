@@ -229,8 +229,7 @@ export async function structureIntakeItem(input: StructureIntakeItemInput): Prom
 
     const result = await runAiMessage<unknown>({
       feature: 'intake_structure',
-      model: 'claude-sonnet-4-6',
-      effort: 'medium',
+      workload: 'intake_structure',
       maxTokens: 900,
       temperature: 0,
       createdBy: input.createdBy,
