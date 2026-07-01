@@ -26,6 +26,12 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
 
   if (!conference) notFound()
 
+  // Silently advance stage based on conference dates (ongoing/follow_up) on each page load.
+  if (tracking?.stage && tracking.stage !== 'archived') {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    await (supabase as any).rpc('auto_advance_conference_stage', { p_conference_id: id }).catch(() => {/* silent */})
+  }
+
   const campusOptions = (campusSessions ?? []).map((s) => ({
     id: String(s.id),
     label: (s.theme as string | null) ?? `Session ${String(s.session_date ?? '').slice(0, 10)}`,

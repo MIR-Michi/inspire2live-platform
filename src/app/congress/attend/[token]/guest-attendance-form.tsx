@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 
 type ConferenceSuggestion = {
   id: string
@@ -19,11 +20,15 @@ type PrefillData = {
   conferenceName: string | null
 }
 
+type WorkspaceCheck = {
+  submissions: Array<{ id: string }>
+}
+
 export function GuestAttendanceForm({ token }: { token: string }) {
+  const router = useRouter()
   const [prefill, setPrefill] = useState<PrefillData | null>(null)
   const [loading, setLoading] = useState(true)
   const [expired, setExpired] = useState(false)
-  const [submitted, setSubmitted] = useState(false)
   const [submitting, setSubmitting] = useState(false)
   const [submitError, setSubmitError] = useState<string | null>(null)
 
@@ -34,6 +39,7 @@ export function GuestAttendanceForm({ token }: { token: string }) {
   const [org, setOrg] = useState('')
   const [role, setRole] = useState('attendee')
   const [notes, setNotes] = useState('')
+  const [isRegistered, setIsRegistered] = useState(false)
 
   // Conference picker
   const [confQuery, setConfQuery] = useState('')
@@ -49,32 +55,40 @@ export function GuestAttendanceForm({ token }: { token: string }) {
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const confInputRef = useRef<HTMLInputElement>(null)
 
-  // Validate token on mount
+  // On mount: validate token AND check if there's already a submission (returning visitor).
   useEffect(() => {
-    void fetch(`/api/congress-guest/validate?token=${encodeURIComponent(token)}`)
-      .then((r) => r.json())
-      .then((data: PrefillData) => {
-        if (!data.valid) {
-          setExpired(true)
-        } else {
-          setPrefill(data)
-          setName(data.contactName ?? '')
-          setEmail(data.contactEmail ?? '')
-          setPhone(data.contactPhone ?? '')
-          if (data.conferenceName) {
-            setConfName(data.conferenceName)
-            setConfQuery(data.conferenceName)
-            setConfId(data.conferenceId)
-            setConfLocked(true)
-          }
-        }
-        setLoading(false)
-      })
-      .catch(() => {
+    void Promise.all([
+      fetch(`/api/congress-guest/validate?token=${encodeURIComponent(token)}`).then((r) => r.json()),
+      fetch(`/api/congress-guest/workspace?token=${encodeURIComponent(token)}`).then((r) => r.ok ? r.json() : null),
+    ]).then(([prefillData, workspaceData]: [PrefillData, WorkspaceCheck | null]) => {
+      if (!prefillData.valid) {
         setExpired(true)
         setLoading(false)
-      })
-  }, [token])
+        return
+      }
+
+      // Returning visitor: already submitted → go directly to workspace.
+      if (workspaceData && workspaceData.submissions?.length > 0) {
+        router.replace(`/congress/attend/${token}/workspace`)
+        return
+      }
+
+      setPrefill(prefillData)
+      setName(prefillData.contactName ?? '')
+      setEmail(prefillData.contactEmail ?? '')
+      setPhone(prefillData.contactPhone ?? '')
+      if (prefillData.conferenceName) {
+        setConfName(prefillData.conferenceName)
+        setConfQuery(prefillData.conferenceName)
+        setConfId(prefillData.conferenceId)
+        setConfLocked(true)
+      }
+      setLoading(false)
+    }).catch(() => {
+      setExpired(true)
+      setLoading(false)
+    })
+  }, [token, router])
 
   const searchConferences = useCallback((q: string) => {
     if (q.length < 2) { setSuggestions([]); return }
@@ -145,13 +159,15 @@ export function GuestAttendanceForm({ token }: { token: string }) {
           conferenceLocation: confLocation.trim() || null,
           role,
           notes: notes.trim() || null,
+          isRegistered,
         }),
       })
-      const data = await res.json() as { ok?: boolean; error?: string }
+      const data = await res.json() as { ok?: boolean; submissionId?: string; error?: string }
       if (!res.ok || !data.ok) {
         setSubmitError(data.error ?? 'Something went wrong. Please try again.')
       } else {
-        setSubmitted(true)
+        // Redirect to workspace — don't just show a thank-you dead end.
+        router.push(`/congress/attend/${token}/workspace`)
       }
     } catch {
       setSubmitError('Could not reach the server. Please check your connection and try again.')
@@ -178,20 +194,6 @@ export function GuestAttendanceForm({ token }: { token: string }) {
           <h1 className="mb-2 text-xl font-semibold text-neutral-900">This link has expired</h1>
           <p className="text-sm text-neutral-500">
             This link is no longer valid. Please ask your Inspire2Live contact to send you a new one.
-          </p>
-        </div>
-      </Shell>
-    )
-  }
-
-  if (submitted) {
-    return (
-      <Shell>
-        <div className="mx-auto max-w-md px-4 py-16 text-center">
-          <div className="mb-4 text-5xl">🎉</div>
-          <h1 className="mb-2 text-xl font-semibold text-neutral-900">Thank you!</h1>
-          <p className="text-sm text-neutral-600">
-            We&apos;ve received your conference attendance. The Inspire2Live team will be in touch.
           </p>
         </div>
       </Shell>
@@ -351,23 +353,15 @@ export function GuestAttendanceForm({ token }: { token: string }) {
               </div>
             </Field>
 
-            {/* Extra conference details — shown only for manually-added (non-DB) conferences */}
+            {/* Extra conference details for manually-added ones */}
             {confLocked && !isConferenceFromDB && (
               <div className="space-y-3 pt-1">
                 <div className="grid grid-cols-2 gap-3">
                   <Field label="Start date">
-                    <Input
-                      type="date"
-                      value={confStart}
-                      onChange={(e) => setConfStart(e.target.value)}
-                    />
+                    <Input type="date" value={confStart} onChange={(e) => setConfStart(e.target.value)} />
                   </Field>
                   <Field label="End date">
-                    <Input
-                      type="date"
-                      value={confEnd}
-                      onChange={(e) => setConfEnd(e.target.value)}
-                    />
+                    <Input type="date" value={confEnd} onChange={(e) => setConfEnd(e.target.value)} />
                   </Field>
                 </div>
                 <Field label="Location">
@@ -393,6 +387,22 @@ export function GuestAttendanceForm({ token }: { token: string }) {
                 <option value="other">Other</option>
               </select>
             </Field>
+
+            {/* Registration checkbox */}
+            <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-neutral-200 bg-neutral-50 px-3 py-3">
+              <input
+                type="checkbox"
+                checked={isRegistered}
+                onChange={(e) => setIsRegistered(e.target.checked)}
+                className="mt-0.5 h-4 w-4 rounded border-neutral-300 accent-orange-600"
+              />
+              <div>
+                <p className="text-sm font-semibold text-neutral-900">I am already registered for this conference</p>
+                <p className="text-xs text-neutral-500">
+                  This moves the conference to &ldquo;Registered&rdquo; in the I2L planning pipeline.
+                </p>
+              </div>
+            </label>
 
             <Field label="Notes">
               <textarea
