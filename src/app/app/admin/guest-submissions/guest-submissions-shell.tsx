@@ -1,5 +1,6 @@
 'use client'
 
+import Link from 'next/link'
 import { useActionState, useState } from 'react'
 import { reviewGuestSubmission, type ReviewSubmissionState } from '@/app/app/comms/conferences/guest-token-actions'
 
@@ -32,17 +33,24 @@ export function GuestSubmissionsShell({ submissions }: { submissions: Submission
 
   return (
     <div className="mx-auto max-w-4xl space-y-6">
-      <header className="space-y-1 border-b border-neutral-200 pb-4">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Admin</p>
-        <h1 className="text-2xl font-semibold text-neutral-900">Guest attendance submissions</h1>
-        <p className="text-sm text-neutral-600">
-          Conference attendance reports submitted via magic-link forms. Approve to record in CRM, or reject to archive.
-        </p>
+      <header className="space-y-3 border-b border-neutral-200 pb-4">
+        <Link href="/app/comms/conferences" className="inline-flex text-sm font-semibold text-orange-700 hover:text-orange-800">
+          Back to Conferences
+        </Link>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
+            <h1 className="text-2xl font-semibold text-neutral-900">Conference attendance reports</h1>
+            <p className="mt-1 text-sm text-neutral-600">
+              Review forms submitted by invited guests after they receive a personal email or WhatsApp link.
+            </p>
+          </div>
+        </div>
       </header>
 
       {submissions.length === 0 && (
         <p className="rounded-xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
-          No submissions yet. Send a guest form link from the Conferences page.
+          No attendance reports yet. Open a conference and use "Invite guest to submit attendance" to send a form link.
         </p>
       )}
 
@@ -88,21 +96,20 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
             </div>
             <p className="truncate text-xs text-neutral-500">
               {s.conference_name}
-              {s.conference_start_date && ` · ${new Date(s.conference_start_date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`}
-              {s.conference_location && ` · ${s.conference_location}`}
+              {s.conference_start_date && ` - ${new Date(s.conference_start_date).toLocaleDateString('en-GB', { month: 'short', year: 'numeric' })}`}
+              {s.conference_location && ` - ${s.conference_location}`}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-3 text-xs text-neutral-400">
           <span className="hidden sm:inline">{new Date(s.created_at).toLocaleDateString('en-GB', { dateStyle: 'medium' })}</span>
-          <span className="capitalize rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-semibold text-neutral-600">{s.role_at_conference}</span>
-          <span className="text-neutral-300">{expanded ? '↑' : '↓'}</span>
+          <span className="rounded-full border border-neutral-200 bg-neutral-50 px-2 py-0.5 font-semibold capitalize text-neutral-600">{s.role_at_conference}</span>
+          <span className="text-neutral-300">{expanded ? 'Collapse' : 'Open'}</span>
         </div>
       </div>
 
       {expanded && (
-        <div className="border-t border-neutral-100 px-5 py-4 space-y-4">
-          {/* Submitter details */}
+        <div className="space-y-4 border-t border-neutral-100 px-5 py-4">
           <div className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
             <Detail label="Email" value={s.submitter_email} />
             <Detail label="Phone" value={s.submitter_phone} />
@@ -129,7 +136,7 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
               <textarea
                 value={reviewNotes}
                 onChange={(e) => setReviewNotes(e.target.value)}
-                placeholder="Review notes (optional)…"
+                placeholder="Review notes (optional)..."
                 rows={2}
                 className="w-full resize-none rounded-xl border border-neutral-200 bg-white px-3 py-2.5 text-sm outline-none transition focus:border-orange-400 focus:ring-2 focus:ring-orange-100"
               />
@@ -143,7 +150,7 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
                     disabled={pending}
                     className="w-full rounded-xl bg-green-600 px-4 py-2.5 text-sm font-semibold text-white hover:bg-green-700 disabled:opacity-50"
                   >
-                    ✓ Approve
+                    Approve report
                   </button>
                 </form>
                 <form action={action} className="flex-1">
@@ -155,7 +162,7 @@ function SubmissionCard({ submission: s }: { submission: Submission }) {
                     disabled={pending}
                     className="w-full rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
                   >
-                    ✕ Reject
+                    Reject report
                   </button>
                 </form>
               </div>
@@ -174,7 +181,7 @@ function Detail({ label, value }: { label: string; value: string | null }) {
   return (
     <div>
       <p className="text-[10px] font-semibold uppercase tracking-wide text-neutral-400">{label}</p>
-      <p className="text-sm text-neutral-700">{value ?? '—'}</p>
+      <p className="text-sm text-neutral-700">{value ?? '-'}</p>
     </div>
   )
 }
