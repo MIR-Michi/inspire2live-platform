@@ -39,15 +39,19 @@ export function ConferenceGuestBulkInvite() {
   const [sendEmail, setSendEmail] = useState(true)
   const [sendWhatsapp, setSendWhatsapp] = useState(false)
 
+  const trimmedQuery = query.trim()
+  const visibleOptions = trimmedQuery.length < 2 ? [] : options
+
   useEffect(() => {
     const text = query.trim()
-    if (text.length < 2) {
-      setOptions([])
-      return
-    }
-
     let cancelled = false
     const timer = setTimeout(() => {
+      if (text.length < 2) {
+        setOptions([])
+        setSearching(false)
+        return
+      }
+
       setSearching(true)
       void searchConferenceContacts(text)
         .then((result) => {
@@ -57,7 +61,7 @@ export function ConferenceGuestBulkInvite() {
         .finally(() => {
           if (!cancelled) setSearching(false)
         })
-    }, 250)
+    }, text.length < 2 ? 0 : 250)
 
     return () => {
       cancelled = true
@@ -155,10 +159,10 @@ export function ConferenceGuestBulkInvite() {
                   className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-800 focus:border-orange-400 focus:outline-none"
                 />
               </label>
-              {searching && <p className="text-xs text-neutral-500">Searching CRM...</p>}
-              {options.length > 0 && (
+              {searching && trimmedQuery.length >= 2 && <p className="text-xs text-neutral-500">Searching CRM...</p>}
+              {visibleOptions.length > 0 && (
                 <ul className="max-h-44 space-y-1.5 overflow-y-auto">
-                  {options.map((contact) => (
+                  {visibleOptions.map((contact) => (
                     <li key={contact.id} className="flex items-center justify-between gap-2 rounded-lg border border-neutral-200 px-3 py-2">
                       <div className="min-w-0">
                         <p className="truncate text-sm font-semibold text-neutral-800">{contact.fullName}</p>
