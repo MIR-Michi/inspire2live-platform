@@ -7,6 +7,7 @@ import {
   UNIFIED_STATUS_META,
   type UnifiedStatus,
 } from '@/lib/comms-status'
+import { isTaskFinished } from '@/lib/tasks/status'
 import type { FeedEntry, TeamMemberOption } from '@/lib/comms-dashboard-data'
 import { RoleBadge } from '@/components/comms/role-badge'
 import { CollapsibleCard, type CollapsibleCardProps } from '@/components/ui/collapsible-card'
@@ -33,6 +34,10 @@ function StatusBadge({ status }: { status: UnifiedStatus }) {
   )
 }
 
+function plural(count: number, singular: string, pluralLabel = `${singular}s`) {
+  return count === 1 ? singular : pluralLabel
+}
+
 export function TeamFeed({
   feed,
   owners,
@@ -42,6 +47,7 @@ export function TeamFeed({
   const [ownerId, setOwnerId] = useState<string>('all')
   const [from, setFrom] = useState<string>('')
   const [to, setTo] = useState<string>('')
+  const [showFinished, setShowFinished] = useState(false)
 
   const toggleStatus = (status: UnifiedStatus) => {
     setStatuses((prev) => {
@@ -52,12 +58,17 @@ export function TeamFeed({
     })
   }
 
+  const finishedCount = useMemo(() => feed.filter((entry) => isTaskFinished(entry.status)).length, [feed])
+
   const [now] = useState(() => Date.now())
   const filtered = useMemo(() => {
     const fromTime = from ? new Date(from).getTime() : null
     const toTime = to ? new Date(to).getTime() + 86_400_000 - 1 : null
+    const hasStatusFilter = statuses.size > 0
+
     return feed.filter((entry) => {
-      if (statuses.size > 0 && !statuses.has(entry.status)) return false
+      if (!showFinished && !hasStatusFilter && isTaskFinished(entry.status)) return false
+      if (hasStatusFilter && !statuses.has(entry.status)) return false
       if (ownerId !== 'all' && entry.ownerId !== ownerId) return false
       if (fromTime !== null || toTime !== null) {
         if (!entry.date) return false
@@ -67,9 +78,9 @@ export function TeamFeed({
       }
       return true
     })
-  }, [feed, statuses, ownerId, from, to])
+  }, [feed, statuses, ownerId, from, to, showFinished])
 
-  const hasFilters = statuses.size > 0 || ownerId !== 'all' || from || to
+  const hasFilters = statuses.size > 0 || ownerId !== 'all' || from || to || showFinished
 
   return (
     <CollapsibleCard
@@ -104,6 +115,22 @@ export function TeamFeed({
               </button>
             )
           })}
+          {finishedCount > 0 && (
+            <button
+              type="button"
+              onClick={() => setShowFinished((value) => !value)}
+              aria-pressed={showFinished}
+              className={[
+                'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-semibold transition',
+                showFinished
+                  ? 'border-orange-200 bg-orange-50 text-orange-700'
+                  : 'border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-100',
+              ].join(' ')}
+            >
+              {showFinished ? 'Hide finished' : 'Show finished'}
+              <span className="rounded-full bg-white/80 px-1.5 py-0.5 text-[10px]">{finishedCount}</span>
+            </button>
+          )}
         </div>
         <div className="flex flex-wrap items-center gap-3">
           <label className="flex items-center gap-1.5 text-xs font-medium text-neutral-600">
@@ -139,6 +166,11 @@ export function TeamFeed({
               className="rounded-lg border border-neutral-300 px-2 py-1 text-xs focus:border-orange-400 focus:outline-none"
             />
           </label>
+          {!showFinished && statuses.size === 0 && finishedCount > 0 && (
+            <span className="text-xs text-neutral-500">
+              {finishedCount} finished {plural(finishedCount, 'item')} hidden by default.
+            </span>
+          )}
           {hasFilters && (
             <button
               type="button"
@@ -147,6 +179,7 @@ export function TeamFeed({
                 setOwnerId('all')
                 setFrom('')
                 setTo('')
+                setShowFinished(false)
               }}
               className="text-xs font-semibold text-orange-700 hover:underline"
             >
@@ -186,7 +219,7 @@ export function TeamFeed({
               <span
                 className={`shrink-0 text-xs ${overdue ? 'font-bold text-red-600' : 'text-neutral-500'}`}
               >
-                {overdue ? '⚠ ' : ''}
+                {overdue ? '! ' : ''}
                 {formatDate(entry.date)}
               </span>
             </Link>
@@ -194,7 +227,9 @@ export function TeamFeed({
         })}
         {filtered.length === 0 && (
           <p className="rounded-lg border border-dashed border-neutral-300 py-8 text-center text-sm text-neutral-500">
-            {hasFilters ? 'No items match the current filters.' : 'No team activity yet.'}
+            {hasFilters
+              ? 'No items match the current filters.'
+              : 'No active team activity. Show finished to recover completed or skipped items.'}
           </p>
         )}
       </div>
