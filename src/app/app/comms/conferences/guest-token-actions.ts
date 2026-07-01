@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { createGuestToken, sendGuestTokenLink } from '@/lib/congress-guest-tokens'
+import { resolveOrCreateCrmContact } from '@/lib/comms-conference-contacts'
 
 export type GenerateTokenState = {
   ok: boolean
@@ -45,11 +46,6 @@ function text(value: unknown, max = 200): string | null {
   return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null
 }
 
-function email(value: unknown): string | null {
-  const normalized = text(value, 320)?.toLowerCase() ?? null
-  return normalized && normalized.includes('@') ? normalized : null
-}
-
 async function requireCommsUser() {
   const supabase = await createClient()
   const { data: { user } } = await supabase.auth.getUser()
@@ -74,80 +70,30 @@ function parseGenericGuests(raw: FormDataEntryValue | null): GenericGuestInput[]
   }
 }
 
-function contactFromRow(row: Record<string, unknown>): ResolvedGuest {
-  return {
-    contactId: String(row.id),
-    fullName: String(row.full_name ?? 'Unnamed contact'),
-    email: text(row.email, 320),
-    whatsappId: text(row.whatsapp_id, 120) ?? text(row.phone, 120),
-  }
-}
-
 async function resolveGenericGuest(
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   admin: any,
   userId: string,
   input: GenericGuestInput
 ): Promise<ResolvedGuest> {
-  const contactId = text(input.contactId, 80)
-  if (contactId) {
-    const { data, error } = await admin
-      .from('comms_crm_contacts')
-      .select('id, full_name, email, phone, whatsapp_id')
-      .eq('id', contactId)
-      .maybeSingle()
-    if (error) throw new Error(error.message)
-    if (!data) throw new Error('CRM contact not found.')
-    return contactFromRow(data)
+  // Delegates to the shared conference-contact resolver so every invite flow
+  // dedupes and creates CRM contacts the same way.
+  const resolved = await resolveOrCreateCrmContact(admin, userId, {
+    contactId: input.contactId,
+    fullName: input.fullName,
+    email: input.email,
+    whatsappId: input.whatsappId,
+    createIfMissing: input.addToCrm !== false,
+    sourceLabel: 'Conference attendance invite',
+    tags: ['conference-guest'],
+    notes: 'Created from the generic conference attendance invite flow.',
+  })
+  return {
+    contactId: resolved.contactId,
+    fullName: resolved.fullName,
+    email: resolved.email,
+    whatsappId: resolved.whatsappId,
   }
-
-  const fullName = text(input.fullName, 180)
-  const normalizedEmail = email(input.email)
-  const whatsappId = text(input.whatsappId, 120)
-  if (!fullName) throw new Error('Add a guest name.')
-  if (!normalizedEmail && !whatsappId) throw new Error('Add an email address or WhatsApp number.')
-
-  if (normalizedEmail) {
-    const existing = await admin
-      .from('comms_crm_contacts')
-      .select('id, full_name, email, phone, whatsapp_id')
-      .eq('normalized_email', normalizedEmail)
-      .maybeSingle()
-    if (existing.error) throw new Error(existing.error.message)
-    if (existing.data) return contactFromRow(existing.data)
-  }
-
-  if (input.addToCrm === false) {
-    return { fullName, email: normalizedEmail, whatsappId }
-  }
-
-  const contactKind = normalizedEmail?.endsWith('@inspire2live.org') ? 'internal_contact' : 'external'
-  const created = await admin
-    .from('comms_crm_contacts')
-    .insert({
-      segment: contactKind === 'external' ? 'external' : 'internal',
-      source_type: 'manual',
-      full_name: fullName,
-      contact_kind: contactKind,
-      platform_status: 'none',
-      email: normalizedEmail,
-      whatsapp_id: whatsappId,
-      preferred_channel: whatsappId && normalizedEmail ? 'Email / WhatsApp' : whatsappId ? 'WhatsApp' : 'Email',
-      lifecycle_stage: 'active',
-      consent_status: 'unknown',
-      source_label: 'Conference attendance invite',
-      tags: ['conference-guest'],
-      notes: 'Created from the generic conference attendance invite flow.',
-      created_by: userId,
-      updated_by: userId,
-      updated_at: new Date().toISOString(),
-    })
-    .select('id, full_name, email, phone, whatsapp_id')
-    .maybeSingle()
-
-  if (created.error) throw new Error(created.error.message)
-  if (!created.data) throw new Error('Could not create the CRM contact.')
-  return contactFromRow(created.data)
 }
 
 /**
@@ -271,8 +217,29 @@ export async function generateGuestToken(
     return { ok: false, error: 'Add a WhatsApp number or untick WhatsApp.' }
   }
 
+  // Persist a manually-typed guest to the CRM (same path the bulk invite and
+  // "Assign attendees" use), so a single-invite guest isn't silently dropped.
+  let resolvedContactId = contactId
+  if (!contactId) {
+    try {
+      const resolved = await resolveOrCreateCrmContact(createAdminClient(), auth.userId, {
+        fullName: contactName,
+        email: contactEmail ?? null,
+        whatsappId: contactPhone ?? null,
+        sourceLabel: 'Conference attendance invite',
+        tags: ['conference-guest'],
+        notes: conferenceName
+          ? `Invited to report attendance for ${conferenceName}.`
+          : 'Created from a conference attendance invite.',
+      })
+      resolvedContactId = resolved.contactId
+    } catch {
+      // Non-fatal: still send the invite even if the CRM insert fails.
+    }
+  }
+
   const result = await createGuestToken(auth.supabase, auth.userId, {
-    contactId,
+    contactId: resolvedContactId,
     contactName,
     contactEmail,
     contactPhone,
