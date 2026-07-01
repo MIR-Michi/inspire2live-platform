@@ -68,6 +68,7 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
       'CRM',
       'Conferences',
       'Podcast',
+      'Conf. submissions',
       'Library',
     ])
     // Even though Comms *can* access these spaces, they must NOT clutter its menu.
@@ -80,6 +81,8 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
     expect(dashboard?.href).toBe('/app/comms/dashboard')
     const campus = sections.flatMap((s) => s.items).find((i) => i.label === 'Campus')
     expect(campus?.badge).toBe('campus')
+    const submissions = sections.flatMap((s) => s.items).find((i) => i.id === 'guest-submissions')
+    expect(submissions?.href).toBe('/app/admin/guest-submissions')
   })
 
   it('never surfaces Profile, Tasks, Bureau, or Partners as nav items', () => {
