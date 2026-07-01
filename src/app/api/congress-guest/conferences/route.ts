@@ -26,10 +26,33 @@ export async function GET(request: Request) {
   const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data } = await (supabase as any).rpc('search_conferences_public', {
+  const { data, error } = await (supabase as any).rpc('search_conferences_public', {
     query: q,
     max_results: 8,
   })
 
-  return NextResponse.json(data ?? [])
+  if (!error && Array.isArray(data)) {
+    return NextResponse.json(data)
+  }
+
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!serviceRoleKey) {
+    return NextResponse.json([])
+  }
+
+  try {
+    const admin = createClient(supabaseUrl, serviceRoleKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    const { data: fallback } = await admin
+      .from('conferences')
+      .select('id, name, location, start_date, end_date')
+      .ilike('name', `%${q.replace(/[%_]/g, '')}%`)
+      .order('start_date', { ascending: false, nullsFirst: false })
+      .limit(8)
+
+    return NextResponse.json(fallback ?? [])
+  } catch {
+    return NextResponse.json([])
+  }
 }

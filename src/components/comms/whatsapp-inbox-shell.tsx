@@ -1,20 +1,64 @@
 'use client'
 
-import { useActionState, useMemo, useState, useTransition } from 'react'
+import { useActionState, useMemo, useState } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
 import { StatusBadge } from '@/components/ui/status-badge'
-import {
-  sendWhatsAppReply,
-  deleteWhatsAppMessage,
-  deleteWhatsAppConversation,
-  type CommsFormState,
-} from '@/app/app/comms/whatsapp/actions'
+import { deleteWhatsAppMessages, sendWhatsAppReply, type CommsFormState } from '@/app/app/comms/whatsapp/actions'
 import { groupIntoThreads, type WhatsAppThreadMessage, type WhatsAppMediaAttachment } from '@/lib/comms-whatsapp-thread'
 
 export type WhatsAppFeedItem = WhatsAppThreadMessage
 
+function MediaAttachment({ media }: { media: WhatsAppMediaAttachment }) {
+  if (media.status === 'pending') {
+    return <p className="mt-2 text-xs italic text-neutral-400">Downloading {media.type}…</p>
+  }
+  if (media.status === 'failed') {
+    return <p className="mt-2 text-xs text-red-600">{media.type} could not be downloaded.</p>
+  }
+  if (!media.url) return null
+
+  if (media.type === 'image') {
+    return (
+      <a href={media.url} target="_blank" rel="noopener noreferrer" className="mt-2 block">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={media.url}
+          alt={media.filename ?? 'WhatsApp image'}
+          className="max-h-72 w-auto rounded-lg border border-neutral-200 object-contain"
+        />
+      </a>
+    )
+  }
+
+  if (media.type === 'video') {
+    return (
+      <video controls preload="metadata" className="mt-2 max-h-72 w-full rounded-lg border border-neutral-200">
+        <source src={media.url} type={media.mimeType ?? undefined} />
+      </video>
+    )
+  }
+
+  if (media.type === 'audio') {
+    return <audio controls preload="metadata" src={media.url} className="mt-2 w-full" />
+  }
+
+  return (
+    <a
+      href={media.url}
+      target="_blank"
+      rel="noopener noreferrer"
+      className="mt-2 inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-neutral-100"
+    >
+      📎 {media.filename ?? 'Download document'}
+    </a>
+  )
+}
+
 const INITIAL_STATE: CommsFormState = { ok: false }
+
+function messageRef(item: WhatsAppFeedItem) {
+  return `${item.direction}:${item.id}`
+}
 
 function formatTimestamp(input: string) {
   return new Intl.DateTimeFormat('en-GB', {
@@ -67,41 +111,47 @@ function ReplyForm({ whatsappId, inReplyToIntakeItemId }: { whatsappId: string; 
   )
 }
 
-function FeedMessage({ item, isAdmin }: { item: WhatsAppFeedItem; isAdmin: boolean }) {
+function FeedMessage({
+  item,
+  canDeleteMessages,
+  selected,
+  onToggleSelected,
+}: {
+  item: WhatsAppFeedItem
+  canDeleteMessages: boolean
+  selected: boolean
+  onToggleSelected: (ref: string, selected: boolean) => void
+}) {
   const isOutbound = item.direction === 'outbound'
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  const handleDelete = () => {
-    if (!window.confirm('Delete this message for everyone? This removes it from the inbox and all dashboards and cannot be undone.')) return
-    setError(null)
-    startTransition(async () => {
-      const result = await deleteWhatsAppMessage({ id: item.id, direction: item.direction })
-      if (!result.ok) {
-        setError(result.error ?? 'Could not delete the message.')
-        return
-      }
-      router.refresh()
-    })
-  }
+  const ref = messageRef(item)
+  const [, deleteAction, deleting] = useActionState(deleteWhatsAppMessages, INITIAL_STATE)
 
   return (
     <div className={['rounded-xl border px-4 py-3', isOutbound ? 'border-orange-200 bg-orange-50' : 'border-neutral-200 bg-white'].join(' ')}>
       <div className="flex flex-wrap items-center gap-2">
+        {canDeleteMessages && (
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={(event) => onToggleSelected(ref, event.target.checked)}
+            className="h-4 w-4 rounded border-neutral-300 accent-orange-600"
+            aria-label={`Select WhatsApp message from ${item.displayName}`}
+          />
+        )}
         <StatusBadge label={isOutbound ? 'OCI reply' : item.displayName} tone={isOutbound ? 'neutral' : 'blue'} />
         <StatusBadge label={item.status.replace(/_/g, ' ')} tone={statusTone(item.direction, item.status)} />
         <span className="text-xs text-neutral-500">{formatTimestamp(item.timestamp)}</span>
-        {isAdmin && (
-          <button
-            type="button"
-            onClick={handleDelete}
-            disabled={pending}
-            className="ml-auto shrink-0 text-xs font-semibold text-neutral-400 transition hover:text-red-600 disabled:opacity-50"
-            aria-label="Delete message for everyone"
-          >
-            {pending ? 'Deleting…' : 'Delete'}
-          </button>
+        {canDeleteMessages && (
+          <form action={deleteAction} className="ml-auto">
+            <input type="hidden" name="message_ref" value={ref} />
+            <button
+              type="submit"
+              disabled={deleting}
+              className="rounded-md border border-red-200 px-2 py-1 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+            >
+              {deleting ? 'Deleting…' : 'Delete'}
+            </button>
+          </form>
         )}
       </div>
       <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">{item.text}</p>
@@ -114,93 +164,31 @@ function FeedMessage({ item, isAdmin }: { item: WhatsAppFeedItem; isAdmin: boole
         </p>
       )}
       {item.errorDetail && <p className="mt-1 text-xs text-red-700">Delivery error: {item.errorDetail}</p>}
-      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
     </div>
   )
 }
 
-function MediaAttachment({ media }: { media: WhatsAppMediaAttachment }) {
-  if (media.status === 'pending') {
-    return <p className="mt-2 text-xs italic text-neutral-400">Downloading {media.type}…</p>
-  }
-  if (media.status === 'failed') {
-    return <p className="mt-2 text-xs text-red-600">{media.type} could not be downloaded.</p>
-  }
-  if (!media.url) return null
+export function WhatsAppInboxShell({
+  feed,
+  canDeleteMessages = false,
+}: {
+  feed: WhatsAppFeedItem[]
+  canDeleteMessages?: boolean
+}) {
+  const conversations = useMemo(() => groupIntoThreads(feed), [feed])
+  const [selectedRefs, setSelectedRefs] = useState<string[]>([])
+  const [deleteState, deleteAction, deleting] = useActionState(deleteWhatsAppMessages, INITIAL_STATE)
 
-  if (media.type === 'image') {
-    return (
-      <a href={media.url} target="_blank" rel="noopener noreferrer" className="mt-2 block">
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={media.url}
-          alt={media.filename ?? 'WhatsApp image'}
-          className="max-h-72 w-auto rounded-lg border border-neutral-200 object-contain"
-        />
-      </a>
-    )
-  }
-
-  if (media.type === 'video') {
-    return (
-      <video controls preload="metadata" className="mt-2 max-h-72 w-full rounded-lg border border-neutral-200">
-        <source src={media.url} type={media.mimeType ?? undefined} />
-      </video>
-    )
-  }
-
-  if (media.type === 'audio') {
-    return <audio controls preload="metadata" src={media.url} className="mt-2 w-full" />
-  }
-
-  // document / other
-  return (
-    <a
-      href={media.url}
-      target="_blank"
-      rel="noopener noreferrer"
-      className="mt-2 inline-flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-2 text-xs font-semibold text-blue-700 hover:bg-neutral-100"
-    >
-      📎 {media.filename ?? 'Download document'}
-    </a>
-  )
-}
-
-function DeleteConversationButton({ whatsappId }: { whatsappId: string }) {
-  const router = useRouter()
-  const [pending, startTransition] = useTransition()
-  const [error, setError] = useState<string | null>(null)
-
-  const handleDelete = () => {
-    if (!window.confirm('Delete this entire conversation for everyone? This removes every message with this contact from the inbox and all dashboards and cannot be undone.')) return
-    setError(null)
-    startTransition(async () => {
-      const result = await deleteWhatsAppConversation(whatsappId)
-      if (!result.ok) {
-        setError(result.error ?? 'Could not delete the conversation.')
-        return
-      }
-      router.refresh()
+  const selectedSet = useMemo(() => new Set(selectedRefs), [selectedRefs])
+  const toggleSelected = (ref: string, next: boolean) => {
+    setSelectedRefs((prev) => {
+      const current = new Set(prev)
+      if (next) current.add(ref)
+      else current.delete(ref)
+      return [...current]
     })
   }
-
-  return (
-    <div className="flex flex-col items-end">
-      <button
-        type="button"
-        onClick={handleDelete}
-        disabled={pending}
-        className="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs font-semibold text-neutral-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
-      >
-        {pending ? 'Deleting…' : 'Delete conversation'}
-      </button>
-      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
-    </div>
-  )
-}
-
-export function WhatsAppInboxShell({ feed, isAdmin = false }: { feed: WhatsAppFeedItem[]; isAdmin?: boolean }) {
-  const conversations = useMemo(() => groupIntoThreads(feed), [feed])
+  const clearSelection = () => setSelectedRefs([])
 
   const header = (
     <header className="flex flex-wrap items-start justify-between gap-3">
@@ -219,10 +207,45 @@ export function WhatsAppInboxShell({ feed, isAdmin = false }: { feed: WhatsAppFe
     </header>
   )
 
+  const adminToolbar = canDeleteMessages ? (
+    <form action={deleteAction} className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-red-100 bg-red-50 px-4 py-3">
+      <div>
+        <p className="text-sm font-semibold text-red-900">Admin message cleanup</p>
+        <p className="text-xs text-red-700">
+          {selectedRefs.length} selected. Deleted messages are hidden from the WhatsApp inbox but retained for audit history.
+        </p>
+        {(deleteState.error || deleteState.message) && (
+          <p className={`mt-1 text-xs ${deleteState.ok ? 'text-emerald-700' : 'text-red-700'}`}>
+            {deleteState.ok ? deleteState.message : deleteState.error}
+          </p>
+        )}
+      </div>
+      {selectedRefs.map((ref) => <input key={ref} type="hidden" name="message_ref" value={ref} />)}
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          onClick={clearSelection}
+          disabled={selectedRefs.length === 0 || deleting}
+          className="rounded-lg border border-red-200 bg-white px-3 py-1.5 text-xs font-semibold text-red-700 hover:bg-red-50 disabled:opacity-50"
+        >
+          Clear
+        </button>
+        <button
+          type="submit"
+          disabled={selectedRefs.length === 0 || deleting}
+          className="rounded-lg bg-red-700 px-3 py-1.5 text-xs font-semibold text-white hover:bg-red-800 disabled:opacity-50"
+        >
+          {deleting ? 'Deleting…' : `Delete selected${selectedRefs.length > 0 ? ` (${selectedRefs.length})` : ''}`}
+        </button>
+      </div>
+    </form>
+  ) : null
+
   if (conversations.length === 0) {
     return (
       <div className="space-y-6">
         {header}
+        {adminToolbar}
         <div className="rounded-2xl border border-neutral-200 bg-white p-8 text-center text-sm text-neutral-500">
           No WhatsApp messages yet. Incoming messages will appear here once the webhook receives them.
         </div>
@@ -233,22 +256,29 @@ export function WhatsAppInboxShell({ feed, isAdmin = false }: { feed: WhatsAppFe
   return (
     <div className="space-y-6">
       {header}
+      {adminToolbar}
 
       <div className="space-y-4">
         {conversations.map((conversation) => (
           <article key={conversation.whatsappId} className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-base font-semibold text-neutral-900">{conversation.displayName}</h2>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-neutral-500">{conversation.whatsappId}</span>
-                {isAdmin && <DeleteConversationButton whatsappId={conversation.whatsappId} />}
-              </div>
+              <span className="text-xs text-neutral-500">{conversation.whatsappId}</span>
             </header>
 
             <div className="space-y-2">
-              {conversation.messages.map((item) => (
-                <FeedMessage key={`${item.direction}-${item.id}`} item={item} isAdmin={isAdmin} />
-              ))}
+              {conversation.messages.map((item) => {
+                const ref = messageRef(item)
+                return (
+                  <FeedMessage
+                    key={`${item.direction}-${item.id}`}
+                    item={item}
+                    canDeleteMessages={canDeleteMessages}
+                    selected={selectedSet.has(ref)}
+                    onToggleSelected={toggleSelected}
+                  />
+                )
+              })}
             </div>
 
             <ReplyForm whatsappId={conversation.whatsappId} inReplyToIntakeItemId={conversation.lastInboundIntakeItemId} />

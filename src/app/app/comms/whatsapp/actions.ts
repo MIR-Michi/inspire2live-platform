@@ -4,7 +4,6 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { normalizeRole } from '@/lib/platform-roles'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 
 export interface CommsFormState {
@@ -15,8 +14,24 @@ export interface CommsFormState {
 
 const INITIAL_STATE: CommsFormState = { ok: false }
 
+type OperatorProfile = {
+  id: string
+  name: string | null
+  email: string | null
+  role: string | null
+}
+
+type MessageRef = { direction: 'inbound' | 'outbound'; id: string }
+
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function parseMessageRef(value: FormDataEntryValue): MessageRef | null {
+  if (typeof value !== 'string') return null
+  const [direction, id] = value.split(':')
+  if ((direction !== 'inbound' && direction !== 'outbound') || !id) return null
+  return { direction, id }
 }
 
 async function requireCommsOperator() {
@@ -38,128 +53,15 @@ async function requireCommsOperator() {
     throw new Error('Not authorized for the communications workspace')
   }
 
-  return { user, profile }
+  return { user, profile: profile as OperatorProfile }
 }
 
-async function requireWhatsAppAdmin() {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-
-  if (!user) throw new Error('Not authenticated')
-
-  const { data: profile, error } = await supabase
-    .from('profiles')
-    .select('id, role')
-    .eq('id', user.id)
-    .maybeSingle()
-
-  if (error) throw new Error(error.message)
-  if (normalizeRole(profile?.role) !== 'PlatformAdmin') {
-    throw new Error('Only a PlatformAdmin can delete WhatsApp messages')
+async function requirePlatformAdmin() {
+  const context = await requireCommsOperator()
+  if (context.profile.role !== 'PlatformAdmin') {
+    throw new Error('Only PlatformAdmin users can delete WhatsApp messages.')
   }
-
-  return { user }
-}
-
-/**
- * Hard-delete inbound WhatsApp intake items platform-wide. Uses the service
- * role so the rows disappear for every user and everywhere they surface
- * (inbox, intake queue, dashboards). Clears the one non-cascading reference
- * (content_calendar.source_intake_id) and the raw webhook payloads first; all
- * other children cascade.
- */
-async function purgeInboundIntakeItems(
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  admin: any,
-  ids: string[]
-): Promise<void> {
-  if (ids.length === 0) return
-
-  // Best-effort: remove any downloaded media objects from the private bucket so
-  // deleting a message doesn't leave the file behind.
-  const withMedia = await admin
-    .from('intake_items')
-    .select('media_storage_path')
-    .in('id', ids)
-    .not('media_storage_path', 'is', null)
-  const paths = (withMedia.data ?? [])
-    .map((row: { media_storage_path: string | null }) => row.media_storage_path)
-    .filter((path: string | null): path is string => Boolean(path))
-  if (paths.length > 0) {
-    await admin.storage.from('whatsapp-inbound-media').remove(paths).catch(() => {/* best-effort */})
-  }
-
-  // Null the only FK to intake_items that does NOT cascade, or the delete
-  // would be blocked.
-  const nulled = await admin.from('content_calendar').update({ source_intake_id: null }).in('source_intake_id', ids)
-  if (nulled.error) throw new Error(nulled.error.message)
-
-  // Remove the raw inbound webhook payloads (they hold the message content and
-  // only set-null their link, so they must be deleted explicitly).
-  const webhook = await admin.from('whatsapp_webhook_events').delete().in('intake_item_id', ids)
-  if (webhook.error) throw new Error(webhook.error.message)
-
-  const removed = await admin.from('intake_items').delete().in('id', ids)
-  if (removed.error) throw new Error(removed.error.message)
-}
-
-function revalidateWhatsAppSurfaces() {
-  // The inbox plus every place a WhatsApp message can surface.
-  revalidatePath('/app/comms/whatsapp')
-  revalidatePath('/app/comms/dashboard')
-  revalidatePath('/app/comms')
-  revalidatePath('/app/comms/intake')
-}
-
-/**
- * Deletes a single WhatsApp message (inbound intake item or outbound reply)
- * for everyone, everywhere. PlatformAdmin only.
- */
-export async function deleteWhatsAppMessage(
-  input: { id: string; direction: 'inbound' | 'outbound' }
-): Promise<CommsFormState> {
-  try {
-    await requireWhatsAppAdmin()
-    const admin = createAdminClient()
-
-    if (input.direction === 'outbound') {
-      const { error } = await admin.from('whatsapp_outbound_messages').delete().eq('id', input.id)
-      if (error) throw new Error(error.message)
-    } else {
-      await purgeInboundIntakeItems(admin, [input.id])
-    }
-
-    revalidateWhatsAppSurfaces()
-    return { ok: true, message: 'Message deleted.' }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not delete the message.' }
-  }
-}
-
-/**
- * Deletes an entire WhatsApp conversation (every inbound and outbound message
- * with one contact) for everyone, everywhere. PlatformAdmin only.
- */
-export async function deleteWhatsAppConversation(whatsappId: string): Promise<CommsFormState> {
-  try {
-    await requireWhatsAppAdmin()
-    if (!whatsappId) return { ok: false, error: 'Missing conversation.' }
-    const admin = createAdminClient()
-
-    const outbound = await admin.from('whatsapp_outbound_messages').delete().eq('recipient_whatsapp_id', whatsappId)
-    if (outbound.error) throw new Error(outbound.error.message)
-
-    const inbound = await admin.from('intake_items').select('id').eq('sender_whatsapp_id', whatsappId)
-    if (inbound.error) throw new Error(inbound.error.message)
-    await purgeInboundIntakeItems(admin, (inbound.data ?? []).map((row: { id: string }) => row.id))
-
-    revalidateWhatsAppSurfaces()
-    return { ok: true, message: 'Conversation deleted.' }
-  } catch (error) {
-    return { ok: false, error: error instanceof Error ? error.message : 'Could not delete the conversation.' }
-  }
+  return context
 }
 
 export async function sendWhatsAppReply(
@@ -200,5 +102,51 @@ export async function sendWhatsAppReply(
     return { ok: true, message: 'Reply sent.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not send the WhatsApp reply.' }
+  }
+}
+
+export async function deleteWhatsAppMessages(
+  _prevState: CommsFormState = INITIAL_STATE,
+  formData: FormData
+): Promise<CommsFormState> {
+  try {
+    const { user } = await requirePlatformAdmin()
+    const refs = formData.getAll('message_ref')
+      .map(parseMessageRef)
+      .filter((ref): ref is MessageRef => ref !== null)
+
+    const inboundIds = Array.from(new Set(refs.filter((ref) => ref.direction === 'inbound').map((ref) => ref.id)))
+    const outboundIds = Array.from(new Set(refs.filter((ref) => ref.direction === 'outbound').map((ref) => ref.id)))
+    const total = inboundIds.length + outboundIds.length
+
+    if (total === 0) return { ok: false, error: 'Select at least one WhatsApp message to delete.' }
+
+    const admin = createAdminClient()
+    const deletedAt = new Date().toISOString()
+    const payload = { whatsapp_deleted_at: deletedAt, whatsapp_deleted_by: user.id }
+
+    if (inboundIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (admin as any)
+        .from('intake_items')
+        .update(payload)
+        .in('id', inboundIds)
+        .not('sender_whatsapp_id', 'is', null)
+      if (error) throw new Error(error.message)
+    }
+
+    if (outboundIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (admin as any)
+        .from('whatsapp_outbound_messages')
+        .update(payload)
+        .in('id', outboundIds)
+      if (error) throw new Error(error.message)
+    }
+
+    revalidatePath('/app/comms/whatsapp')
+    return { ok: true, message: `Deleted ${total} WhatsApp message${total === 1 ? '' : 's'}.` }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not delete WhatsApp messages.' }
   }
 }

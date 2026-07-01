@@ -2,9 +2,24 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { normalizeRole } from '@/lib/platform-roles'
 import { signInboundMediaUrl } from '@/lib/whatsapp-media'
 import { WhatsAppInboxShell, type WhatsAppFeedItem } from '@/components/comms/whatsapp-inbox-shell'
+
+function isMissingColumn(error: { message?: string } | null | undefined, column: string): boolean {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes(column) && (
+    message.includes('could not find') ||
+    message.includes('does not exist') ||
+    message.includes('schema cache') ||
+    message.includes('column')
+  )
+}
+
+function isMissingSoftDeleteColumn(error: { message?: string } | null | undefined): boolean {
+  return isMissingColumn(error, 'whatsapp_deleted_at')
+}
+
+const INBOUND_MEDIA_COLUMNS = 'media_type, media_mime_type, media_storage_path, media_filename, media_status'
 
 export default async function CommsWhatsAppPage() {
   const supabase = await createClient()
@@ -24,48 +39,73 @@ export default async function CommsWhatsAppPage() {
     redirect('/app/comms')
   }
 
-  const isAdmin = normalizeRole(profile.role) === 'PlatformAdmin'
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any
 
-  const [inboundResult, outboundResult] = await Promise.all([
-    supabase
-      .from('intake_items')
-      .select('id, sender_name, sender_whatsapp_id, raw_content, status, captured_at, media_type, media_mime_type, media_storage_path, media_filename, media_status')
-      .not('sender_whatsapp_id', 'is', null)
-      .order('captured_at', { ascending: false })
-      .limit(100),
-    supabase
+  // `media` and `softDelete` degrade independently: an inbound query may run on
+  // a DB where the media columns (00114) or the soft-delete columns (00113)
+  // aren't applied yet.
+  const loadInbound = (withSoftDeleteFilter: boolean, withMedia: boolean) => {
+    const columns = withMedia
+      ? `id, sender_name, sender_whatsapp_id, raw_content, status, captured_at, ${INBOUND_MEDIA_COLUMNS}`
+      : 'id, sender_name, sender_whatsapp_id, raw_content, status, captured_at'
+    let query = db.from('intake_items').select(columns).not('sender_whatsapp_id', 'is', null)
+    if (withSoftDeleteFilter) query = query.is('whatsapp_deleted_at', null)
+    return query.order('captured_at', { ascending: false }).limit(100)
+  }
+
+  const loadOutbound = (withSoftDeleteFilter: boolean) => {
+    let query = db
       .from('whatsapp_outbound_messages')
       .select('id, recipient_whatsapp_id, body, delivery_status, error_detail, sent_at, delivered_at, read_at')
-      .order('sent_at', { ascending: false })
-      .limit(100),
-  ])
+    if (withSoftDeleteFilter) query = query.is('whatsapp_deleted_at', null)
+    return query.order('sent_at', { ascending: false }).limit(100)
+  }
+
+  let softDelete = true
+  let withMedia = true
+  let [inboundResult, outboundResult] = await Promise.all([loadInbound(softDelete, withMedia), loadOutbound(softDelete)])
+
+  // Drop media columns if they aren't there yet, then retry.
+  if (isMissingColumn(inboundResult.error, 'media_')) {
+    withMedia = false
+    inboundResult = await loadInbound(softDelete, withMedia)
+  }
+  // Drop the soft-delete filter if those columns aren't there yet, then retry.
+  if (isMissingSoftDeleteColumn(inboundResult.error) || isMissingSoftDeleteColumn(outboundResult.error)) {
+    softDelete = false
+    ;[inboundResult, outboundResult] = await Promise.all([loadInbound(softDelete, withMedia), loadOutbound(softDelete)])
+  }
 
   if (inboundResult.error) throw new Error(inboundResult.error.message)
   if (outboundResult.error) throw new Error(outboundResult.error.message)
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const inboundRows = ((inboundResult.data ?? []) as any[]).filter((item) => item.sender_whatsapp_id)
-
   // Stored media lives in a private bucket; mint short-lived signed URLs with a
   // service-role client. Guard for environments without the service key.
-  const needsSigning = inboundRows.some((i) => i.media_status === 'stored' && i.media_storage_path)
-  let admin: ReturnType<typeof createAdminClient> | null = null
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const inboundRows = (inboundResult.data ?? []).filter((item: any) => item.sender_whatsapp_id)
+  const needsSigning = inboundRows.some(
+    (item: { media_status?: string; media_storage_path?: string | null }) =>
+      item.media_status === 'stored' && item.media_storage_path
+  )
+  let mediaAdmin: ReturnType<typeof createAdminClient> | null = null
   if (needsSigning) {
     try {
-      admin = createAdminClient()
+      mediaAdmin = createAdminClient()
     } catch {
-      admin = null
+      mediaAdmin = null
     }
   }
 
   const inbound: WhatsAppFeedItem[] = await Promise.all(
-    inboundRows.map(async (item): Promise<WhatsAppFeedItem> => {
-      const mediaType = item.media_type as 'image' | 'video' | 'document' | 'audio' | null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    inboundRows.map(async (item: any): Promise<WhatsAppFeedItem> => {
+      const mediaType = (item.media_type ?? null) as 'image' | 'video' | 'document' | 'audio' | null
       let media: WhatsAppFeedItem['media'] = null
       if (mediaType) {
         let url: string | null = null
-        if (admin && item.media_status === 'stored' && item.media_storage_path) {
-          url = await signInboundMediaUrl(admin, item.media_storage_path as string)
+        if (mediaAdmin && item.media_status === 'stored' && item.media_storage_path) {
+          url = await signInboundMediaUrl(mediaAdmin, item.media_storage_path as string)
         }
         media = {
           type: mediaType,
@@ -78,7 +118,7 @@ export default async function CommsWhatsAppPage() {
       return {
         id: item.id,
         direction: 'inbound',
-        whatsappId: item.sender_whatsapp_id as string,
+        whatsappId: item.sender_whatsapp_id,
         displayName: item.sender_name,
         text: item.raw_content,
         timestamp: item.captured_at,
@@ -88,7 +128,16 @@ export default async function CommsWhatsAppPage() {
     })
   )
 
-  const outbound: WhatsAppFeedItem[] = (outboundResult.data ?? []).map((item) => ({
+  const outbound: WhatsAppFeedItem[] = (outboundResult.data ?? []).map((item: {
+    id: string
+    recipient_whatsapp_id: string
+    body: string
+    delivery_status: string
+    error_detail: string | null
+    sent_at: string
+    delivered_at: string | null
+    read_at: string | null
+  }) => ({
     id: item.id,
     direction: 'outbound',
     whatsappId: item.recipient_whatsapp_id,
@@ -105,5 +154,5 @@ export default async function CommsWhatsAppPage() {
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )
 
-  return <WhatsAppInboxShell feed={feed} isAdmin={isAdmin} />
+  return <WhatsAppInboxShell feed={feed} canDeleteMessages={profile.role === 'PlatformAdmin'} />
 }
