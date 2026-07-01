@@ -14,8 +14,22 @@ export interface CommsFormState {
 
 const INITIAL_STATE: CommsFormState = { ok: false }
 
+type OperatorProfile = {
+  id: string
+  name: string | null
+  email: string | null
+  role: string | null
+}
+
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
+}
+
+function parseMessageRef(value: FormDataEntryValue): { direction: 'inbound' | 'outbound'; id: string } | null {
+  if (typeof value !== 'string') return null
+  const [direction, id] = value.split(':')
+  if ((direction !== 'inbound' && direction !== 'outbound') || !id) return null
+  return { direction, id }
 }
 
 async function requireCommsOperator() {
@@ -37,7 +51,15 @@ async function requireCommsOperator() {
     throw new Error('Not authorized for the communications workspace')
   }
 
-  return { user, profile }
+  return { user, profile: profile as OperatorProfile }
+}
+
+async function requirePlatformAdmin() {
+  const context = await requireCommsOperator()
+  if (context.profile.role !== 'PlatformAdmin') {
+    throw new Error('Only PlatformAdmin users can delete WhatsApp messages.')
+  }
+  return context
 }
 
 export async function sendWhatsAppReply(
@@ -78,5 +100,49 @@ export async function sendWhatsAppReply(
     return { ok: true, message: 'Reply sent.' }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not send the WhatsApp reply.' }
+  }
+}
+
+export async function deleteWhatsAppMessages(
+  _prevState: CommsFormState = INITIAL_STATE,
+  formData: FormData
+): Promise<CommsFormState> {
+  try {
+    const { user } = await requirePlatformAdmin()
+    const refs = formData.getAll('message_ref').map(parseMessageRef).filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
+
+    const inboundIds = Array.from(new Set(refs.filter((ref) => ref.direction === 'inbound').map((ref) => ref.id)))
+    const outboundIds = Array.from(new Set(refs.filter((ref) => ref.direction === 'outbound').map((ref) => ref.id)))
+    const total = inboundIds.length + outboundIds.length
+
+    if (total === 0) return { ok: false, error: 'Select at least one WhatsApp message to delete.' }
+
+    const admin = createAdminClient()
+    const deletedAt = new Date().toISOString()
+    const payload = { whatsapp_deleted_at: deletedAt, whatsapp_deleted_by: user.id }
+
+    if (inboundIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (admin as any)
+        .from('intake_items')
+        .update(payload)
+        .in('id', inboundIds)
+        .not('sender_whatsapp_id', 'is', null)
+      if (error) throw new Error(error.message)
+    }
+
+    if (outboundIds.length > 0) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error } = await (admin as any)
+        .from('whatsapp_outbound_messages')
+        .update(payload)
+        .in('id', outboundIds)
+      if (error) throw new Error(error.message)
+    }
+
+    revalidatePath('/app/comms/whatsapp')
+    return { ok: true, message: `Deleted ${total} WhatsApp message${total === 1 ? '' : 's'}.` }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not delete WhatsApp messages.' }
   }
 }
