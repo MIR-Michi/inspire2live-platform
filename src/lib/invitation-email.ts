@@ -1,14 +1,16 @@
 /**
  * lib/invitation-email.ts
  *
- * Email dispatch for invitations.
+ * Email dispatch for invitation-style messages.
  *
  * Transport strategy:
- *   - If SMTP env vars are set (SMTP_HOST etc.) → use fetch to call
- *     Supabase Edge Function "send-email" (recommended production path).
- *   - Fallback: log to console + mark as 'skipped' in email_log.
+ *   - Prefer Resend when RESEND_API_KEY is configured.
+ *   - Fall back to SendGrid when SENDGRID_API_KEY is configured.
+ *   - If neither provider is configured, log the intended email and return a
+ *     non-sent result so callers can surface a useful setup message.
  *
- * The email_log audit trail is always written regardless of transport outcome.
+ * The sendInviteEmail path also writes an email_log audit trail regardless of
+ * transport outcome.
  */
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
@@ -27,9 +29,32 @@ interface SendInviteEmailParams {
   baseUrl: string
 }
 
-interface EmailResult {
+export interface EmailResult {
   sent: boolean
   error?: string
+}
+
+export interface SendTransactionalEmailParams {
+  recipientEmail: string
+  subject: string
+  htmlBody: string
+  logContext?: Record<string, unknown>
+}
+
+/**
+ * Sends a transactional platform email through the configured app provider.
+ */
+export async function sendTransactionalEmail(params: SendTransactionalEmailParams): Promise<EmailResult> {
+  if (hasEmailProviderConfigured()) {
+    return attemptEmailDelivery(params)
+  }
+
+  console.info('[invitation-email] No email provider configured. Would send:', {
+    to: params.recipientEmail,
+    subject: params.subject,
+    ...params.logContext,
+  })
+  return { sent: false, error: 'No email provider configured (RESEND_API_KEY / SENDGRID_API_KEY missing).' }
 }
 
 /**
@@ -66,32 +91,13 @@ export async function sendInviteEmail(params: SendInviteEmailParams): Promise<Em
     actionUrl,
   })
 
-  // ── Attempt delivery ──────────────────────────────────────────────────────
-
-  let sent = false
-  let errorMessage: string | undefined
-
-  const smtpConfigured =
-    !!process.env.SMTP_HOST ||
-    !!process.env.RESEND_API_KEY ||
-    !!process.env.SENDGRID_API_KEY
-
-  if (smtpConfigured) {
-    const result = await attemptEmailDelivery({ recipientEmail, subject, htmlBody })
-    sent = result.sent
-    errorMessage = result.error
-  } else {
-    // development fallback: log to console
-    console.info('[invitation-email] No email provider configured. Would send:', {
-      to: recipientEmail,
-      subject,
-      scope,
-      targetTitle,
-      inviteeRole,
-    })
-    sent = false
-    errorMessage = 'No email provider configured (SMTP_HOST / RESEND_API_KEY missing).'
-  }
+  const providerConfigured = hasEmailProviderConfigured()
+  const result = await sendTransactionalEmail({
+    recipientEmail,
+    subject,
+    htmlBody,
+    logContext: { scope, targetTitle, inviteeRole },
+  })
 
   // ── Write audit log ───────────────────────────────────────────────────────
 
@@ -101,22 +107,26 @@ export async function sendInviteEmail(params: SendInviteEmailParams): Promise<Em
       invitation_id: invitationId,
       recipient_email: recipientEmail,
       subject,
-      status: sent ? 'sent' : smtpConfigured ? 'failed' : 'skipped',
-      error_message: errorMessage ?? null,
-      sent_at: sent ? new Date().toISOString() : null,
+      status: result.sent ? 'sent' : providerConfigured ? 'failed' : 'skipped',
+      error_message: result.error ?? null,
+      sent_at: result.sent ? new Date().toISOString() : null,
     })
     .then(() => {/* fire and forget */})
 
-  return { sent, error: errorMessage }
+  return result
 }
 
 // ─── Delivery implementation ──────────────────────────────────────────────────
+
+function hasEmailProviderConfigured(): boolean {
+  return !!process.env.RESEND_API_KEY || !!process.env.SENDGRID_API_KEY
+}
 
 async function attemptEmailDelivery(params: {
   recipientEmail: string
   subject: string
   htmlBody: string
-}): Promise<{ sent: boolean; error?: string }> {
+}): Promise<EmailResult> {
   // Resend API (https://resend.com) — minimal integration
   if (process.env.RESEND_API_KEY) {
     try {
