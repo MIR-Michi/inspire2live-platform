@@ -2,7 +2,19 @@ import { redirect } from 'next/navigation'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
-import { AI_MODEL_CATALOG, DEFAULT_AI_EFFORT, DEFAULT_AI_MODEL, normalizeAiEffort, normalizeAiModel } from '@/lib/ai/models'
+import {
+  AI_MODEL_CATALOG,
+  AI_WORKLOAD_POLICIES,
+  DEFAULT_AI_EFFORT,
+  DEFAULT_AI_MODEL,
+  getAiModelCatalogEntry,
+  getAiWorkloadSelection,
+  normalizeAiEffort,
+  normalizeAiModel,
+  normalizeAiWorkloadOverrides,
+  type AiModelSelection,
+  type AiWorkloadPolicy,
+} from '@/lib/ai/models'
 import { saveAiSettings, testAiSettingsConnection } from './actions'
 
 type SearchParams = {
@@ -17,6 +29,7 @@ type AiSettingsRow = {
   api_key_last4: string | null
   model: string | null
   effort: string | null
+  model_overrides: unknown
   updated_at: string | null
   updated_by: string | null
 }
@@ -46,13 +59,15 @@ export default async function AdminAiSettingsPage({
 
   const { data: settings } = await db
     .from('ai_settings')
-    .select('api_key_last4, model, effort, updated_at, updated_by')
+    .select('api_key_last4, model, effort, model_overrides, updated_at, updated_by')
     .eq('singleton', true)
     .maybeSingle()
 
   const selectedModel = normalizeAiModel(settings?.model ?? DEFAULT_AI_MODEL)
   const selectedEffort = normalizeAiEffort(selectedModel, settings?.effort ?? DEFAULT_AI_EFFORT)
-  const selectedEntry = AI_MODEL_CATALOG.find((entry) => entry.id === selectedModel) ?? AI_MODEL_CATALOG[0]
+  const selectedEntry = getAiModelCatalogEntry(selectedModel) ?? AI_MODEL_CATALOG[0]
+  const workloadOverrides = normalizeAiWorkloadOverrides(settings?.model_overrides)
+  const globalSelection: AiModelSelection = { model: selectedModel, effort: selectedEffort }
   const envFallbackSet = Boolean(process.env.ANTHROPIC_API_KEY?.trim())
   const storedCredentialSet = Boolean(settings?.api_key_last4)
 
@@ -62,7 +77,7 @@ export default async function AdminAiSettingsPage({
         <div>
           <h1 className="text-2xl font-bold text-neutral-900">AI Settings</h1>
           <p className="text-sm text-neutral-500">
-            Org-wide Claude configuration for Sprint 14 AI augmentation.
+            Org-wide Claude configuration plus task-specific model routing.
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -163,6 +178,24 @@ export default async function AdminAiSettingsPage({
             </label>
           </div>
 
+          <section className="space-y-3 border-t border-neutral-100 pt-5">
+            <div>
+              <h2 className="text-lg font-semibold text-neutral-900">AI model recommendations by section</h2>
+              <p className="mt-1 text-sm text-neutral-500">
+                Each AI workload can use its recommended model, or an admin can override it for quality, speed, or cost.
+              </p>
+            </div>
+            <div className="grid gap-3">
+              {AI_WORKLOAD_POLICIES.map((policy) => (
+                <WorkloadModelCard
+                  key={policy.id}
+                  policy={policy}
+                  selection={getAiWorkloadSelection(policy.id, workloadOverrides, globalSelection)}
+                />
+              ))}
+            </div>
+          </section>
+
           <div className="flex flex-wrap gap-2 border-t border-neutral-100 pt-4">
             <button
               formAction={saveAiSettings}
@@ -186,7 +219,7 @@ export default async function AdminAiSettingsPage({
           </div>
           <dl className="space-y-3 text-sm">
             <div>
-              <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Model</dt>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Default model</dt>
               <dd className="mt-1 font-medium text-neutral-900">{selectedEntry.label}</dd>
             </div>
             <div>
@@ -197,11 +230,67 @@ export default async function AdminAiSettingsPage({
               <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Usage logging</dt>
               <dd className="mt-1 text-neutral-700">All wrapper calls write feature, tokens, cost, latency, and status to ai_usage_log.</dd>
             </div>
+            <div>
+              <dt className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Routing rule</dt>
+              <dd className="mt-1 text-neutral-700">Explicit call settings win first, then workload overrides, then workload recommendations, then the org default.</dd>
+            </div>
           </dl>
           <a className="inline-flex text-sm font-medium text-neutral-700 underline underline-offset-2" href="/docs/AI_INTEGRATION.md">
             AI integration guide
           </a>
         </aside>
+      </div>
+    </div>
+  )
+}
+
+function WorkloadModelCard({ policy, selection }: { policy: AiWorkloadPolicy; selection: AiModelSelection }) {
+  const selectedEntry = getAiModelCatalogEntry(selection.model) ?? AI_MODEL_CATALOG[0]
+  const recommendedEntry = getAiModelCatalogEntry(policy.recommendedModel)
+
+  return (
+    <div className="rounded-lg border border-neutral-200 bg-white p-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-neutral-500">{policy.section}</p>
+          <h3 className="mt-1 text-sm font-semibold text-neutral-900">{policy.label}</h3>
+          <p className="mt-1 text-sm text-neutral-600">{policy.description}</p>
+        </div>
+        <div className="rounded-md bg-emerald-50 px-2.5 py-1.5 text-xs font-medium text-emerald-800">
+          Recommended: {recommendedEntry?.label ?? policy.recommendedModel}, {policy.recommendedEffort}
+        </div>
+      </div>
+
+      <p className="mt-3 rounded-md bg-neutral-50 px-3 py-2 text-sm text-neutral-600">
+        {policy.recommendation}
+      </p>
+
+      <div className="mt-3 grid gap-3 sm:grid-cols-2">
+        <label className="block space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Model</span>
+          <select
+            name={`workload_${policy.id}_model`}
+            defaultValue={selection.model}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
+          >
+            {AI_MODEL_CATALOG.map((entry) => (
+              <option key={entry.id} value={entry.id}>{entry.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="block space-y-1.5">
+          <span className="text-xs font-semibold uppercase tracking-wide text-neutral-500">Reasoning effort</span>
+          <select
+            name={`workload_${policy.id}_effort`}
+            defaultValue={selection.effort}
+            className="w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm outline-none focus:border-neutral-500"
+          >
+            {selectedEntry.allowedEfforts.map((effort) => (
+              <option key={effort} value={effort}>{effort}</option>
+            ))}
+          </select>
+        </label>
       </div>
     </div>
   )
