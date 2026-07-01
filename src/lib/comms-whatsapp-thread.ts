@@ -8,6 +8,16 @@
 
 export type WhatsAppDirection = 'inbound' | 'outbound'
 
+export type WhatsAppMediaAttachment = {
+  type: 'image' | 'video' | 'document' | 'audio'
+  /** Short-lived signed URL, or null while pending / on failure. */
+  url: string | null
+  mimeType: string | null
+  filename: string | null
+  /** none | pending | stored | failed */
+  status: string
+}
+
 export type WhatsAppThreadMessage = {
   id: string
   direction: WhatsAppDirection
@@ -20,6 +30,8 @@ export type WhatsAppThreadMessage = {
   /** Receipt times for outbound messages (null for inbound). */
   deliveredAt?: string | null
   readAt?: string | null
+  /** Present on inbound messages that carried an image/video/document/audio. */
+  media?: WhatsAppMediaAttachment | null
 }
 
 export type WhatsAppThread = {

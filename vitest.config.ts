@@ -35,6 +35,7 @@ export default defineConfig({
         'src/lib/congress-workspace/current-event.ts',
         // External API / email dispatch wrappers — no unit-test value.
         'src/lib/whatsapp-send.ts',
+        'src/lib/whatsapp-media.ts',
         'src/lib/invitation-email.ts',
         'src/lib/congress-guest-tokens.ts',
         // Thin env-flag or type-only files.
