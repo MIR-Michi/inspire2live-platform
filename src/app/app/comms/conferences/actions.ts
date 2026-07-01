@@ -23,6 +23,7 @@ import {
   type ConferenceKeyPerson,
 } from '@/lib/comms-conference-prep'
 import { parseDelimitedList } from '@/lib/comms-events'
+import { resolveOrCreateCrmContact } from '@/lib/comms-conference-contacts'
 
 const CONFERENCES_PATH = '/app/comms/conferences'
 const CONFERENCE_ASSIGNMENT_TOKEN = /\[conference:([0-9a-f-]{36})\]/i
@@ -689,46 +690,38 @@ export async function assignConferenceContact(input: AssignConferenceContactInpu
     const firstName = clean(input.firstName, 80)
     const lastName = clean(input.lastName, 80)
     const email = normalizeContactEmail(input.email)
-    const whatsappId = clean(input.whatsappId, 80)
     if (!firstName || !lastName || !email) return { ok: false, message: 'First name, last name, and email are required.' }
 
-    const existing = await db
-      .from('comms_crm_contacts')
-      .select('id, full_name, email, phone, whatsapp_id, title, organisation')
-      .eq('normalized_email', email)
-      .maybeSingle()
-    if (existing.error) return { ok: false, message: existing.error.message }
-
-    if (existing.data) {
-      contact = contactOptionFromRow(existing.data)
-    } else {
-      const contactKind = email.endsWith('@inspire2live.org') ? 'internal_contact' : 'external'
-      const created = await db
-        .from('comms_crm_contacts')
-        .insert({
-          segment: contactKind === 'external' ? 'external' : 'internal',
-          source_type: 'manual',
-          full_name: `${firstName} ${lastName}`,
-          contact_kind: contactKind,
-          platform_status: 'none',
+    // Shared resolve/dedupe/create path (same helper the guest-invite flows use).
+    let resolvedId: string
+    try {
+      const resolved = await resolveOrCreateCrmContact(
+        db as unknown as Parameters<typeof resolveOrCreateCrmContact>[0],
+        auth.userId,
+        {
+          fullName: `${firstName} ${lastName}`,
           email,
-          whatsapp_id: whatsappId,
-          preferred_channel: whatsappId ? 'WhatsApp / Email' : 'Email',
-          lifecycle_stage: 'active',
-          consent_status: 'unknown',
-          source_label: 'Conference assignment',
+          whatsappId: input.whatsappId,
+          sourceLabel: 'Conference assignment',
           tags: ['conference-attendee'],
           notes: `Created from conference assignment for ${String(conferenceResult.data.name)}.`,
-          created_by: auth.userId,
-          updated_by: auth.userId,
-          updated_at: new Date().toISOString(),
-        })
-        .select('id, full_name, email, phone, whatsapp_id, title, organisation')
-        .maybeSingle()
-      if (created.error) return { ok: false, message: created.error.message }
-      if (!created.data) return { ok: false, message: 'Could not create the CRM contact.' }
-      contact = contactOptionFromRow(created.data)
+        }
+      )
+      if (!resolved.contactId) return { ok: false, message: 'Could not create the CRM contact.' }
+      resolvedId = resolved.contactId
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : 'Could not create the CRM contact.' }
     }
+
+    // Re-fetch the full row so the returned option keeps title/organisation meta.
+    const full = await db
+      .from('comms_crm_contacts')
+      .select('id, full_name, email, phone, whatsapp_id, title, organisation')
+      .eq('id', resolvedId)
+      .maybeSingle()
+    if (full.error) return { ok: false, message: full.error.message }
+    if (!full.data) return { ok: false, message: 'CRM contact not found.' }
+    contact = contactOptionFromRow(full.data)
   }
 
   const conferenceName = String(conferenceResult.data.name)
