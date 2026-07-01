@@ -18,7 +18,6 @@ export default defineConfig({
       exclude: [
         // Demo / seed content is intentionally large and not unit-tested.
         'src/lib/demo-data.ts',
-        'src/lib/congress-workspace-demo.ts',
         // Thin wrappers around Next/Supabase runtime.
         'src/lib/supabase/**',
         // Supabase data-layer query files — require live DB or heavy mocking.
