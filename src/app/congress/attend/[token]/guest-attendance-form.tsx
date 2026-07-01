@@ -24,7 +24,7 @@ type WorkspaceCheck = {
   submissions: Array<{ id: string }>
 }
 
-export function GuestAttendanceForm({ token }: { token: string }) {
+export function GuestAttendanceForm({ token, addMode = false }: { token: string; addMode?: boolean }) {
   const router = useRouter()
   const [prefill, setPrefill] = useState<PrefillData | null>(null)
   const [loading, setLoading] = useState(true)
@@ -67,8 +67,10 @@ export function GuestAttendanceForm({ token }: { token: string }) {
         return
       }
 
-      // Returning visitor: already submitted → go directly to workspace.
-      if (workspaceData && workspaceData.submissions?.length > 0) {
+      // Returning visitor who already submitted → go straight to their
+      // workspace. Skipped in "add another conference" mode so they can file a
+      // fresh report.
+      if (!addMode && workspaceData && workspaceData.submissions?.length > 0) {
         router.replace(`/congress/attend/${token}/workspace`)
         return
       }
@@ -77,7 +79,9 @@ export function GuestAttendanceForm({ token }: { token: string }) {
       setName(prefillData.contactName ?? '')
       setEmail(prefillData.contactEmail ?? '')
       setPhone(prefillData.contactPhone ?? '')
-      if (prefillData.conferenceName) {
+      // Only prefill+lock the conference from the token on a first visit. When
+      // adding another conference, leave the picker empty so they choose it.
+      if (!addMode && prefillData.conferenceName) {
         setConfName(prefillData.conferenceName)
         setConfQuery(prefillData.conferenceName)
         setConfId(prefillData.conferenceId)
@@ -88,7 +92,7 @@ export function GuestAttendanceForm({ token }: { token: string }) {
       setExpired(true)
       setLoading(false)
     })
-  }, [token, router])
+  }, [token, router, addMode])
 
   const searchConferences = useCallback((q: string) => {
     if (q.length < 2) { setSuggestions([]); return }
@@ -207,8 +211,19 @@ export function GuestAttendanceForm({ token }: { token: string }) {
       <div className="mx-auto max-w-lg px-4 py-8">
         {/* Header */}
         <div className="mb-8">
+          {addMode && (
+            <button
+              type="button"
+              onClick={() => router.push(`/congress/attend/${token}/workspace`)}
+              className="mb-3 inline-flex items-center gap-1 text-sm font-semibold text-orange-700 hover:text-orange-800"
+            >
+              ← Back to my workspace
+            </button>
+          )}
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-600">Inspire2Live</p>
-          <h1 className="text-2xl font-semibold text-neutral-900">Conference attendance</h1>
+          <h1 className="text-2xl font-semibold text-neutral-900">
+            {addMode ? 'Add another conference' : 'Conference attendance'}
+          </h1>
           <p className="mt-1 text-sm text-neutral-500">
             Let us know which conference you&apos;re attending. Takes less than a minute.
           </p>

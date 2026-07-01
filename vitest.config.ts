@@ -23,6 +23,8 @@ export default defineConfig({
         'src/lib/supabase/**',
         // Supabase data-layer query files — require live DB or heavy mocking.
         'src/lib/comms-crm-data.ts',
+        'src/lib/comms-conference-contacts.ts',
+        'src/lib/comms-conference-guest-reports.ts',
         'src/lib/comms-meeting-transcripts.ts',
         'src/lib/ai/follow-up-tasks-store.ts',
         'src/lib/ai/org-newsfeed-job.ts',
@@ -34,6 +36,7 @@ export default defineConfig({
         // External API / email dispatch wrappers — no unit-test value.
         'src/lib/whatsapp-send.ts',
         'src/lib/invitation-email.ts',
+        'src/lib/congress-guest-tokens.ts',
         // Thin env-flag or type-only files.
         'src/lib/comms-integrations.ts',
         'src/lib/patient-stories.ts',
