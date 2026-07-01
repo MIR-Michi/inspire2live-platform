@@ -1,5 +1,13 @@
 -- ============================================================
--- MIGRATION 00109: Congress guest workspace
+-- MIGRATION 00110: Congress guest workspace
+--
+-- (Renumbered from 00109 — the digest-fix migration merged first and already
+-- occupies version 00109; this must be a distinct later version.)
+--
+-- All guest RPCs qualify pgcrypto's digest as extensions.digest: these are
+-- SECURITY DEFINER with search_path = '', and pgcrypto is exposed through the
+-- extensions schema on Supabase, so an unqualified digest(...) fails at runtime
+-- and makes fresh links look expired.
 --
 -- Extends the guest attendance form (00108) with:
 --   1. `is_registered` flag on submissions (drives conference stage)
@@ -15,6 +23,9 @@
 --        register_guest_file     – record an uploaded file after API upload
 --        request_guest_access    – store access request + return creator email
 -- ============================================================
+
+-- pgcrypto (for digest) is exposed via the extensions schema on Supabase.
+create extension if not exists pgcrypto with schema extensions;
 
 -- Drop the old 12-param overload from 00108 (replaced by the 13-param version below).
 drop function if exists public.submit_conference_guest_form(text,text,text,text,text,uuid,text,date,date,text,text,text);
@@ -144,7 +155,7 @@ declare
   v_creator_id  uuid;
   v_target_stage text;
 begin
-  v_hash := encode(digest(p_raw_token, 'sha256'), 'hex');
+  v_hash := encode(extensions.digest(p_raw_token, 'sha256'), 'hex');
 
   select id, created_by into v_token_id, v_creator_id
   from public.conference_guest_tokens
@@ -216,7 +227,7 @@ declare
   v_token_id uuid;
   v_result   jsonb;
 begin
-  v_hash := encode(digest(raw_token, 'sha256'), 'hex');
+  v_hash := encode(extensions.digest(raw_token, 'sha256'), 'hex');
 
   select id into v_token_id
   from public.conference_guest_tokens
@@ -301,7 +312,7 @@ declare
   v_conf_id  uuid;
   v_creator  uuid;
 begin
-  v_hash := encode(digest(p_raw_token, 'sha256'), 'hex');
+  v_hash := encode(extensions.digest(p_raw_token, 'sha256'), 'hex');
 
   select id, created_by into v_token_id, v_creator
   from public.conference_guest_tokens
@@ -358,7 +369,7 @@ begin
     raise exception 'content_empty';
   end if;
 
-  v_hash := encode(digest(p_raw_token, 'sha256'), 'hex');
+  v_hash := encode(extensions.digest(p_raw_token, 'sha256'), 'hex');
 
   select id into v_token_id
   from public.conference_guest_tokens
@@ -426,7 +437,7 @@ declare
   v_token_id uuid;
   v_file_id uuid;
 begin
-  v_hash := encode(digest(p_raw_token, 'sha256'), 'hex');
+  v_hash := encode(extensions.digest(p_raw_token, 'sha256'), 'hex');
 
   select id into v_token_id
   from public.conference_guest_tokens
@@ -480,7 +491,7 @@ declare
   v_creator   uuid;
   v_cr_email  text;
 begin
-  v_hash := encode(digest(p_raw_token, 'sha256'), 'hex');
+  v_hash := encode(extensions.digest(p_raw_token, 'sha256'), 'hex');
 
   select t.id, t.contact_name, t.contact_email, t.created_by
   into v_token_id, v_contact, v_email, v_creator
