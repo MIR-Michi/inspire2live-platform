@@ -21,11 +21,13 @@ type OperatorProfile = {
   role: string | null
 }
 
+type MessageRef = { direction: 'inbound' | 'outbound'; id: string }
+
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
 }
 
-function parseMessageRef(value: FormDataEntryValue): { direction: 'inbound' | 'outbound'; id: string } | null {
+function parseMessageRef(value: FormDataEntryValue): MessageRef | null {
   if (typeof value !== 'string') return null
   const [direction, id] = value.split(':')
   if ((direction !== 'inbound' && direction !== 'outbound') || !id) return null
@@ -109,7 +111,9 @@ export async function deleteWhatsAppMessages(
 ): Promise<CommsFormState> {
   try {
     const { user } = await requirePlatformAdmin()
-    const refs = formData.getAll('message_ref').map(parseMessageRef).filter((ref): ref is NonNullable<typeof ref> => Boolean(ref))
+    const refs = formData.getAll('message_ref')
+      .map(parseMessageRef)
+      .filter((ref): ref is MessageRef => ref !== null)
 
     const inboundIds = Array.from(new Set(refs.filter((ref) => ref.direction === 'inbound').map((ref) => ref.id)))
     const outboundIds = Array.from(new Set(refs.filter((ref) => ref.direction === 'outbound').map((ref) => ref.id)))
