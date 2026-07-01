@@ -13,6 +13,7 @@ import {
   type ConferenceStage,
   type ConferenceView,
 } from '@/lib/comms-conferences'
+import { ConferenceGuestLink } from '@/components/comms/conferences/conference-guest-link'
 import {
   STAGE_CHECKLISTS,
   showsPresentationBlocks,
@@ -203,7 +204,7 @@ export function ConferenceOperatingShell({
           )}
         </div>
 
-        <Sidebar conference={conference} prep={prep} profiles={profiles} />
+        <Sidebar conference={conference} prep={prep} profiles={profiles} assignedContacts={assignedContacts} />
       </div>
     </div>
   )
@@ -759,8 +760,25 @@ function Recap({ label, value }: { label: string; value: string }) {
 
 // ─── Sidebar ────────────────────────────────────────────────────────────────────
 
-function Sidebar({ conference, prep, profiles }: { conference: ConferenceView; prep: ConferencePrep; profiles: Profile[] }) {
+function Sidebar({
+  conference,
+  prep,
+  profiles,
+  assignedContacts,
+}: {
+  conference: ConferenceView
+  prep: ConferencePrep
+  profiles: Profile[]
+  assignedContacts: ConferenceAssignedContact[]
+}) {
   const ownerName = prep.commsOwnerId ? profiles.find((p) => p.id === prep.commsOwnerId)?.name ?? profiles.find((p) => p.id === prep.commsOwnerId)?.email ?? null : null
+  const guestContacts = assignedContacts.map((c) => ({
+    contactId: c.id,
+    contactName: c.fullName,
+    contactEmail: c.email,
+    contactPhone: c.whatsappId,
+  }))
+
   return (
     <div className="space-y-4">
       <div className="rounded-xl border border-neutral-200 bg-white p-4">
@@ -791,6 +809,12 @@ function Sidebar({ conference, prep, profiles }: { conference: ConferenceView; p
           </div>
         </div>
       )}
+
+      <ConferenceGuestLink
+        conferenceId={conference.id}
+        conferenceName={conference.name}
+        contacts={guestContacts}
+      />
     </div>
   )
 }
