@@ -6,7 +6,14 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { encryptAiSecret, secretLast4 } from '@/lib/ai/crypto'
 import { testAiConnection } from '@/lib/ai/client'
-import { normalizeAiEffort, normalizeAiModel, validateAiModelEffort } from '@/lib/ai/models'
+import {
+  AI_WORKLOAD_POLICIES,
+  normalizeAiEffort,
+  normalizeAiModel,
+  normalizeAiModelSelection,
+  validateAiModelEffort,
+  type AiWorkloadOverrides,
+} from '@/lib/ai/models'
 
 async function requirePlatformAdmin(): Promise<{ id: string } | null> {
   const supabase = await createClient()
@@ -32,6 +39,20 @@ export async function saveAiSettings(formData: FormData): Promise<void> {
   const validation = validateAiModelEffort(model, effort)
   if (!validation.ok) go({ status: 'error', message: validation.message })
 
+  const modelOverrides: AiWorkloadOverrides = {}
+  for (const policy of AI_WORKLOAD_POLICIES) {
+    const selection = normalizeAiModelSelection(
+      String(formData.get(`workload_${policy.id}_model`) ?? policy.recommendedModel),
+      String(formData.get(`workload_${policy.id}_effort`) ?? policy.recommendedEffort),
+      { model: policy.recommendedModel, effort: policy.recommendedEffort },
+    )
+    const workloadValidation = validateAiModelEffort(selection.model, selection.effort)
+    if (!workloadValidation.ok) {
+      go({ status: 'error', message: `${policy.label}: ${workloadValidation.message}` })
+    }
+    modelOverrides[policy.id] = selection
+  }
+
   const credential = String(formData.get('credential') ?? '').trim()
   const clearCredential = formData.get('clearCredential') === 'on'
 
@@ -39,6 +60,7 @@ export async function saveAiSettings(formData: FormData): Promise<void> {
     singleton: true,
     model,
     effort,
+    model_overrides: modelOverrides,
     updated_by: user.id,
     updated_at: new Date().toISOString(),
   }
