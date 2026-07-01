@@ -28,10 +28,15 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
 
   if (!conference) notFound()
 
-  // Silently advance stage based on conference dates (ongoing/follow_up) on each page load.
+  // Best-effort date-based stage update. The operating page must render even if
+  // the RPC is unavailable, not yet migrated, or rejected by RLS.
   if (tracking?.stage && tracking.stage !== 'archived') {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).rpc('auto_advance_conference_stage', { p_conference_id: id }).catch(() => {/* silent */})
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).rpc('auto_advance_conference_stage', { p_conference_id: id })
+    } catch (error) {
+      console.error('[conferences] auto_advance_conference_stage failed', error)
+    }
   }
 
   const campusOptions = (campusSessions ?? []).map((s) => ({
