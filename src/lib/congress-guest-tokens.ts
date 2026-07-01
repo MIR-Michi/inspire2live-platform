@@ -1,6 +1,7 @@
 import 'server-only'
 import { createHash, randomUUID } from 'crypto'
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { sendTransactionalEmail } from '@/lib/invitation-email'
 import { sendWhatsAppMessage } from '@/lib/whatsapp-send'
 
 export type TokenContact = {
@@ -98,31 +99,14 @@ async function sendGuestEmail(params: {
   subject: string
   html: string
 }): Promise<{ ok: boolean; error?: string }> {
-  if (!process.env.RESEND_API_KEY) {
-    return { ok: false, error: 'Email not configured (RESEND_API_KEY missing).' }
-  }
-  try {
-    const res = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        from: process.env.EMAIL_FROM ?? 'Inspire2Live <no-reply@inspire2live.org>',
-        to: [params.to],
-        subject: params.subject,
-        html: params.html,
-      }),
-    })
-    if (!res.ok) {
-      const body = await res.text()
-      return { ok: false, error: `Resend ${res.status}: ${body}` }
-    }
-    return { ok: true }
-  } catch (err) {
-    return { ok: false, error: String(err) }
-  }
+  const result = await sendTransactionalEmail({
+    recipientEmail: params.to,
+    subject: params.subject,
+    htmlBody: params.html,
+    logContext: { scope: 'conference_guest_attendance' },
+  })
+
+  return { ok: result.sent, error: result.error }
 }
 
 function buildGuestEmailHtml(params: {
