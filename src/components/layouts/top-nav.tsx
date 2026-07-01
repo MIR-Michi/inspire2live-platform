@@ -11,6 +11,13 @@ import { PreviewPanel } from '@/components/layouts/preview-panel'
 import { NavGlyph } from '@/components/layouts/side-nav'
 import { useRoleLayers } from '@/components/roles/role-layers-context'
 
+export type PreviewUserOption = {
+  id: string
+  name: string
+  email: string
+  role: string
+}
+
 interface TopNavProps {
   userName: string
   userRole: string
@@ -19,6 +26,8 @@ interface TopNavProps {
   unreadCount?: number
   isAdmin?: boolean
   viewAsRole?: string | null
+  viewAsUser?: PreviewUserOption | null
+  previewUsers?: PreviewUserOption[]
   /** Effective access levels per space (server-resolved, includes DB overrides). */
   effectiveSpaces: Record<PlatformSpace, AccessLevel>
 }
@@ -31,6 +40,8 @@ export function TopNav({
   unreadCount = 0,
   isAdmin = false,
   viewAsRole,
+  viewAsUser,
+  previewUsers = [],
   effectiveSpaces,
 }: TopNavProps) {
   const router = useRouter()
@@ -121,7 +132,13 @@ export function TopNav({
 
         {/* Right: preview (admin) + notifications + profile */}
         <div className="flex items-center gap-2">
-          {isAdmin && <PreviewPanel viewAsRole={viewAsRole} />}
+          {isAdmin && (
+            <PreviewPanel
+              viewAsRole={viewAsRole}
+              viewAsUser={viewAsUser}
+              users={previewUsers}
+            />
+          )}
 
           {notificationsAccessible ? (
             <Link
