@@ -30,7 +30,12 @@ export async function GET(request: Request) {
     raw_token: token,
   })
 
-  if (error || !data || data.length === 0) {
+  if (error) {
+    console.error('[congress-guest/validate] RPC error', error)
+    return NextResponse.json({ valid: false }, { status: 500 })
+  }
+
+  if (!data || data.length === 0) {
     return NextResponse.json({ valid: false })
   }
 
