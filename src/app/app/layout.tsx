@@ -1,10 +1,10 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { TopNav } from '@/components/layouts/top-nav'
+import { TopNav, type PreviewUserOption } from '@/components/layouts/top-nav'
 import { SideNav } from '@/components/layouts/side-nav'
 import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access'
 import { canAccess, resolveAllSpaces } from '@/lib/permissions'
-import { getViewAsRole } from '@/lib/view-as'
+import { getViewAsRole, getViewAsUserId } from '@/lib/view-as'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
 import { TestModeProvider } from '@/components/feedback/test-mode-context'
 import { FeedbackOverlay } from '@/components/feedback/feedback-overlay'
@@ -19,6 +19,15 @@ function getInitials(name: string): string {
     .toUpperCase()
 }
 
+type ProfileShell = {
+  id: string
+  name: string | null
+  email: string | null
+  role: string | null
+  onboarding_completed: boolean | null
+  avatar_url: string | null
+}
+
 export default async function AppLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient()
   const {
@@ -29,20 +38,14 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('name, role, onboarding_completed, avatar_url')
+    .select('id, name, email, role, onboarding_completed, avatar_url')
     .eq('id', user.id)
     .maybeSingle()
 
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
-  const { count: unread } = await supabase
-    .from('notifications')
-    .select('id', { count: 'exact', head: true })
-    .eq('user_id', user.id)
-    .eq('is_read', false)
-
-  const name = profile?.name || user.email || 'Unknown'
-  const actualRole = normalizeRole(profile?.role)
+  const actualProfile = profile as ProfileShell | null
+  const actualRole = normalizeRole(actualProfile?.role)
 
   // NOTE: Do not mutate platform roles at request-time based on email.
   // Role is a DB-managed attribute (profiles.role) and must be updated only via
@@ -50,9 +53,51 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const isAdmin = actualRole === 'PlatformAdmin'
 
-  // Admin perspective switching: read cookie
-  const viewAsRole = isAdmin ? await getViewAsRole() : null
-  const effectiveRole = viewAsRole ?? actualRole
+  const [viewAsRoleCookie, viewAsUserId] = isAdmin
+    ? await Promise.all([getViewAsRole(), getViewAsUserId()])
+    : [null, null]
+
+  let viewAsUser: ProfileShell | null = null
+  let previewUsers: PreviewUserOption[] = []
+
+  if (isAdmin) {
+    const [viewAsUserResult, previewUsersResult] = await Promise.all([
+      viewAsUserId
+        ? supabase
+            .from('profiles')
+            .select('id, name, email, role, onboarding_completed, avatar_url')
+            .eq('id', viewAsUserId)
+            .maybeSingle()
+        : Promise.resolve({ data: null }),
+      supabase
+        .from('profiles')
+        .select('id, name, email, role')
+        .order('name'),
+    ])
+
+    viewAsUser = (viewAsUserResult.data as ProfileShell | null) ?? null
+    previewUsers = (previewUsersResult.data ?? []).map((row) => ({
+      id: row.id,
+      name: row.name ?? 'Unnamed user',
+      email: row.email ?? '',
+      role: row.role ?? 'PatientAdvocate',
+    }))
+  }
+
+  // Admin perspective switching: user preview wins over role preview so the
+  // selected user's role + DB permission overrides are reflected together.
+  const viewAsRole = viewAsUser ? null : viewAsRoleCookie
+  const effectiveProfile = viewAsUser ?? actualProfile
+  const effectiveUserId = effectiveProfile?.id ?? user.id
+  const effectiveRole = viewAsUser ? normalizeRole(viewAsUser.role) : viewAsRole ?? actualRole
+
+  const { count: unread } = await supabase
+    .from('notifications')
+    .select('id', { count: 'exact', head: true })
+    .eq('user_id', effectiveUserId)
+    .eq('is_read', false)
+
+  const name = effectiveProfile?.name || effectiveProfile?.email || user.email || 'Unknown'
 
   const currentAllowed = canAccessAppPath(actualRole, '/app/dashboard')
   if (!currentAllowed) {
@@ -60,9 +105,8 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   }
 
   // Resolve effective access levels for all spaces (one DB query).
-  // Uses effectiveRole (view-as aware) so preview mode reflects the target role's defaults,
-  // but DB overrides are looked up by the actual user's id.
-  const effectiveSpaces = await resolveAllSpaces(user.id, effectiveRole, supabase)
+  // Uses the previewed user when active, so DB overrides match the user being inspected.
+  const effectiveSpaces = await resolveAllSpaces(effectiveUserId, effectiveRole, supabase)
   const workspaceLabel = getRoleLabel(effectiveRole)
 
   // Campus badge: show whenever the user can see the comms space (admins always can).
@@ -88,10 +132,17 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             userName={name}
             userRole={effectiveRole}
             userInitials={getInitials(name)}
-            userAvatarUrl={profile?.avatar_url ?? null}
+            userAvatarUrl={effectiveProfile?.avatar_url ?? null}
             unreadCount={unread ?? 0}
             isAdmin={isAdmin}
             viewAsRole={viewAsRole}
+            viewAsUser={viewAsUser ? {
+              id: viewAsUser.id,
+              name: viewAsUser.name ?? 'Unnamed user',
+              email: viewAsUser.email ?? '',
+              role: viewAsUser.role ?? effectiveRole,
+            } : null}
+            previewUsers={previewUsers}
             effectiveSpaces={effectiveSpaces}
           />
           <div className="flex min-h-0 flex-1">
