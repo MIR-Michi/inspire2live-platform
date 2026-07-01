@@ -14,6 +14,8 @@ import {
   type ConferenceView,
 } from '@/lib/comms-conferences'
 import { ConferenceGuestLink } from '@/components/comms/conferences/conference-guest-link'
+import { ConferenceGuestReports } from '@/components/comms/conferences/conference-guest-reports'
+import type { ConferenceGuestReport } from '@/lib/comms-conference-guest-reports'
 import {
   STAGE_CHECKLISTS,
   showsPresentationBlocks,
@@ -101,6 +103,7 @@ export function ConferenceOperatingShell({
   campusSessions,
   assignedContacts = [],
   initialTasks = [],
+  guestReports = [],
 }: {
   conference: ConferenceView
   stage: ConferenceStage | null
@@ -111,6 +114,7 @@ export function ConferenceOperatingShell({
   campusSessions: Option[]
   assignedContacts?: ConferenceAssignedContact[]
   initialTasks?: ConferenceTask[]
+  guestReports?: ConferenceGuestReport[]
 }) {
   const [realStage, setRealStage] = useState<ConferenceStage | null>(stage)
   const [activeStage, setActiveStage] = useState<ConferenceStage>(stage ?? 'intended')
@@ -200,6 +204,12 @@ export function ConferenceOperatingShell({
                 profiles={profiles}
                 attendees={assignedContacts}
               />
+            </div>
+          )}
+
+          {guestReports.length > 0 && (
+            <div className="mt-6">
+              <ConferenceGuestReports reports={guestReports} />
             </div>
           )}
         </div>

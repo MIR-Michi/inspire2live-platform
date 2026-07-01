@@ -82,13 +82,7 @@ export function GuestWorkspace({ token }: { token: string }) {
 
   const handleRegisteredChange = async (checked: boolean) => {
     if (!submission) return
-    if (checked) {
-      await fetch('/api/congress-guest/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ token, submissionId: submission.id }),
-      })
-    }
+    // Optimistic — send the new value both ways (check and uncheck).
     setData((prev) => {
       if (!prev) return prev
       return {
@@ -98,6 +92,11 @@ export function GuestWorkspace({ token }: { token: string }) {
         ),
       }
     })
+    await fetch('/api/congress-guest/register', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token, submissionId: submission.id, registered: checked }),
+    }).catch(() => {/* best-effort; UI already reflects intent */})
   }
 
   const handleFileAdded = (file: GuestFile) => {
@@ -107,6 +106,30 @@ export function GuestWorkspace({ token }: { token: string }) {
         ...prev,
         submissions: prev.submissions.map((s) =>
           s.id === submission.id ? { ...s, files: [...s.files, file] } : s
+        ),
+      }
+    })
+  }
+
+  const handleFileDeleted = (fileId: string) => {
+    setData((prev) => {
+      if (!prev || !submission) return prev
+      return {
+        ...prev,
+        submissions: prev.submissions.map((s) =>
+          s.id === submission.id ? { ...s, files: s.files.filter((f) => f.id !== fileId) } : s
+        ),
+      }
+    })
+  }
+
+  const handleNoteDeleted = (noteId: string) => {
+    setData((prev) => {
+      if (!prev || !submission) return prev
+      return {
+        ...prev,
+        submissions: prev.submissions.map((s) =>
+          s.id === submission.id ? { ...s, guestNotes: s.guestNotes.filter((n) => n.id !== noteId) } : s
         ),
       }
     })
@@ -148,24 +171,29 @@ export function GuestWorkspace({ token }: { token: string }) {
           )}
         </div>
 
-        {/* Tab picker if multiple submissions */}
-        {data.submissions.length > 1 && (
-          <div className="flex flex-wrap gap-2">
-            {data.submissions.map((s) => (
-              <button
-                key={s.id}
-                onClick={() => setActiveSubId(s.id)}
-                className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                  s.id === activeSubId
-                    ? 'border-neutral-950 bg-neutral-950 text-white'
-                    : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50'
-                }`}
-              >
-                {s.conferenceName}
-              </button>
-            ))}
-          </div>
-        )}
+        {/* Conference switcher — one workspace tab per conference — plus a way
+            to file a report for another conference at any time. */}
+        <div className="flex flex-wrap items-center gap-2">
+          {data.submissions.map((s) => (
+            <button
+              key={s.id}
+              onClick={() => setActiveSubId(s.id)}
+              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
+                s.id === activeSubId
+                  ? 'border-neutral-950 bg-neutral-950 text-white'
+                  : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50'
+              }`}
+            >
+              {s.conferenceName}
+            </button>
+          ))}
+          <a
+            href={`/congress/attend/${token}?add=1`}
+            className="rounded-full border border-dashed border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+          >
+            + Add another conference
+          </a>
+        </div>
 
         {submission && (
           <>
@@ -204,6 +232,7 @@ export function GuestWorkspace({ token }: { token: string }) {
               label="Photos"
               description="Conference photos, team shots, booth pictures."
               onFileAdded={handleFileAdded}
+              onFileDeleted={handleFileDeleted}
             />
 
             {/* Presentation — shown if speaker or panelist */}
@@ -216,6 +245,7 @@ export function GuestWorkspace({ token }: { token: string }) {
                 label="Presentation"
                 description="Upload your slides or any document you presented."
                 onFileAdded={handleFileAdded}
+                onFileDeleted={handleFileDeleted}
               />
             )}
 
@@ -224,6 +254,7 @@ export function GuestWorkspace({ token }: { token: string }) {
               token={token}
               submission={submission}
               onNoteUpdated={handleNoteUpdated}
+              onNoteDeleted={handleNoteDeleted}
             />
 
             {/* Request full access */}
@@ -316,6 +347,7 @@ function UploadSection({
   label,
   description,
   onFileAdded,
+  onFileDeleted,
 }: {
   token: string
   submission: Submission
@@ -324,11 +356,31 @@ function UploadSection({
   label: string
   description: string
   onFileAdded: (file: GuestFile) => void
+  onFileDeleted: (fileId: string) => void
 }) {
   const inputRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const files = submission.files.filter((f) => f.fileType === fileType)
+
+  const handleDelete = async (fileId: string) => {
+    setDeletingId(fileId)
+    try {
+      const res = await fetch('/api/congress-guest/upload/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, fileId }),
+      })
+      const data = await res.json() as { ok?: boolean }
+      if (res.ok && data.ok) onFileDeleted(fileId)
+      else setError('Could not delete the file.')
+    } catch {
+      setError('Could not delete the file.')
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const handleFiles = async (fileList: FileList) => {
     for (const file of Array.from(fileList)) {
@@ -379,6 +431,15 @@ function UploadSection({
               ) : (
                 <span className="min-w-0 flex-1 truncate text-xs text-neutral-700">{f.fileName}</span>
               )}
+              <button
+                type="button"
+                onClick={() => { void handleDelete(f.id) }}
+                disabled={deletingId === f.id}
+                className="shrink-0 text-xs font-semibold text-neutral-400 hover:text-red-600 disabled:opacity-50"
+                aria-label={`Delete ${f.fileName}`}
+              >
+                {deletingId === f.id ? '…' : 'Delete'}
+              </button>
             </li>
           ))}
         </ul>
@@ -411,14 +472,32 @@ function CommentsSection({
   token,
   submission,
   onNoteUpdated,
+  onNoteDeleted,
 }: {
   token: string
   submission: Submission
   onNoteUpdated: (note: GuestNote) => void
+  onNoteDeleted: (noteId: string) => void
 }) {
   const comments = submission.guestNotes.filter((n) => n.noteType === 'comment')
   const [text, setText] = useState('')
   const [posting, setPosting] = useState(false)
+  const [deletingId, setDeletingId] = useState<string | null>(null)
+
+  const remove = async (noteId: string) => {
+    setDeletingId(noteId)
+    try {
+      const res = await fetch('/api/congress-guest/notes/delete', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, noteId }),
+      })
+      const data = await res.json() as { ok?: boolean }
+      if (res.ok && data.ok) onNoteDeleted(noteId)
+    } finally {
+      setDeletingId(null)
+    }
+  }
 
   const post = async () => {
     if (!text.trim()) return
@@ -450,7 +529,18 @@ function CommentsSection({
         <ul className="mb-3 space-y-2">
           {comments.map((c) => (
             <li key={c.id} className="rounded-xl border border-neutral-100 bg-neutral-50 px-3 py-2.5 text-sm text-neutral-700">
-              <p>{c.content}</p>
+              <div className="flex items-start justify-between gap-2">
+                <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">{c.content}</p>
+                <button
+                  type="button"
+                  onClick={() => { void remove(c.id) }}
+                  disabled={deletingId === c.id}
+                  className="shrink-0 text-xs font-semibold text-neutral-400 hover:text-red-600 disabled:opacity-50"
+                  aria-label="Delete comment"
+                >
+                  {deletingId === c.id ? '…' : 'Delete'}
+                </button>
+              </div>
               <p className="mt-1 text-[10px] text-neutral-400">
                 {new Date(c.createdAt).toLocaleString('en-GB', { dateStyle: 'medium', timeStyle: 'short' })}
               </p>

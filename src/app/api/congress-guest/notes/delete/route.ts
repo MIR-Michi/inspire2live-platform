@@ -1,9 +1,7 @@
 /**
- * POST /api/congress-guest/register
+ * POST /api/congress-guest/notes/delete
  *
- * Public: sets a guest submission's registration flag. Turning it on advances
- * the conference stage to "registered" if not already further along; turning it
- * off leaves the pipeline stage untouched.
+ * Public: deletes a guest note (summary or comment) the token owns.
  */
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
@@ -17,11 +15,9 @@ export async function POST(request: Request) {
   }
 
   const token = typeof body.token === 'string' ? body.token.trim() : ''
-  const submissionId = typeof body.submissionId === 'string' ? body.submissionId.trim() : ''
-  // Defaults to true for backwards compatibility with the original one-way call.
-  const registered = typeof body.registered === 'boolean' ? body.registered : true
+  const noteId = typeof body.noteId === 'string' ? body.noteId.trim() : ''
 
-  if (!token || !submissionId) {
+  if (!token || !noteId) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
   }
 
@@ -34,17 +30,16 @@ export async function POST(request: Request) {
   const supabase = createClient(supabaseUrl, supabaseAnonKey)
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any).rpc('set_guest_registered', {
+  const { error } = await (supabase as any).rpc('delete_guest_note', {
     p_raw_token: token,
-    p_sub_id: submissionId,
-    p_registered: registered,
+    p_note_id: noteId,
   })
 
   if (error) {
     if (error.message?.includes('invalid_token')) {
       return NextResponse.json({ error: 'Invalid link.' }, { status: 403 })
     }
-    return NextResponse.json({ error: 'Could not update registration.' }, { status: 500 })
+    return NextResponse.json({ error: 'Could not delete note.' }, { status: 500 })
   }
 
   return NextResponse.json({ ok: true })

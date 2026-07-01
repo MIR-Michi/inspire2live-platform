@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { loadConference, loadConferenceTracking, loadConferenceAssignedContacts } from '@/lib/comms-conferences'
 import { loadConferencePrep } from '@/lib/comms-conference-prep'
+import { loadConferenceGuestReports } from '@/lib/comms-conference-guest-reports'
 import { loadConferenceTasks } from '@/app/app/comms/conferences/actions'
 import { ConferenceOperatingShell } from '@/components/comms/conferences/conference-operating-shell'
 
@@ -12,7 +13,7 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
   const { id } = await params
   const supabase = await createClient()
 
-  const [conference, tracking, prep, { data: profiles }, { data: podcastEvents }, { data: campusSessions }, assignedContacts, tasks] =
+  const [conference, tracking, prep, { data: profiles }, { data: podcastEvents }, { data: campusSessions }, assignedContacts, tasks, guestReports] =
     await Promise.all([
       loadConference(supabase, id),
       loadConferenceTracking(supabase, id),
@@ -22,6 +23,7 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
       supabase.from('campus_sessions').select('id, theme, session_date').order('session_date', { ascending: false }),
       loadConferenceAssignedContacts(supabase, id),
       loadConferenceTasks(id),
+      loadConferenceGuestReports(supabase, id),
     ])
 
   if (!conference) notFound()
@@ -48,6 +50,7 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
       campusSessions={campusOptions}
       assignedContacts={assignedContacts}
       initialTasks={tasks}
+      guestReports={guestReports}
     />
   )
 }
