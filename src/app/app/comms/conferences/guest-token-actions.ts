@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { createGuestToken, sendGuestTokenLink } from '@/lib/congress-guest-tokens'
 
@@ -12,6 +13,231 @@ export type GenerateTokenState = {
   sends?: Array<{ channel: string; ok: boolean; error?: string }>
 }
 
+export type GenericGuestInviteResult = {
+  name: string
+  ok: boolean
+  url?: string
+  error?: string
+}
+
+export type GenericGuestInviteState = {
+  ok: boolean
+  error?: string
+  results?: GenericGuestInviteResult[]
+}
+
+type GenericGuestInput = {
+  contactId?: string | null
+  fullName?: string | null
+  email?: string | null
+  whatsappId?: string | null
+  addToCrm?: boolean | null
+}
+
+type ResolvedGuest = {
+  contactId?: string
+  fullName: string
+  email: string | null
+  whatsappId: string | null
+}
+
+function text(value: unknown, max = 200): string | null {
+  return typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : null
+}
+
+function email(value: unknown): string | null {
+  const normalized = text(value, 320)?.toLowerCase() ?? null
+  return normalized && normalized.includes('@') ? normalized : null
+}
+
+async function requireCommsUser() {
+  const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { ok: false as const, error: 'Not authenticated.' }
+
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (!canAccessCommsWorkspace(profile?.role)) {
+    return { ok: false as const, error: 'Access denied.' }
+  }
+
+  return { ok: true as const, supabase, userId: user.id }
+}
+
+function parseGenericGuests(raw: FormDataEntryValue | null): GenericGuestInput[] {
+  if (typeof raw !== 'string') return []
+  try {
+    const parsed = JSON.parse(raw) as unknown
+    if (!Array.isArray(parsed)) return []
+    return parsed.slice(0, 40).map((item) => typeof item === 'object' && item !== null ? item as GenericGuestInput : {})
+  } catch {
+    return []
+  }
+}
+
+function contactFromRow(row: Record<string, unknown>): ResolvedGuest {
+  return {
+    contactId: String(row.id),
+    fullName: String(row.full_name ?? 'Unnamed contact'),
+    email: text(row.email, 320),
+    whatsappId: text(row.whatsapp_id, 120) ?? text(row.phone, 120),
+  }
+}
+
+async function resolveGenericGuest(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  admin: any,
+  userId: string,
+  input: GenericGuestInput
+): Promise<ResolvedGuest> {
+  const contactId = text(input.contactId, 80)
+  if (contactId) {
+    const { data, error } = await admin
+      .from('comms_crm_contacts')
+      .select('id, full_name, email, phone, whatsapp_id')
+      .eq('id', contactId)
+      .maybeSingle()
+    if (error) throw new Error(error.message)
+    if (!data) throw new Error('CRM contact not found.')
+    return contactFromRow(data)
+  }
+
+  const fullName = text(input.fullName, 180)
+  const normalizedEmail = email(input.email)
+  const whatsappId = text(input.whatsappId, 120)
+  if (!fullName) throw new Error('Add a guest name.')
+  if (!normalizedEmail && !whatsappId) throw new Error('Add an email address or WhatsApp number.')
+
+  if (normalizedEmail) {
+    const existing = await admin
+      .from('comms_crm_contacts')
+      .select('id, full_name, email, phone, whatsapp_id')
+      .eq('normalized_email', normalizedEmail)
+      .maybeSingle()
+    if (existing.error) throw new Error(existing.error.message)
+    if (existing.data) return contactFromRow(existing.data)
+  }
+
+  if (input.addToCrm === false) {
+    return { fullName, email: normalizedEmail, whatsappId }
+  }
+
+  const contactKind = normalizedEmail?.endsWith('@inspire2live.org') ? 'internal_contact' : 'external'
+  const created = await admin
+    .from('comms_crm_contacts')
+    .insert({
+      segment: contactKind === 'external' ? 'external' : 'internal',
+      source_type: 'manual',
+      full_name: fullName,
+      contact_kind: contactKind,
+      platform_status: 'none',
+      email: normalizedEmail,
+      whatsapp_id: whatsappId,
+      preferred_channel: whatsappId && normalizedEmail ? 'Email / WhatsApp' : whatsappId ? 'WhatsApp' : 'Email',
+      lifecycle_stage: 'active',
+      consent_status: 'unknown',
+      source_label: 'Conference attendance invite',
+      tags: ['conference-guest'],
+      notes: 'Created from the generic conference attendance invite flow.',
+      created_by: userId,
+      updated_by: userId,
+      updated_at: new Date().toISOString(),
+    })
+    .select('id, full_name, email, phone, whatsapp_id')
+    .maybeSingle()
+
+  if (created.error) throw new Error(created.error.message)
+  if (!created.data) throw new Error('Could not create the CRM contact.')
+  return contactFromRow(created.data)
+}
+
+/**
+ * Generates generic guest attendance links for one or more guests. These tokens
+ * are intentionally not tied to a conference, so the guest selects the conference
+ * as the first step in the public form.
+ */
+export async function sendGenericGuestInvites(
+  _prev: GenericGuestInviteState,
+  formData: FormData
+): Promise<GenericGuestInviteState> {
+  const auth = await requireCommsUser()
+  if (!auth.ok) return { ok: false, error: auth.error }
+
+  const guests = parseGenericGuests(formData.get('guests'))
+  const sendEmail = formData.get('sendEmail') === 'true'
+  const sendWhatsapp = formData.get('sendWhatsapp') === 'true'
+
+  if (guests.length === 0) return { ok: false, error: 'Add at least one guest.' }
+  if (!sendEmail && !sendWhatsapp) return { ok: false, error: 'Select email, WhatsApp, or both.' }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const admin = createAdminClient() as any
+  const results: GenericGuestInviteResult[] = []
+
+  for (const guestInput of guests) {
+    let guestName = text(guestInput.fullName, 180) ?? 'Guest'
+    try {
+      const guest = await resolveGenericGuest(admin, auth.userId, guestInput)
+      guestName = guest.fullName
+
+      if (sendEmail && !guest.email) throw new Error('No email address available.')
+      if (sendWhatsapp && !guest.whatsappId) throw new Error('No WhatsApp number available.')
+
+      const token = await createGuestToken(admin, auth.userId, {
+        contactId: guest.contactId,
+        contactName: guest.fullName,
+        contactEmail: guest.email ?? undefined,
+        contactPhone: guest.whatsappId ?? undefined,
+      })
+      if (!token.ok) throw new Error(token.error)
+
+      const sends = await sendGuestTokenLink({
+        url: token.url,
+        contactName: guest.fullName,
+        contactEmail: guest.email,
+        contactPhone: guest.whatsappId,
+        channels: { email: sendEmail, whatsapp: sendWhatsapp },
+      })
+      const failed = sends.find((send) => !send.ok)
+      if (failed) throw new Error(`${failed.channel}: ${failed.error ?? 'send failed'}`)
+
+      if (guest.contactId) {
+        await admin.from('comms_crm_interactions').insert({
+          contact_id: guest.contactId,
+          interaction_type: sendEmail && sendWhatsapp ? 'note' : sendEmail ? 'email' : 'whatsapp',
+          summary: `Generic conference attendance form invite sent via ${[
+            sendEmail ? 'email' : null,
+            sendWhatsapp ? 'WhatsApp' : null,
+          ].filter(Boolean).join(' and ')}.`,
+          occurred_at: new Date().toISOString(),
+          created_by: auth.userId,
+        })
+        await admin.from('comms_crm_contacts').update({
+          lifecycle_stage: 'active',
+          last_interaction_at: new Date().toISOString(),
+          updated_by: auth.userId,
+          updated_at: new Date().toISOString(),
+        }).eq('id', guest.contactId)
+      }
+
+      results.push({ name: guest.fullName, ok: true, url: token.url })
+    } catch (error) {
+      results.push({ name: guestName, ok: false, error: error instanceof Error ? error.message : 'Invite failed.' })
+    }
+  }
+
+  revalidatePath('/app/comms/conferences')
+  revalidatePath('/app/comms/conferences/submissions')
+  revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
+
+  const sent = results.filter((result) => result.ok).length
+  return {
+    ok: sent > 0,
+    error: sent > 0 ? undefined : 'No invites were sent.',
+    results,
+  }
+}
+
 /**
  * Generates a magic-link token for a CRM contact and optionally sends it
  * via WhatsApp and/or email.
@@ -20,14 +246,8 @@ export async function generateGuestToken(
   _prev: GenerateTokenState,
   formData: FormData
 ): Promise<GenerateTokenState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not authenticated.' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (!canAccessCommsWorkspace(profile?.role)) {
-    return { ok: false, error: 'Access denied.' }
-  }
+  const auth = await requireCommsUser()
+  if (!auth.ok) return { ok: false, error: auth.error }
 
   const contactId = (formData.get('contactId') as string | null) ?? undefined
   const contactName = ((formData.get('contactName') as string | null) ?? '').trim() || undefined
@@ -51,7 +271,7 @@ export async function generateGuestToken(
     return { ok: false, error: 'Add a WhatsApp number or untick WhatsApp.' }
   }
 
-  const result = await createGuestToken(supabase, user.id, {
+  const result = await createGuestToken(auth.supabase, auth.userId, {
     contactId,
     contactName,
     contactEmail,
@@ -87,14 +307,8 @@ export async function reviewGuestSubmission(
   _prev: ReviewSubmissionState,
   formData: FormData
 ): Promise<ReviewSubmissionState> {
-  const supabase = await createClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { ok: false, error: 'Not authenticated.' }
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (!canAccessCommsWorkspace(profile?.role)) {
-    return { ok: false, error: 'Access denied.' }
-  }
+  const auth = await requireCommsUser()
+  if (!auth.ok) return { ok: false, error: auth.error }
 
   const submissionId = formData.get('submissionId') as string
   const action = formData.get('action') as 'approve' | 'reject'
@@ -105,11 +319,11 @@ export async function reviewGuestSubmission(
   }
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { error } = await (supabase as any)
+  const { error } = await (auth.supabase as any)
     .from('conference_guest_submissions')
     .update({
       status: action === 'approve' ? 'approved' : 'rejected',
-      reviewed_by: user.id,
+      reviewed_by: auth.userId,
       reviewed_at: new Date().toISOString(),
       review_notes: reviewNotes,
     })

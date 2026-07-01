@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { useRouter } from 'next/navigation'
+import { ConferenceGuestBulkInvite } from '@/components/comms/conferences/conference-guest-bulk-invite'
 import {
   addDiscoveredConferences,
   findMoreConferences,
@@ -142,6 +143,7 @@ export function FindMoreDialog({ aiEnabled }: { aiEnabled: boolean }) {
 
   return (
     <>
+      <ConferenceGuestBulkInvite />
       <button
         type="button"
         onClick={() => setOpen(true)}
