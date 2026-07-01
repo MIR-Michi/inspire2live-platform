@@ -30,13 +30,26 @@ export async function generateGuestToken(
   }
 
   const contactId = (formData.get('contactId') as string | null) ?? undefined
-  const contactName = (formData.get('contactName') as string | null) ?? undefined
-  const contactEmail = (formData.get('contactEmail') as string | null) ?? undefined
-  const contactPhone = (formData.get('contactPhone') as string | null) ?? undefined
+  const contactName = ((formData.get('contactName') as string | null) ?? '').trim() || undefined
+  const contactEmail = ((formData.get('contactEmail') as string | null) ?? '').trim() || undefined
+  const contactPhone = ((formData.get('contactPhone') as string | null) ?? '').trim() || undefined
   const conferenceId = (formData.get('conferenceId') as string | null) ?? undefined
   const conferenceName = (formData.get('conferenceName') as string | null) ?? undefined
   const sendWhatsapp = formData.get('sendWhatsapp') === 'true'
   const sendEmail = formData.get('sendEmail') === 'true'
+
+  if (!contactName) {
+    return { ok: false, error: 'Add the guest name before sending an invite.' }
+  }
+  if (!sendEmail && !sendWhatsapp) {
+    return { ok: false, error: 'Select email, WhatsApp, or both.' }
+  }
+  if (sendEmail && !contactEmail) {
+    return { ok: false, error: 'Add an email address or untick Email.' }
+  }
+  if (sendWhatsapp && !contactPhone) {
+    return { ok: false, error: 'Add a WhatsApp number or untick WhatsApp.' }
+  }
 
   const result = await createGuestToken(supabase, user.id, {
     contactId,
