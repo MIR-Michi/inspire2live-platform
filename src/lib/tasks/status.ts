@@ -39,7 +39,12 @@ export function normalizeUnifiedTaskStatus(
   }
 }
 
+/** A task that is finished and should be hidden from active task views. */
+export function isTaskFinished(status: UnifiedStatus): boolean {
+  return status === 'completed' || status === 'skipped'
+}
+
 /** A task that still needs attention (not finished or explicitly skipped). */
 export function isTaskOpen(status: UnifiedStatus): boolean {
-  return status !== 'completed' && status !== 'skipped'
+  return !isTaskFinished(status)
 }
