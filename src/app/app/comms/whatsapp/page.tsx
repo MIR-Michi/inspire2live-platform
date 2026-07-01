@@ -21,16 +21,20 @@ export default async function CommsWhatsAppPage() {
     redirect('/app/comms')
   }
 
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any
   const [inboundResult, outboundResult] = await Promise.all([
-    supabase
+    db
       .from('intake_items')
       .select('id, sender_name, sender_whatsapp_id, raw_content, status, captured_at')
       .not('sender_whatsapp_id', 'is', null)
+      .is('whatsapp_deleted_at', null)
       .order('captured_at', { ascending: false })
       .limit(100),
-    supabase
+    db
       .from('whatsapp_outbound_messages')
       .select('id, recipient_whatsapp_id, body, delivery_status, error_detail, sent_at, delivered_at, read_at')
+      .is('whatsapp_deleted_at', null)
       .order('sent_at', { ascending: false })
       .limit(100),
   ])
@@ -39,18 +43,34 @@ export default async function CommsWhatsAppPage() {
   if (outboundResult.error) throw new Error(outboundResult.error.message)
 
   const inbound: WhatsAppFeedItem[] = (inboundResult.data ?? [])
-    .filter((item) => item.sender_whatsapp_id)
-    .map((item) => ({
+    .filter((item: { sender_whatsapp_id: string | null }) => item.sender_whatsapp_id)
+    .map((item: {
+      id: string
+      sender_name: string
+      sender_whatsapp_id: string
+      raw_content: string
+      status: string
+      captured_at: string
+    }) => ({
       id: item.id,
       direction: 'inbound',
-      whatsappId: item.sender_whatsapp_id as string,
+      whatsappId: item.sender_whatsapp_id,
       displayName: item.sender_name,
       text: item.raw_content,
       timestamp: item.captured_at,
       status: item.status,
     }))
 
-  const outbound: WhatsAppFeedItem[] = (outboundResult.data ?? []).map((item) => ({
+  const outbound: WhatsAppFeedItem[] = (outboundResult.data ?? []).map((item: {
+    id: string
+    recipient_whatsapp_id: string
+    body: string
+    delivery_status: string
+    error_detail: string | null
+    sent_at: string
+    delivered_at: string | null
+    read_at: string | null
+  }) => ({
     id: item.id,
     direction: 'outbound',
     whatsappId: item.recipient_whatsapp_id,
@@ -67,5 +87,5 @@ export default async function CommsWhatsAppPage() {
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )
 
-  return <WhatsAppInboxShell feed={feed} />
+  return <WhatsAppInboxShell feed={feed} canDeleteMessages={profile.role === 'PlatformAdmin'} />
 }
