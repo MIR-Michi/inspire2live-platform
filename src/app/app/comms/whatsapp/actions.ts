@@ -77,6 +77,20 @@ async function purgeInboundIntakeItems(
 ): Promise<void> {
   if (ids.length === 0) return
 
+  // Best-effort: remove any downloaded media objects from the private bucket so
+  // deleting a message doesn't leave the file behind.
+  const withMedia = await admin
+    .from('intake_items')
+    .select('media_storage_path')
+    .in('id', ids)
+    .not('media_storage_path', 'is', null)
+  const paths = (withMedia.data ?? [])
+    .map((row: { media_storage_path: string | null }) => row.media_storage_path)
+    .filter((path: string | null): path is string => Boolean(path))
+  if (paths.length > 0) {
+    await admin.storage.from('whatsapp-inbound-media').remove(paths).catch(() => {/* best-effort */})
+  }
+
   // Null the only FK to intake_items that does NOT cascade, or the delete
   // would be blocked.
   const nulled = await admin.from('content_calendar').update({ source_intake_id: null }).in('source_intake_id', ids)

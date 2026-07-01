@@ -1,4 +1,4 @@
-import { NextResponse } from 'next/server'
+import { NextResponse, after } from 'next/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import {
   authenticateWhatsAppWebhookRequest,
@@ -8,6 +8,10 @@ import {
   processWhatsAppStatusEvents,
   processWhatsAppWebhookPayload,
 } from '@/lib/comms-webhook'
+import { ingestWhatsAppInboundMedia } from '@/lib/whatsapp-media'
+
+// Media downloads run via after(); ensure a Node runtime for Buffer/streaming.
+export const runtime = 'nodejs'
 
 export async function GET(request: Request) {
   const url = new URL(request.url)
@@ -54,6 +58,19 @@ export async function POST(request: Request) {
       processWhatsAppWebhookPayload(admin, payload),
       processWhatsAppStatusEvents(admin, payload),
     ])
+
+    // Download any inbound media AFTER responding, so a large video never
+    // blocks the webhook's 200 (Meta retries slow webhooks). A fresh admin
+    // client is used since the request may be torn down.
+    if (result.mediaTasks.length > 0) {
+      const tasks = result.mediaTasks
+      after(async () => {
+        const bgAdmin = createAdminClient()
+        for (const task of tasks) {
+          await ingestWhatsAppInboundMedia(bgAdmin, task)
+        }
+      })
+    }
 
     return NextResponse.json({
       ok: true,

@@ -1,10 +1,18 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { classifyIntakeItem, parseSourceUrl, toClassifierRules } from '@/lib/comms-classifier'
 import type { Database } from '@/types/database'
+import type { MediaIngestTask, WhatsAppMediaKind } from '@/lib/whatsapp-media'
 
 type AdminClient = SupabaseClient<Database>
 type ClassifierRuleRow = Database['public']['Tables']['intake_classifier_rules']['Row']
 type WebhookPayloadJson = Database['public']['Tables']['whatsapp_webhook_events']['Insert']['payload']
+
+type WhatsAppMedia = {
+  id: string
+  kind: WhatsAppMediaKind
+  mimeType: string | null
+  filename: string | null
+}
 
 type WhatsAppInboundMessage = {
   providerMessageId: string
@@ -12,6 +20,7 @@ type WhatsAppInboundMessage = {
   senderName: string
   rawContent: string
   attachedMediaRef: string | null
+  media: WhatsAppMedia | null
   sourceUrl: string | null
   payload: Record<string, unknown>
 }
@@ -21,6 +30,8 @@ type WebhookProcessingResult = {
   duplicates: number
   failures: number
   intakeItemIds: string[]
+  /** Background media downloads to run after the webhook responds. */
+  mediaTasks: MediaIngestTask[]
 }
 
 /** A delivery receipt ("statuses" change event) for a message this platform sent. */
@@ -246,6 +257,8 @@ function asText(value: unknown) {
   return typeof value === 'string' ? value : ''
 }
 
+const MEDIA_KINDS: readonly WhatsAppMediaKind[] = ['image', 'video', 'document', 'audio']
+
 function extractRawContent(message: Record<string, unknown>) {
   const type = asText(message.type)
   const text = asRecord(message.text)
@@ -257,16 +270,29 @@ function extractRawContent(message: Record<string, unknown>) {
   if (type === 'image') return asText(image?.caption) || 'Inbound WhatsApp image'
   if (type === 'document') return asText(document?.caption) || asText(document?.filename) || 'Inbound WhatsApp document'
   if (type === 'video') return asText(video?.caption) || 'Inbound WhatsApp video'
+  if (type === 'audio') return 'Inbound WhatsApp audio'
   return `Inbound WhatsApp ${type || 'message'}`
 }
 
-function extractAttachedMediaRef(message: Record<string, unknown>) {
+/** Pull the media id + kind + mime + filename off a media message, if any. */
+function extractMedia(message: Record<string, unknown>): WhatsAppMedia | null {
   const type = asText(message.type)
-  if (!['image', 'video', 'document'].includes(type)) return null
+  if (!MEDIA_KINDS.includes(type as WhatsAppMediaKind)) return null
   const node = asRecord(message[type])
   const mediaId = asText(node?.id)
-  const filename = asText(node?.filename)
-  return filename || mediaId || null
+  if (!mediaId) return null
+  return {
+    id: mediaId,
+    kind: type as WhatsAppMediaKind,
+    mimeType: asText(node?.mime_type) || null,
+    filename: asText(node?.filename) || null,
+  }
+}
+
+function extractAttachedMediaRef(message: Record<string, unknown>) {
+  const media = extractMedia(message)
+  if (!media) return null
+  return media.filename || media.id
 }
 
 export function parseWhatsAppWebhookPayload(payload: unknown): WhatsAppInboundMessage[] {
@@ -308,6 +334,7 @@ export function parseWhatsAppWebhookPayload(payload: unknown): WhatsAppInboundMe
           senderName: contacts.get(senderWhatsappId) || senderWhatsappId || 'WhatsApp contact',
           rawContent,
           attachedMediaRef: extractAttachedMediaRef(record),
+          media: extractMedia(record),
           sourceUrl,
           payload: record,
         })
@@ -346,7 +373,7 @@ export async function processWhatsAppWebhookPayload(
   payload: unknown
 ): Promise<WebhookProcessingResult> {
   const messages = parseWhatsAppWebhookPayload(payload)
-  if (messages.length === 0) return { accepted: 0, duplicates: 0, failures: 0, intakeItemIds: [] }
+  if (messages.length === 0) return { accepted: 0, duplicates: 0, failures: 0, intakeItemIds: [], mediaTasks: [] }
 
   const { data: ruleRows, error: rulesError } = await admin
     .from('intake_classifier_rules')
@@ -363,6 +390,7 @@ export async function processWhatsAppWebhookPayload(
   let duplicates = 0
   let failures = 0
   const intakeItemIds: string[] = []
+  const mediaTasks: MediaIngestTask[] = []
 
   for (const message of messages) {
     let intakeItemId: string | null = null
@@ -400,6 +428,11 @@ export async function processWhatsAppWebhookPayload(
         raw_content: message.rawContent,
         source_url: message.sourceUrl,
         attached_media_ref: message.attachedMediaRef,
+        // Media bytes are downloaded in the background; record intent now.
+        media_type: message.media?.kind ?? null,
+        media_mime_type: message.media?.mimeType ?? null,
+        media_filename: message.media?.filename ?? null,
+        media_status: message.media ? 'pending' : 'none',
         content_type: result.contentType,
         classification_confidence: result.confidence,
         is_peter_kapitein: result.isPeterKapitein,
@@ -452,7 +485,18 @@ export async function processWhatsAppWebhookPayload(
       if (eventError) throw new Error(eventError.message)
 
       accepted += 1
-      if (intakeItemId) intakeItemIds.push(intakeItemId)
+      if (intakeItemId) {
+        intakeItemIds.push(intakeItemId)
+        if (message.media) {
+          mediaTasks.push({
+            intakeItemId,
+            mediaId: message.media.id,
+            kind: message.media.kind,
+            mimeType: message.media.mimeType,
+            filename: message.media.filename,
+          })
+        }
+      }
     } catch (error) {
       failures += 1
       await admin.from('whatsapp_webhook_events').upsert(
@@ -471,5 +515,5 @@ export async function processWhatsAppWebhookPayload(
     }
   }
 
-  return { accepted, duplicates, failures, intakeItemIds }
+  return { accepted, duplicates, failures, intakeItemIds, mediaTasks }
 }
