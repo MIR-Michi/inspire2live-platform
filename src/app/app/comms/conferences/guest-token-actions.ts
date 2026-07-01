@@ -59,6 +59,7 @@ export async function generateGuestToken(
     channels: { whatsapp: sendWhatsapp, email: sendEmail },
   })
 
+  revalidatePath('/app/comms/conferences/submissions')
   revalidatePath('/app/admin/guest-submissions')
 
   return { ok: true, url: result.url, sends }
@@ -105,6 +106,7 @@ export async function reviewGuestSubmission(
     return { ok: false, error: error.message }
   }
 
+  revalidatePath('/app/comms/conferences/submissions')
   revalidatePath('/app/admin/guest-submissions')
   return { ok: true }
 }
