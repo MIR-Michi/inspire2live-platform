@@ -3,6 +3,16 @@ import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { WhatsAppInboxShell, type WhatsAppFeedItem } from '@/components/comms/whatsapp-inbox-shell'
 
+function isMissingSoftDeleteColumn(error: { message?: string } | null | undefined): boolean {
+  const message = error?.message?.toLowerCase() ?? ''
+  return message.includes('whatsapp_deleted_at') && (
+    message.includes('could not find') ||
+    message.includes('does not exist') ||
+    message.includes('schema cache') ||
+    message.includes('column')
+  )
+}
+
 export default async function CommsWhatsAppPage() {
   const supabase = await createClient()
   const {
@@ -23,21 +33,29 @@ export default async function CommsWhatsAppPage() {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any
-  const [inboundResult, outboundResult] = await Promise.all([
-    db
+
+  const loadInbound = (withSoftDeleteFilter: boolean) => {
+    let query = db
       .from('intake_items')
       .select('id, sender_name, sender_whatsapp_id, raw_content, status, captured_at')
       .not('sender_whatsapp_id', 'is', null)
-      .is('whatsapp_deleted_at', null)
-      .order('captured_at', { ascending: false })
-      .limit(100),
-    db
+    if (withSoftDeleteFilter) query = query.is('whatsapp_deleted_at', null)
+    return query.order('captured_at', { ascending: false }).limit(100)
+  }
+
+  const loadOutbound = (withSoftDeleteFilter: boolean) => {
+    let query = db
       .from('whatsapp_outbound_messages')
       .select('id, recipient_whatsapp_id, body, delivery_status, error_detail, sent_at, delivered_at, read_at')
-      .is('whatsapp_deleted_at', null)
-      .order('sent_at', { ascending: false })
-      .limit(100),
-  ])
+    if (withSoftDeleteFilter) query = query.is('whatsapp_deleted_at', null)
+    return query.order('sent_at', { ascending: false }).limit(100)
+  }
+
+  let [inboundResult, outboundResult] = await Promise.all([loadInbound(true), loadOutbound(true)])
+
+  if (isMissingSoftDeleteColumn(inboundResult.error) || isMissingSoftDeleteColumn(outboundResult.error)) {
+    ;[inboundResult, outboundResult] = await Promise.all([loadInbound(false), loadOutbound(false)])
+  }
 
   if (inboundResult.error) throw new Error(inboundResult.error.message)
   if (outboundResult.error) throw new Error(outboundResult.error.message)
