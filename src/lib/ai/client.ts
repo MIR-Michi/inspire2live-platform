@@ -8,23 +8,29 @@ import {
   DEFAULT_AI_EFFORT,
   DEFAULT_AI_MODEL,
   estimateAiCostUsd,
+  getAiWorkloadSelection,
   normalizeAiEffort,
   normalizeAiModel,
+  normalizeAiModelSelection,
+  normalizeAiWorkloadOverrides,
   validateAiModelEffort,
   type AiModelId,
   type AiReasoningEffort,
+  type AiWorkloadId,
 } from './models'
 
 type AiSettingsRow = {
   api_key_ciphertext: string | null
   model: string | null
   effort: string | null
+  model_overrides: unknown
 }
 
 export type AiConfig = {
   apiKey: string
   model: AiModelId
   effort: AiReasoningEffort
+  workload?: AiWorkloadId
   source: 'database' | 'environment'
 }
 
@@ -42,9 +48,13 @@ export type AiMessage = {
 
 export type RunAiMessageInput = {
   feature: string
+  /** Optional workload key used to resolve admin-configured per-task model policy. */
+  workload?: AiWorkloadId
   messages: AiMessage[]
   system?: string
+  /** Explicit model override. Takes precedence over workload settings. */
   model?: AiModelId
+  /** Explicit effort override. Takes precedence over workload settings when model is also explicit. */
   effort?: AiReasoningEffort
   maxTokens?: number
   temperature?: number
@@ -117,11 +127,20 @@ export async function resolveAiConfig(overrides?: {
   apiKeyOverride?: string
   model?: AiModelId
   effort?: AiReasoningEffort
+  workload?: AiWorkloadId
 }): Promise<AiConfig> {
   if (overrides?.apiKeyOverride) {
-    const model = overrides.model ?? DEFAULT_AI_MODEL
-    const effort = normalizeAiEffort(model, overrides.effort ?? DEFAULT_AI_EFFORT)
-    return { apiKey: overrides.apiKeyOverride, model, effort, source: 'environment' }
+    const globalDefault = { model: DEFAULT_AI_MODEL, effort: DEFAULT_AI_EFFORT }
+    const selection = overrides.model
+      ? normalizeAiModelSelection(overrides.model, overrides.effort, globalDefault)
+      : getAiWorkloadSelection(overrides?.workload, {}, globalDefault)
+    return {
+      apiKey: overrides.apiKeyOverride,
+      model: selection.model,
+      effort: selection.effort,
+      workload: overrides?.workload,
+      source: 'environment',
+    }
   }
 
   const db = createAdminClient() as unknown as {
@@ -134,22 +153,41 @@ export async function resolveAiConfig(overrides?: {
 
   const { data, error } = await db
     .from('ai_settings')
-    .select('api_key_ciphertext, model, effort')
+    .select('api_key_ciphertext, model, effort, model_overrides')
     .eq('singleton', true)
     .maybeSingle()
 
   if (error) throw new AiConfigurationError(`Failed to load AI settings: ${error.message}`)
 
-  const model = normalizeAiModel(overrides?.model ?? data?.model ?? DEFAULT_AI_MODEL)
-  const effort = normalizeAiEffort(model, overrides?.effort ?? data?.effort ?? DEFAULT_AI_EFFORT)
+  const globalModel = normalizeAiModel(data?.model ?? DEFAULT_AI_MODEL)
+  const globalDefault = {
+    model: globalModel,
+    effort: normalizeAiEffort(globalModel, data?.effort ?? DEFAULT_AI_EFFORT),
+  }
+  const workloadOverrides = normalizeAiWorkloadOverrides(data?.model_overrides)
+  const selection = overrides?.model
+    ? normalizeAiModelSelection(overrides.model, overrides.effort, globalDefault)
+    : getAiWorkloadSelection(overrides?.workload, workloadOverrides, globalDefault)
 
   if (data?.api_key_ciphertext) {
-    return { apiKey: decryptAiSecret(data.api_key_ciphertext), model, effort, source: 'database' }
+    return {
+      apiKey: decryptAiSecret(data.api_key_ciphertext),
+      model: selection.model,
+      effort: selection.effort,
+      workload: overrides?.workload,
+      source: 'database',
+    }
   }
 
   const envKey = process.env.ANTHROPIC_API_KEY?.trim()
   if (!envKey) throw new AiConfigurationError('Anthropic is not configured')
-  return { apiKey: envKey, model, effort, source: 'environment' }
+  return {
+    apiKey: envKey,
+    model: selection.model,
+    effort: selection.effort,
+    workload: overrides?.workload,
+    source: 'environment',
+  }
 }
 
 export function zodToOutputConfig(params: {
@@ -190,6 +228,7 @@ export async function runAiMessage<T = string>(input: RunAiMessageInput): Promis
     apiKeyOverride: input.apiKeyOverride,
     model: input.model,
     effort: input.effort,
+    workload: input.workload,
   })
 
   const validation = validateAiModelEffort(config.model, config.effort)
@@ -208,7 +247,7 @@ export async function runAiMessage<T = string>(input: RunAiMessageInput): Promis
     return {
       output: parseOutput<T>(rawResponse, Boolean(input.structuredFormat)),
       rawResponse,
-      config: { model: config.model, effort: config.effort, source: config.source },
+      config: { model: config.model, effort: config.effort, workload: config.workload, source: config.source },
       usage,
     }
   } catch (error) {
