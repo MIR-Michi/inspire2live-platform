@@ -68,7 +68,6 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
       'CRM',
       'Conferences',
       'Podcast',
-      'Conf. submissions',
       'Library',
     ])
     // Even though Comms *can* access these spaces, they must NOT clutter its menu.
@@ -76,16 +75,18 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
     expect(labelsIn('Comms')).not.toContain('Network')
     expect(labelsIn('Comms')).not.toContain('Stories')
     expect(labelsIn('Comms')).not.toContain('Resources')
+    expect(labelsIn('Comms')).not.toContain('Conference submissions')
+    expect(labelsIn('Comms')).not.toContain('Conf. submissions')
     // Comms dashboard is its own toggle page, not the shared one.
     const dashboard = sections.flatMap((s) => s.items).find((i) => i.id === 'comms-dashboard')
     expect(dashboard?.href).toBe('/app/comms/dashboard')
     const campus = sections.flatMap((s) => s.items).find((i) => i.label === 'Campus')
     expect(campus?.badge).toBe('campus')
     const submissions = sections.flatMap((s) => s.items).find((i) => i.id === 'guest-submissions')
-    expect(submissions?.href).toBe('/app/admin/guest-submissions')
+    expect(submissions).toBeUndefined()
   })
 
-  it('never surfaces Profile, Tasks, Bureau, or Partners as nav items', () => {
+  it('never surfaces Profile, Tasks, Bureau, Partners, or conference submissions as nav items', () => {
     for (const role of Object.keys(ROLE_SPACE_DEFAULTS) as PlatformRole[]) {
       const labels = labelsIn(role)
       expect(labels).not.toContain('Profile')
@@ -93,6 +94,8 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
       expect(labels).not.toContain('My Tasks')
       expect(labels).not.toContain('Bureau')
       expect(labels).not.toContain('Partners')
+      expect(labels).not.toContain('Conference submissions')
+      expect(labels).not.toContain('Conf. submissions')
     }
   })
 
