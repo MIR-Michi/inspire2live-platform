@@ -100,8 +100,9 @@ export function GuestAttendanceForm({ token, addMode = false }: { token: string;
     void fetch(`/api/congress-guest/conferences?q=${encodeURIComponent(q)}`)
       .then((r) => r.json())
       .then((data: ConferenceSuggestion[]) => {
-        setSuggestions(data ?? [])
-        setShowSuggestions(true)
+        const nextSuggestions = data ?? []
+        setSuggestions(nextSuggestions)
+        setShowSuggestions(nextSuggestions.length > 0)
       })
       .catch(() => setSuggestions([]))
       .finally(() => setSearchingConf(false))
