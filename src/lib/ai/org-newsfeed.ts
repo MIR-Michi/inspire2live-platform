@@ -4,10 +4,6 @@ import { runAiMessage, webSearchTool, wrapExternalData } from './client'
 import type { AiModelId, AiReasoningEffort } from './models'
 import type { OrgFeedConfig } from './org-feed-config'
 
-// Per the model-per-workload policy: the news feed is a web-search aggregation
-// job, best served by a fast balanced model, not the heavy reasoning default.
-const NEWSFEED_MODEL: AiModelId = 'claude-sonnet-4-6'
-
 export type NewsFeedItem = {
   headline: string
   summary: string | null
@@ -283,7 +279,15 @@ const MENTION_GROUP_ITEMS = 8
 const GROUP_CONCURRENCY = 4
 const TOTAL_ITEM_CAP = 40
 
-type GroupResult = { items: NewsFeedItem[]; candidates: number; validated: number; outputWasJson: boolean; error: boolean }
+type GroupResult = {
+  items: NewsFeedItem[]
+  candidates: number
+  validated: number
+  outputWasJson: boolean
+  error: boolean
+  model: string | null
+  effort: AiReasoningEffort | null
+}
 
 async function mapWithConcurrency<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
   const results = new Array<R>(items.length)
@@ -318,7 +322,15 @@ function buildMentionInstruction(names: string): string {
 }
 
 /** Run one focused search group and tag its items with the group label. */
-async function generateGroup(group: SearchGroup, config: OrgFeedConfig, system: string, existingHeadlines: string[], createdBy: string | null): Promise<GroupResult> {
+async function generateGroup(
+  group: SearchGroup,
+  config: OrgFeedConfig,
+  system: string,
+  existingHeadlines: string[],
+  createdBy: string | null,
+  model?: AiModelId,
+  effort?: AiReasoningEffort
+): Promise<GroupResult> {
   const existingContext = wrapExternalData(
     'newsfeed.existing',
     JSON.stringify({ existingHeadlines: existingHeadlines.slice(0, 40), note: 'Do not repeat these.' })
@@ -326,8 +338,9 @@ async function generateGroup(group: SearchGroup, config: OrgFeedConfig, system: 
   try {
     const result = await runAiMessage<unknown>({
       feature: 'org_newsfeed_group',
-      model: NEWSFEED_MODEL,
-      effort: 'low',
+      workload: 'org_newsfeed',
+      model,
+      effort,
       maxTokens: group.kind === 'mention' ? 3500 : 2500,
       timeoutMs: GROUP_TIMEOUT_MS,
       retries: 0,
@@ -351,10 +364,18 @@ async function generateGroup(group: SearchGroup, config: OrgFeedConfig, system: 
     const candidates = itemsArray(result.output).length
     const validated = validateNewsFeedItems(result.output, config.blockedSources)
     const items = validated.map((item) => ({ ...item, topic: group.label }))
-    return { items, candidates, validated: validated.length, outputWasJson: typeof result.output !== 'string', error: false }
+    return {
+      items,
+      candidates,
+      validated: validated.length,
+      outputWasJson: typeof result.output !== 'string',
+      error: false,
+      model: result.config.model,
+      effort: result.config.effort,
+    }
   } catch (error) {
     console.error(`[newsfeed] group "${group.label}" failed`, error)
-    return { items: [], candidates: 0, validated: 0, outputWasJson: true, error: true }
+    return { items: [], candidates: 0, validated: 0, outputWasJson: true, error: true, model: null, effort: null }
   }
 }
 
@@ -371,19 +392,23 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
   const existingHeadlines = input.existingHeadlines ?? []
 
   const groupResults = await mapWithConcurrency(groups, GROUP_CONCURRENCY, (group) =>
-    generateGroup(group, config, system, existingHeadlines, input.createdBy ?? null)
+    generateGroup(group, config, system, existingHeadlines, input.createdBy ?? null, input.model, input.effort)
   )
 
   let candidateCount = 0
   let validatedCount = 0
   let outputWasJson = true
   let groupErrors = 0
+  let model: string | null = null
+  let effort: AiReasoningEffort | null = null
   const allItems: NewsFeedItem[] = []
   for (const result of groupResults) {
     candidateCount += result.candidates
     validatedCount += result.validated
     if (!result.outputWasJson) outputWasJson = false
     if (result.error) groupErrors += 1
+    if (!model && result.model) model = result.model
+    if (!effort && result.effort) effort = result.effort
     allItems.push(...result.items)
   }
 
@@ -391,8 +416,8 @@ export async function generateOrgNewsfeed(input: GenerateOrgNewsfeedInput): Prom
 
   return {
     items: deduped,
-    model: NEWSFEED_MODEL,
-    effort: 'low',
+    model,
+    effort,
     candidateCount,
     validatedCount,
     outputWasJson,
