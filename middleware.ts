@@ -23,6 +23,7 @@ export async function middleware(request: NextRequest) {
   const isOnboardingPage = pathname.startsWith('/onboarding')
   const isProtected = pathname.startsWith('/app')
   const isCommsRoute = pathname === '/app/comms' || pathname.startsWith('/app/comms/')
+  const isGuestSubmissionsRoute = pathname === '/app/admin/guest-submissions' || pathname.startsWith('/app/admin/guest-submissions/')
 
   // Without Supabase credentials (e.g. CI without secrets), treat every request
   // as unauthenticated. Protected routes still redirect to /login so smoke tests
@@ -116,7 +117,7 @@ export async function middleware(request: NextRequest) {
     }
 
     if (profile?.onboarding_completed && isProtected) {
-      const allowed = isCommsRoute
+      const allowed = isCommsRoute || isGuestSubmissionsRoute
         ? canAccessCommsWorkspace(profile.role)
         : canAccessAppPath(profile.role, pathname)
       if (!allowed) {
