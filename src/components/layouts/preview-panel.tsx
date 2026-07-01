@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRouter } from 'next/navigation'
 import { ROLE_LABELS } from '@/lib/role-access'
 import { useRoleLayers } from '@/components/roles/role-layers-context'
@@ -10,19 +10,50 @@ const ALL_PERSPECTIVE_ROLES = Object.entries(ROLE_LABELS).map(([value, label]) =
   label: value === 'PlatformAdmin' ? `${label} (default)` : label,
 }))
 
+type PreviewUser = {
+  id: string
+  name: string
+  email: string
+  role: string
+}
+
 /**
  * Admin-only "Preview" control: a single eye button that opens a popover with
  * the role-as picker, the current role layers, and an exit action. Collapsed
  * by default; when a preview is active the button turns amber and shows the
  * previewed role, replacing the old full-width banner + inline selector.
  */
-export function PreviewPanel({ viewAsRole }: { viewAsRole?: string | null }) {
+export function PreviewPanel({
+  viewAsRole,
+  viewAsUser,
+  users = [],
+}: {
+  viewAsRole?: string | null
+  viewAsUser?: PreviewUser | null
+  users?: PreviewUser[]
+}) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
+  const [userFilter, setUserFilter] = useState('')
   const ref = useRef<HTMLDivElement>(null)
   const { platformRole, congressRoles } = useRoleLayers()
 
-  const previewing = Boolean(viewAsRole && viewAsRole !== 'PlatformAdmin')
+  const previewingRole = Boolean(viewAsRole && viewAsRole !== 'PlatformAdmin')
+  const previewingUser = Boolean(viewAsUser)
+  const previewing = previewingRole || previewingUser
+  const buttonLabel = previewingUser
+    ? `Previewing: ${viewAsUser?.name ?? 'User'}`
+    : previewingRole
+      ? `Previewing: ${ROLE_LABELS[viewAsRole as keyof typeof ROLE_LABELS] ?? viewAsRole}`
+      : 'Preview'
+
+  const filteredUsers = useMemo(() => {
+    const q = userFilter.trim().toLowerCase()
+    if (!q) return users.slice(0, 40)
+    return users.filter((user) =>
+      [user.name, user.email, user.role].some((value) => value.toLowerCase().includes(q))
+    ).slice(0, 40)
+  }, [userFilter, users])
 
   useEffect(() => {
     function onClick(e: MouseEvent) {
@@ -39,14 +70,35 @@ export function PreviewPanel({ viewAsRole }: { viewAsRole?: string | null }) {
     }
   }, [])
 
+  const refreshPreview = () => {
+    router.push('/app/dashboard')
+    router.refresh()
+  }
+
+  const exitPreview = () => {
+    document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
+    document.cookie = 'i2l-view-as-user=; path=/; max-age=0'
+    refreshPreview()
+  }
+
   const applyRole = (val: string) => {
+    document.cookie = 'i2l-view-as-user=; path=/; max-age=0'
     if (val === 'PlatformAdmin') {
       document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
     } else {
       document.cookie = `i2l-view-as-role=${val}; path=/; max-age=86400; SameSite=Lax`
     }
-    router.push('/app/dashboard')
-    router.refresh()
+    refreshPreview()
+  }
+
+  const applyUser = (val: string) => {
+    document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
+    if (!val) {
+      document.cookie = 'i2l-view-as-user=; path=/; max-age=0'
+    } else {
+      document.cookie = `i2l-view-as-user=${val}; path=/; max-age=86400; SameSite=Lax`
+    }
+    refreshPreview()
   }
 
   const congressLabel = !congressRoles || congressRoles.length === 0 ? '—' : congressRoles.join(', ')
@@ -69,23 +121,50 @@ export function PreviewPanel({ viewAsRole }: { viewAsRole?: string | null }) {
           <path strokeLinecap="round" strokeLinejoin="round" d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z" />
           <path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
         </svg>
-        <span className="hidden sm:inline">
-          {previewing ? `Previewing: ${ROLE_LABELS[viewAsRole as keyof typeof ROLE_LABELS] ?? viewAsRole}` : 'Preview'}
-        </span>
+        <span className="hidden max-w-52 truncate sm:inline">{buttonLabel}</span>
       </button>
 
       {open && (
         <div
-          className="absolute right-0 z-50 mt-1 w-64 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg"
+          className="absolute right-0 z-50 mt-1 w-80 rounded-lg border border-neutral-200 bg-white p-3 shadow-lg"
           role="menu"
         >
+          <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
+            Preview as user
+          </label>
+          <input
+            value={userFilter}
+            onChange={(event) => setUserFilter(event.target.value)}
+            placeholder="Search users…"
+            className="mt-1.5 w-full rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm text-neutral-800 outline-none focus:ring-2 focus:ring-orange-300"
+          />
+          <select
+            value={viewAsUser?.id ?? ''}
+            onChange={(e) => applyUser(e.target.value)}
+            className="mt-1.5 w-full cursor-pointer rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm font-medium text-neutral-800 outline-none focus:ring-2 focus:ring-orange-300"
+            aria-label="Switch platform user preview"
+          >
+            <option value="">No user preview</option>
+            {filteredUsers.map((user) => (
+              <option key={user.id} value={user.id}>
+                {user.name} · {user.email || 'no email'} · {ROLE_LABELS[user.role as keyof typeof ROLE_LABELS] ?? user.role}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[11px] text-neutral-400">
+            User preview uses that user&apos;s role and permission overrides for navigation and access checks.
+          </p>
+
+          <div className="my-3 border-t border-neutral-100" />
+
           <label className="text-[11px] font-semibold uppercase tracking-wide text-neutral-500">
             Preview as role
           </label>
           <select
             value={viewAsRole ?? 'PlatformAdmin'}
             onChange={(e) => applyRole(e.target.value)}
-            className="mt-1.5 w-full cursor-pointer rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm font-medium text-neutral-800 outline-none focus:ring-2 focus:ring-orange-300"
+            disabled={previewingUser}
+            className="mt-1.5 w-full cursor-pointer rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm font-medium text-neutral-800 outline-none focus:ring-2 focus:ring-orange-300 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
             aria-label="Switch platform role preview"
           >
             {ALL_PERSPECTIVE_ROLES.map((r) => (
@@ -104,7 +183,7 @@ export function PreviewPanel({ viewAsRole }: { viewAsRole?: string | null }) {
 
           {previewing && (
             <button
-              onClick={() => applyRole('PlatformAdmin')}
+              onClick={exitPreview}
               className="mt-3 w-full rounded-md bg-amber-700 px-2 py-1.5 text-xs font-semibold text-white hover:bg-amber-800"
             >
               Exit preview
