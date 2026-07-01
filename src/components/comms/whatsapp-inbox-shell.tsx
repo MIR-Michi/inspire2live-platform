@@ -1,9 +1,15 @@
 'use client'
 
-import { useActionState, useMemo } from 'react'
+import { useActionState, useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { StatusBadge } from '@/components/ui/status-badge'
-import { sendWhatsAppReply, type CommsFormState } from '@/app/app/comms/whatsapp/actions'
+import {
+  sendWhatsAppReply,
+  deleteWhatsAppMessage,
+  deleteWhatsAppConversation,
+  type CommsFormState,
+} from '@/app/app/comms/whatsapp/actions'
 import { groupIntoThreads, type WhatsAppThreadMessage } from '@/lib/comms-whatsapp-thread'
 
 export type WhatsAppFeedItem = WhatsAppThreadMessage
@@ -61,8 +67,24 @@ function ReplyForm({ whatsappId, inReplyToIntakeItemId }: { whatsappId: string; 
   )
 }
 
-function FeedMessage({ item }: { item: WhatsAppFeedItem }) {
+function FeedMessage({ item, isAdmin }: { item: WhatsAppFeedItem; isAdmin: boolean }) {
   const isOutbound = item.direction === 'outbound'
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  const handleDelete = () => {
+    if (!window.confirm('Delete this message for everyone? This removes it from the inbox and all dashboards and cannot be undone.')) return
+    setError(null)
+    startTransition(async () => {
+      const result = await deleteWhatsAppMessage({ id: item.id, direction: item.direction })
+      if (!result.ok) {
+        setError(result.error ?? 'Could not delete the message.')
+        return
+      }
+      router.refresh()
+    })
+  }
 
   return (
     <div className={['rounded-xl border px-4 py-3', isOutbound ? 'border-orange-200 bg-orange-50' : 'border-neutral-200 bg-white'].join(' ')}>
@@ -70,6 +92,17 @@ function FeedMessage({ item }: { item: WhatsAppFeedItem }) {
         <StatusBadge label={isOutbound ? 'OCI reply' : item.displayName} tone={isOutbound ? 'neutral' : 'blue'} />
         <StatusBadge label={item.status.replace(/_/g, ' ')} tone={statusTone(item.direction, item.status)} />
         <span className="text-xs text-neutral-500">{formatTimestamp(item.timestamp)}</span>
+        {isAdmin && (
+          <button
+            type="button"
+            onClick={handleDelete}
+            disabled={pending}
+            className="ml-auto shrink-0 text-xs font-semibold text-neutral-400 transition hover:text-red-600 disabled:opacity-50"
+            aria-label="Delete message for everyone"
+          >
+            {pending ? 'Deleting…' : 'Delete'}
+          </button>
+        )}
       </div>
       <p className="mt-2 whitespace-pre-wrap text-sm text-neutral-800">{item.text}</p>
       {isOutbound && (item.readAt || item.deliveredAt) && (
@@ -80,11 +113,45 @@ function FeedMessage({ item }: { item: WhatsAppFeedItem }) {
         </p>
       )}
       {item.errorDetail && <p className="mt-1 text-xs text-red-700">Delivery error: {item.errorDetail}</p>}
+      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
     </div>
   )
 }
 
-export function WhatsAppInboxShell({ feed }: { feed: WhatsAppFeedItem[] }) {
+function DeleteConversationButton({ whatsappId }: { whatsappId: string }) {
+  const router = useRouter()
+  const [pending, startTransition] = useTransition()
+  const [error, setError] = useState<string | null>(null)
+
+  const handleDelete = () => {
+    if (!window.confirm('Delete this entire conversation for everyone? This removes every message with this contact from the inbox and all dashboards and cannot be undone.')) return
+    setError(null)
+    startTransition(async () => {
+      const result = await deleteWhatsAppConversation(whatsappId)
+      if (!result.ok) {
+        setError(result.error ?? 'Could not delete the conversation.')
+        return
+      }
+      router.refresh()
+    })
+  }
+
+  return (
+    <div className="flex flex-col items-end">
+      <button
+        type="button"
+        onClick={handleDelete}
+        disabled={pending}
+        className="shrink-0 rounded-lg border border-neutral-200 px-2.5 py-1 text-xs font-semibold text-neutral-500 transition hover:border-red-200 hover:bg-red-50 hover:text-red-600 disabled:opacity-50"
+      >
+        {pending ? 'Deleting…' : 'Delete conversation'}
+      </button>
+      {error && <p className="mt-1 text-xs text-red-700">{error}</p>}
+    </div>
+  )
+}
+
+export function WhatsAppInboxShell({ feed, isAdmin = false }: { feed: WhatsAppFeedItem[]; isAdmin?: boolean }) {
   const conversations = useMemo(() => groupIntoThreads(feed), [feed])
 
   const header = (
@@ -124,12 +191,15 @@ export function WhatsAppInboxShell({ feed }: { feed: WhatsAppFeedItem[] }) {
           <article key={conversation.whatsappId} className="space-y-3 rounded-2xl border border-neutral-200 bg-white p-5 shadow-sm">
             <header className="flex flex-wrap items-baseline justify-between gap-2">
               <h2 className="text-base font-semibold text-neutral-900">{conversation.displayName}</h2>
-              <span className="text-xs text-neutral-500">{conversation.whatsappId}</span>
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-neutral-500">{conversation.whatsappId}</span>
+                {isAdmin && <DeleteConversationButton whatsappId={conversation.whatsappId} />}
+              </div>
             </header>
 
             <div className="space-y-2">
               {conversation.messages.map((item) => (
-                <FeedMessage key={`${item.direction}-${item.id}`} item={item} />
+                <FeedMessage key={`${item.direction}-${item.id}`} item={item} isAdmin={isAdmin} />
               ))}
             </div>
 

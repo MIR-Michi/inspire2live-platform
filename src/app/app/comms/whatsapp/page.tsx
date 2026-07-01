@@ -1,6 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
+import { normalizeRole } from '@/lib/platform-roles'
 import { WhatsAppInboxShell, type WhatsAppFeedItem } from '@/components/comms/whatsapp-inbox-shell'
 
 export default async function CommsWhatsAppPage() {
@@ -20,6 +21,8 @@ export default async function CommsWhatsAppPage() {
   if (!profile || !canAccessCommsWorkspace(profile.role)) {
     redirect('/app/comms')
   }
+
+  const isAdmin = normalizeRole(profile.role) === 'PlatformAdmin'
 
   const [inboundResult, outboundResult] = await Promise.all([
     supabase
@@ -67,5 +70,5 @@ export default async function CommsWhatsAppPage() {
     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
   )
 
-  return <WhatsAppInboxShell feed={feed} />
+  return <WhatsAppInboxShell feed={feed} isAdmin={isAdmin} />
 }
