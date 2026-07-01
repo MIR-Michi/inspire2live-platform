@@ -42,6 +42,7 @@ type WorkspaceData = {
     contactName: string | null
     contactEmail: string | null
     conferenceId: string | null
+    hasPlatformAccess?: boolean
   }
   submissions: Submission[]
 }
@@ -258,7 +259,11 @@ export function GuestWorkspace({ token }: { token: string }) {
             />
 
             {/* Request full access */}
-            <AccessRequestSection token={token} submission={submission} />
+            <AccessRequestSection
+              token={token}
+              submission={submission}
+              hasPlatformAccess={Boolean(data.token.hasPlatformAccess)}
+            />
           </>
         )}
 
@@ -549,7 +554,7 @@ function CommentsSection({
         </ul>
       )}
 
-      <div className="flex gap-2">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
         <textarea
           value={text}
           onChange={(e) => setText(e.target.value)}
@@ -560,9 +565,9 @@ function CommentsSection({
         <button
           onClick={() => { void post() }}
           disabled={posting || !text.trim()}
-          className="self-end rounded-xl bg-neutral-900 px-3 py-2.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-50"
+          className="rounded-xl bg-neutral-900 px-4 py-2.5 text-xs font-semibold text-white hover:bg-neutral-700 disabled:opacity-50"
         >
-          {posting ? '…' : '→'}
+          {posting ? 'Saving…' : 'Save comment'}
         </button>
       </div>
     </Card>
@@ -571,7 +576,15 @@ function CommentsSection({
 
 // ─── Access request section ───────────────────────────────────────────────────
 
-function AccessRequestSection({ token, submission }: { token: string; submission: Submission }) {
+function AccessRequestSection({
+  token,
+  submission,
+  hasPlatformAccess,
+}: {
+  token: string
+  submission: Submission
+  hasPlatformAccess: boolean
+}) {
   const [open, setOpen] = useState(false)
   const [message, setMessage] = useState('')
   const [sending, setSending] = useState(false)
@@ -589,6 +602,27 @@ function AccessRequestSection({ token, submission }: { token: string; submission
     } finally {
       setSending(false)
     }
+  }
+
+  if (hasPlatformAccess) {
+    return (
+      <Card>
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <SectionLabel>Platform access</SectionLabel>
+            <p className="text-xs text-neutral-500">
+              Your email already has access to the Inspire2Live platform.
+            </p>
+          </div>
+          <a
+            href="/app"
+            className="shrink-0 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white hover:bg-neutral-700"
+          >
+            Open platform
+          </a>
+        </div>
+      </Card>
+    )
   }
 
   if (sent) {
