@@ -88,7 +88,7 @@ export function CommsDashboardPanel({
           storageKey="comms-personal-incoming"
           actions={
             <Link href="/app/comms/intake" className="text-xs font-semibold text-orange-700 hover:underline">
-              Open intake
+              Open organizer
             </Link>
           }
         >

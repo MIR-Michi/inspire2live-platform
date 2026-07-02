@@ -133,7 +133,7 @@ export function TeamDashboard({ data, canApprove = false, newsfeedRunStatus = nu
                   href="/app/comms/intake"
                   className="mt-3 inline-flex text-xs font-semibold text-orange-700 hover:underline"
                 >
-                  Open channel intake →
+                  Open content organizer →
                 </Link>
               </div>
             ))}
