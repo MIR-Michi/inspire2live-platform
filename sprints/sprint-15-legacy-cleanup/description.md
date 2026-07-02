@@ -31,9 +31,10 @@ Shipping this sprint produces a smaller, clearer runtime with no dead demo code,
 - [x] **Batch 0 (provably dead):** `src/lib/congress-workspace-demo.ts` removed (no runtime import; guard test still green); stale coverage-exclude dropped.
 - [x] **Refactor:** `demo-data.ts` → `initiative-stages.ts` — keeps the 4 live stage exports, drops all 15 unused `DEMO_*` stubs; importers updated; a unit test added; no behaviour change.
 - [ ] **Dead-code scan:** systematic unused-file / unused-export pass; provably-unreferenced modules removed.
-- [ ] **Per-space go/no-go recorded** for each Category-C candidate (events list page, congress workspace, calendar, media, meetings, bureau, partners, admin org-feed/ai).
-- [ ] Each approved space removed via the per-space recipe, references rewired, tests updated, one commit each.
-- [ ] Any live demo/seed **rows** for retired spaces removed via a forward migration.
+- [x] **Per-space go/no-go recorded.** Retire: Stories, Network, Resources, Board, Annual Congress (`/app/congress`), Bureau, Events list page. Keep: shared domains (events/`[id]`, `congress_events`, `congress_activity_log`), public `/stories` (separate decision), Calendar/Media/Meetings.
+- [ ] **Stage A (disable):** retired spaces removed from nav and blocked at the route guard (redirect to `/app/dashboard`); the notifications→`/app/congress` redirect rewired; `role-access` tests updated.
+- [ ] **Stage B (delete code):** orphaned page/component/lib files deleted per space (one commit each); dashboard cards/links to retired spaces removed; tests updated. Shared code kept.
+- [ ] **Stage C (drop data):** forward migrations drop tables owned solely by retired spaces; shared tables kept.
 - [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test` (coverage gate) green after every batch; manual smoke of affected areas.
 
 ## Out of scope

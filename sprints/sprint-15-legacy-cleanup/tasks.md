@@ -18,18 +18,41 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 | S15-T05 | Rename `demo-data.ts` → `initiative-stages.ts`; drop 15 unused `DEMO_*` stubs; keep 4 live stage exports; update importers | Opus 4.8 | Completed | 2 importers updated (initiatives layout + milestones); added `initiative-stages.test.ts`; un-excluded from coverage; no behaviour change |
 | S15-T06 | Systematic unused-file / unused-export scan; remove provably-unreferenced modules | Opus 4.8 | Not Started | Candidates verified 0-ref before removal; each its own commit |
 
-## Phase 3 — Per-space deprecations (each needs go/no-go, then the removal recipe)
+## Phase 3 — Retire the confirmed spaces (decided)
+
+**Decision (product owner):** retire **Stories, Network, Resources, Board, Annual Congress (`/app/congress`), Bureau, and the Events list page**. Keep everything that backs a kept feature (see "must-keep" below).
+
+**Risk-minimized rollout — three stages, most-reversible first:**
+- **Stage A — Disable (this batch):** remove nav entries; block the routes centrally (retired-guard → redirect to `/app/dashboard`); rewire the one hard redirect from a kept surface (notifications → `/app/congress`). No page/lib/DB deletion. Instantly removes the spaces from the product, fully revertible.
+- **Stage B — Clean UI + delete orphaned code:** remove dashboard cards/links that pointed at retired spaces; delete the now-unreachable page/component/lib files (one space per commit); update tests.
+- **Stage C — Drop dead data:** forward migrations to drop tables owned solely by retired spaces. **Keep** shared tables.
+
+**Must-keep (shared with kept features):**
+- `events` domain — `events` table, `EventsPipelineShell`, `comms-events*` — Podcast & Conferences depend on it. Only the **list page** `/app/comms/events` is retired; `[id]` detail stays.
+- `congress_events` + `src/lib/congress-workspace/current-event.ts` — imported by the kept Admin → User Management page.
+- `congress_activity_log` — read by the kept Admin activity metrics (`user-activity.ts`).
+- Public patient-stories site `/stories` + `/stories/[slug]` — **separate decision** (external/SEO-facing URLs); not retired in this pass.
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S15-T07 | **Events list page** `/app/comms/events` (+`[id]` generic view) | Opus 4.8 | Needs decision | Remove the *generic list page* + its dashboard cards only. **Keep** the events domain/tables/`EventsPipelineShell` — Podcast & Conferences depend on them. Rewire: comms + personal dashboards, library, dashboard-data loaders + their tests |
-| S15-T08 | **Congress workspace** `/app/congress/workspace/*` (~14 pages) + `/app/congress/*` | Opus 4.8 | Needs decision | Large earlier-version subsystem; referenced by a notifications redirect + nav test. Confirm retired vs kept before touching |
-| S15-T09 | **Calendar** `/app/comms/calendar` | Opus 4.8 | Needs decision | 12 inbound refs — confirm retired |
-| S15-T10 | **Media** `/app/comms/media` (+`[id]`) | Opus 4.8 | Needs decision | 7 refs — confirm retired vs active library asset flow |
-| S15-T11 | **Meetings** `/app/comms/meetings` | Opus 4.8 | Needs decision | 7 refs; note Transcripts (Sprint 14) is adjacent and kept |
-| S15-T12 | **Bureau** `/app/bureau` | Opus 4.8 | Needs decision | Not in nav; 3 refs |
-| S15-T13 | **Partners** `/app/partners` | Opus 4.8 | Needs decision | Not in nav; 1 ref |
-| S15-T14 | **Admin org-feed / AI settings** `/app/admin/org-feed`, `/app/admin/ai` | Opus 4.8 | Needs decision | Sprint-14 AI surfaces — likely KEEP; listed for completeness |
+| S15-T07 | **Stage A** — remove nav items (Board, Network, Stories, Resources) + retire-guard for `/app/{stories,network,resources,board,congress,bureau}` and the exact `/app/comms/events` list page; rewire notifications redirect; update `role-access` tests | Opus 4.8 | In Progress | Central guard in `canAccessAppPath` + events list → redirect; one chokepoint, reversible |
+| S15-T08 | **Stage B — Board** `/app/board` + `src/components/board/*` | Opus 4.8 | Not Started | Delete after Stage A verified |
+| S15-T09 | **Stage B — Network** `/app/network` | Opus 4.8 | Not Started | |
+| S15-T10 | **Stage B — Resources** `/app/resources` | Opus 4.8 | Not Started | |
+| S15-T11 | **Stage B — Stories (internal)** `/app/stories/*` + components; keep public `/stories` | Opus 4.8 | Not Started | Public site retirement is a separate decision |
+| S15-T12 | **Stage B — Bureau** `/app/bureau` | Opus 4.8 | Not Started | |
+| S15-T13 | **Stage B — Annual Congress** `/app/congress/*` + `/app/congress/workspace/*` + `src/components/congress/*` + congress libs **except** `congress-workspace/current-event.ts` | Opus 4.8 | Not Started | Keep `congress_events` + `congress_activity_log` (used by kept admin surfaces) |
+| S15-T14 | **Stage B — Events list page** `/app/comms/events/page.tsx` + dashboard Events cards/loaders | Opus 4.8 | Not Started | Keep `[id]`, `EventsPipelineShell`, `events` domain (Podcast/Conferences) |
+| S15-T15 | **Stage C** — forward migrations dropping tables owned solely by retired spaces; keep shared tables | Opus 4.8 | Not Started | After Stage B; `DEMO_EMAILS` admin utility kept |
+
+## Kept (explicitly not retired)
+
+| Space | Why kept |
+|---|---|
+| Initiatives, Tasks, Notifications, Profile | Active |
+| Comms: Dashboard, Planner, Campus, Campus-log, WhatsApp, CRM, Conferences, Podcast, Library, Intake, Transcripts | Active workspace |
+| Admin: Users, Activity, Feedback, Guest submissions, AI settings, Org-feed | Active admin surfaces |
+| Calendar, Media, Meetings | **Not** in this retirement list — left as-is |
 
 ## Phase 4 — Database / seed legacy
 

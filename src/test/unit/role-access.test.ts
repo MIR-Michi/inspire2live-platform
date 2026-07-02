@@ -34,17 +34,24 @@ describe('canAccessAppPath', () => {
     expect(canAccessAppPath('BoardMember', '/app/tasks')).toBe(false)
   })
 
-  it('allows HubCoordinator to access bureau', () => {
-    expect(canAccessAppPath('HubCoordinator', '/app/bureau')).toBe(true)
-  })
-
   it('blocks IndustryPartner from tasks, allows partners', () => {
     expect(canAccessAppPath('IndustryPartner', '/app/tasks')).toBe(false)
     expect(canAccessAppPath('IndustryPartner', '/app/partners')).toBe(true)
   })
 
-  it('allows PatientAdvocate to access stories', () => {
-    expect(canAccessAppPath('PatientAdvocate', '/app/stories')).toBe(true)
+  it('blocks all roles from retired spaces (Sprint 15 cleanup)', () => {
+    // Retired regardless of role: stories, network, resources, board, congress, bureau,
+    // and the generic events list page (its [id] detail is kept).
+    expect(canAccessAppPath('HubCoordinator', '/app/bureau')).toBe(false)
+    expect(canAccessAppPath('PatientAdvocate', '/app/stories')).toBe(false)
+    expect(canAccessAppPath('PlatformAdmin', '/app/board')).toBe(false)
+    expect(canAccessAppPath('PlatformAdmin', '/app/network')).toBe(false)
+    expect(canAccessAppPath('PlatformAdmin', '/app/resources')).toBe(false)
+    expect(canAccessAppPath('PlatformAdmin', '/app/congress')).toBe(false)
+    expect(canAccessAppPath('PlatformAdmin', '/app/congress/workspace/overview')).toBe(false)
+    expect(canAccessAppPath('PlatformAdmin', '/app/comms/events')).toBe(false)
+    // The events [id] detail view stays reachable (Podcast/Conferences use it).
+    expect(canAccessAppPath('PlatformAdmin', '/app/comms/events/abc123')).toBe(true)
   })
 })
 
@@ -104,7 +111,7 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
     expect(labels).not.toContain('Planner')
     expect(labels).not.toContain('CRM')
     // but shared spaces it can view are present
-    expect(labels).toContain('Stories')
+    expect(labels).toContain('Dashboard')
     expect(labels).toContain('Initiatives')
   })
 
@@ -113,7 +120,7 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
     const account = sections.find((s) => s.label === 'Account')
     expect(account?.items.some((i) => i.id === 'admin')).toBe(true)
     const labels = sections.flatMap((s) => s.items.map((i) => i.label))
-    expect(labels).toEqual(expect.arrayContaining(['Planner', 'CRM', 'Board', 'User Management']))
+    expect(labels).toEqual(expect.arrayContaining(['Planner', 'CRM', 'Initiatives', 'User Management']))
   })
 
   it('reveals comms items to a NON-comms role when a space override grants access', () => {

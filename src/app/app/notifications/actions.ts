@@ -75,7 +75,8 @@ export async function acceptInviteAction(formData: FormData): Promise<void> {
     redirect(`/app/initiatives/${(inv as { initiative_id: string }).initiative_id}`)
   }
   if (scope === 'congress') {
-    redirect('/app/congress')
+    // Annual Congress space retired (Sprint 15) — land on the dashboard.
+    redirect('/app/dashboard')
   }
 }
 
