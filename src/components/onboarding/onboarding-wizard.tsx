@@ -42,7 +42,7 @@ const COMMS_FLOW: OnboardingFlow = {
   highlights: [
     { title: 'Planner', desc: 'Draft, schedule, and track content across your communication channels.' },
     { title: 'Campus', desc: 'Log sessions and members, and keep the community knowledge base current.' },
-    { title: 'WhatsApp & Intake', desc: 'Review incoming messages, classify them, and assign follow-ups.' },
+    { title: 'WhatsApp & Content organizer', desc: 'Review incoming content, classify it, and route it to the right place.' },
     { title: 'CRM & Library', desc: 'Manage contacts, pipelines, and your shared media assets.' },
   ],
   landingPath: '/app/comms/dashboard',

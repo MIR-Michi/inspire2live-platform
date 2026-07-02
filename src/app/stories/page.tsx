@@ -1,6 +1,6 @@
 import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
-import { WorkspaceDiagnostics } from '@/components/congress/workspace/workspace-diagnostics'
+import { QueryDiagnostics } from '@/components/ui/query-diagnostics'
 
 type PublicStory = {
   id: string
@@ -33,7 +33,7 @@ export default async function PublicStoriesPage() {
 
   return (
     <div className="mx-auto max-w-5xl space-y-8 px-4 py-10">
-      <WorkspaceDiagnostics issues={issues} />
+      <QueryDiagnostics issues={issues} />
 
       <header className="space-y-3">
         <h1 className="text-3xl font-bold text-neutral-900">Patient Stories</h1>

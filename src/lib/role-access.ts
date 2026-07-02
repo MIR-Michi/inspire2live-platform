@@ -128,7 +128,6 @@ export const MASTER_NAV: NavSection[] = [
       { id: 'comms-whatsapp', label: 'WhatsApp',    href: '/app/comms/whatsapp', space: 'comms', icon: 'whatsapp' },
       { id: 'comms-crm',      label: 'CRM',         href: '/app/comms/crm',      space: 'comms', icon: 'crm' },
       { id: 'initiatives',    label: 'Initiatives', href: '/app/initiatives',    space: 'initiatives', icon: 'initiatives' },
-      { id: 'board',          label: 'Board',       href: '/app/board',          space: 'board', icon: 'board' },
     ],
   },
   {
@@ -139,17 +138,9 @@ export const MASTER_NAV: NavSection[] = [
     ],
   },
   {
-    label: 'Community',
-    items: [
-      { id: 'network', label: 'Network', href: '/app/network', space: 'network', icon: 'network' },
-      { id: 'stories', label: 'Stories', href: '/app/stories', space: 'stories', icon: 'stories' },
-    ],
-  },
-  {
     label: 'Content',
     items: [
       { id: 'comms-library', label: 'Library',   href: '/app/comms/library', space: 'comms', icon: 'library' },
-      { id: 'resources',     label: 'Resources', href: '/app/resources',     space: 'resources', icon: 'resources' },
     ],
   },
   {
@@ -210,6 +201,27 @@ function getAppSection(pathname: string): string | null {
 }
 
 /**
+ * Legacy top-level spaces retired in the cleanup sprint (Sprint 15). They are
+ * removed from navigation and blocked here so every route + subroute redirects
+ * to the dashboard, regardless of role. Kept as a single list so the retirement
+ * is one reversible chokepoint until the page code is deleted in a later batch.
+ */
+const RETIRED_APP_SECTIONS: ReadonlySet<string> = new Set([
+  'board',
+  'network',
+  'stories',
+  'resources',
+  'congress',
+  'bureau',
+  'notifications',
+])
+
+/** True for the retired generic Events *list* page only — its `[id]` detail is kept. */
+function isRetiredEventsList(pathname: string): boolean {
+  return pathname === '/app/comms/events' || pathname === '/app/comms/events/'
+}
+
+/**
  * Synchronous route-access check — safe for use in middleware.
  * Delegates to resolveAccessFromRole() from permissions.ts.
  * A user can access a path if their effective access level is 'view' or above (not 'invisible').
@@ -217,6 +229,9 @@ function getAppSection(pathname: string): string | null {
 export function canAccessAppPath(role: string | null | undefined, pathname: string): boolean {
   const section = getAppSection(pathname)
   if (!section) return true
+
+  // Retired spaces are inaccessible to everyone (Sprint 15 cleanup).
+  if (RETIRED_APP_SECTIONS.has(section) || isRetiredEventsList(pathname)) return false
 
   const level = resolveAccessFromRole(role, section as PlatformSpace)
   return level !== 'invisible'

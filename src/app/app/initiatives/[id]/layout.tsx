@@ -4,7 +4,7 @@ import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
 import { InitiativeTabs } from '@/components/initiatives/initiative-tabs'
 import { canManageInitiativeWorkspace } from '@/lib/initiative-workspace'
-import { normalizeStage, STAGE_META } from '@/lib/demo-data'
+import { normalizeStage, STAGE_META } from '@/lib/initiative-stages'
 
 export default async function InitiativeLayout({
   children,

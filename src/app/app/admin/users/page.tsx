@@ -1,8 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { EditRoleButton, InviteUserButton, AssignCongressRolesButton, UserStatusButton, DeleteUserButton, PurgeDemoUsersButton, ResendInviteButton } from '@/components/ui/client-buttons'
+import { EditRoleButton, InviteUserButton, UserStatusButton, DeleteUserButton, PurgeDemoUsersButton, ResendInviteButton } from '@/components/ui/client-buttons'
 import { DEMO_EMAILS } from '@/app/app/admin/users/constants'
-import { fetchLatestWorkspaceEvent } from '@/lib/congress-workspace/current-event'
 import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
 
 export default async function AdminUsersPage() {
@@ -41,8 +40,6 @@ export default async function AdminUsersPage() {
       .order('name')
     dbUsers = (fallback ?? []).map(u => ({ ...u, status: 'active' }))
   }
-
-  const { event: latestCongress } = await fetchLatestWorkspaceEvent(supabase)
 
   const users = (dbUsers ?? []).map(u => ({
     id: u.id,
@@ -140,12 +137,6 @@ export default async function AdminUsersPage() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <AssignCongressRolesButton
-                      userName={u.name}
-                      userId={u.id}
-                      congressId={latestCongress?.id ?? null}
-                      congressTitle={latestCongress?.title}
-                    />
                     <EditRoleButton userName={u.name} userId={u.id} currentRole={u.role} />
                     {!u.onboarding_completed && (
                       <ResendInviteButton userId={u.id} userName={u.name} email={u.email} />

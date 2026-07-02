@@ -785,7 +785,7 @@ export function IntakeQueueShell({
             Daily triage
           </p>
           <div className="flex flex-wrap items-center gap-3">
-            <h2 className="text-2xl font-semibold text-neutral-900">Intake queue</h2>
+            <h2 className="text-2xl font-semibold text-neutral-900">Content organizer</h2>
             <span className="rounded-full border border-orange-200 bg-orange-50 px-3 py-1 text-sm font-semibold text-orange-700">
               {unreviewedCount} unreviewed
             </span>

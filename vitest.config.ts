@@ -16,9 +16,6 @@ export default defineConfig({
       // UI (src/app, src/components) is validated via E2E smoke tests.
       include: ['src/lib/**/*.{ts,tsx}'],
       exclude: [
-        // Demo / seed content is intentionally large and not unit-tested.
-        'src/lib/demo-data.ts',
-        'src/lib/congress-workspace-demo.ts',
         // Thin wrappers around Next/Supabase runtime.
         'src/lib/supabase/**',
         // Supabase data-layer query files — require live DB or heavy mocking.
@@ -32,7 +29,6 @@ export default defineConfig({
         'src/lib/comms-digest.ts',
         'src/lib/comms-event-pipeline.ts',
         'src/lib/comms-integration-intents.ts',
-        'src/lib/congress-workspace/current-event.ts',
         // External API / email dispatch wrappers — no unit-test value.
         'src/lib/whatsapp-send.ts',
         'src/lib/whatsapp-media.ts',

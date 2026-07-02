@@ -14,6 +14,21 @@ export const maxDuration = 300
 
 const VALID_VIEWS = new Set(['personal', 'team'])
 
+/**
+ * Best-effort newsfeed run status. Fully guarded: `createAdminClient()` throws
+ * synchronously when `SUPABASE_SERVICE_ROLE_KEY` isn't set (e.g. preview
+ * environments), and a bare `.catch()` on the argument can't catch that — a
+ * missing key would otherwise crash the whole dashboard render. This widget is
+ * non-critical, so any failure degrades to `null`.
+ */
+async function loadNewsfeedRunStatus() {
+  try {
+    return await getRunStatus(createAdminClient())
+  } catch {
+    return null
+  }
+}
+
 export default async function CommsDashboardPage({
   searchParams,
 }: {
@@ -51,7 +66,7 @@ export default async function CommsDashboardPage({
         <TeamDashboard
           data={await loadCommsTeamDashboardData(supabase)}
           canApprove={profile?.role === 'PlatformAdmin'}
-          newsfeedRunStatus={await getRunStatus(createAdminClient()).catch(() => null)}
+          newsfeedRunStatus={await loadNewsfeedRunStatus()}
         />
       )}
     </div>

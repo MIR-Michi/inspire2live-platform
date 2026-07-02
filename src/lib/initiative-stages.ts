@@ -1,10 +1,10 @@
 /**
- * Fallback data for pages when Supabase returns empty results.
- * All DEMO_* arrays are empty — pages show real DB data or empty state.
- * Only the stage-vocabulary utilities contain logic/metadata.
+ * Canonical 5-stage vocabulary for initiatives (label, colour, ordering).
+ *
+ * Was previously `demo-data.ts`, which also carried 15 empty `DEMO_*` fallback
+ * stubs from an earlier version — all unused and removed in the cleanup sprint.
+ * This file now contains only the live stage utilities.
  */
-
-// ─── Canonical 5-stage vocabulary ────────────────────────────────────────────
 
 export type InitiativeStage = 'idea' | 'planning' | 'execution' | 'public' | 'completed'
 
@@ -28,21 +28,3 @@ export const STAGE_META: Record<InitiativeStage, { label: string; color: string;
 }
 
 export const STAGE_ORDER: InitiativeStage[] = ['idea', 'planning', 'execution', 'public', 'completed']
-
-// ─── Fallback arrays (all empty — real data comes from Supabase) ─────────────
-
-export const DEMO_INITIATIVE_IDS: Record<string, string> = {}
-export const DEMO_INITIATIVES:       never[] = []
-export const DEMO_TASKS:             never[] = []
-export const DEMO_NOTIFICATIONS:     never[] = []
-export const DEMO_TEAM_MEMBERS_RICH: never[] = []
-export const DEMO_EMAIL_THREADS:     never[] = []
-export const DEMO_TEAM_CHAT:         never[] = []
-export const DEMO_PARTNERS:          never[] = []
-export const DEMO_RESOURCES:         never[] = []
-export const DEMO_MILESTONES_RICH:   never[] = []
-export const DEMO_EVIDENCE_RICH:     never[] = []
-export const DEMO_NEWSFEED:          never[] = []
-export const DEMO_BOARD_ACTIVITY:    never[] = []
-export const DEMO_NETWORK_INTERNAL:  never[] = []
-export const DEMO_NETWORK_EXTERNAL:  never[] = []
