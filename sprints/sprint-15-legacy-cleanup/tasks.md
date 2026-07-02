@@ -47,7 +47,7 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 | S15-T12 | **Stage B — Bureau** `/app/bureau` | Opus 4.8 | Completed | Deleted in Stage B batch 1 (commit 0862aa5) |
 | S15-T13 | **Stage B — Annual Congress** `/app/congress/*` + `/app/congress/workspace/*` + `src/components/congress/*` + congress libs (`congress.ts`, `congress-assignments.ts`, `congress-policy.ts`, `congress-workspace/current-event.ts`) + congress tests | Opus 4.8 | Completed | Kept `congress-guest-tokens.ts` + congress DB tables. Decoupled first: relocated `WorkspaceDiagnostics` → `ui/query-diagnostics.tsx` (public `/stories`), removed `AssignCongressRolesButton`/`VoteButton` + congress fetch from Admin users. `tsc`/lint/364 tests green; coverage 60.66% |
 | S15-T14 | **Stage B — Events list page** `/app/comms/events/page.tsx` + dashboard Events cards/loaders | Opus 4.8 | Not Started | Keep `[id]`, `EventsPipelineShell`, `events` domain (Podcast/Conferences) |
-| S15-T15 | **Stage C** — forward migrations dropping tables owned solely by retired spaces; keep shared tables | Opus 4.8 | Not Started | After Stage B; `DEMO_EMAILS` admin utility kept |
+| S15-T15 | **Stage C** — forward migration dropping tables owned solely by retired spaces; keep shared tables | Opus 4.8 | Completed | `00151_drop_retired_congress_workspace.sql` drops the 18 internal Congress-workspace tables (CASCADE). Kept `congress_events`/`congress_assignments`/`congress_activity_log` (live surfaces) and `congress_members` (invitation-accept RPC + trigger). See Stage C analysis below |
 
 ## Kept (explicitly not retired)
 
@@ -62,8 +62,38 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S15-T15 | For each approved retired space, forward migration to drop now-dead tables/rows | Opus 4.8 | Not Started | Never edit historical migrations; new forward migration only |
+| S15-T15b | Forward migration to drop now-dead tables for retired spaces | Opus 4.8 | Completed | `00151` — internal Congress-workspace tables only (self-contained, provably zero live readers). Never edited historical migrations |
 | S15-T16 | Purge any live demo/seed rows for retired spaces | Opus 4.8 | Not Started | Gated on Phase 3 decisions; `DEMO_EMAILS` admin utility kept |
+
+### Stage C analysis — why only the Congress-workspace tables were dropped
+
+Criterion: drop a table **only** if it is owned solely by a fully-retired space **and**
+has zero live readers (no app-code query, no DB function/trigger/RPC that can run, no
+seed insert, no coupling from a kept feature). Every other retired-space table failed
+this test and was deliberately kept:
+
+- **`patient_stories` family** — `patient_stories` backs the **kept public `/stories`** site.
+  Its audit children `story_status_changes` / `patient_story_events` are written by a live
+  trigger on `patient_stories` (`log_patient_story_status_change`, migration 00019), so
+  dropping them would break status updates on a kept table. **Kept.**
+- **`resources` family** — the `resources` table is read by the **kept Initiatives → Evidence**
+  page and is still a live `PlatformSpace`. `resource_translations` is its child. **Kept.**
+- **`notifications`** — the `/app/notifications` *page* was retired, but the table is still
+  written/read by the kept app-shell notification bell (`app/layout.tsx`, `lib/notify.ts`,
+  intake actions). **Kept.**
+- **Congress kept tables** — `congress_events`, `congress_assignments` (data preserved),
+  `congress_activity_log` (Admin activity metrics), `congress_members` (invitation-accept
+  RPC 00027 + live `updated_at` trigger). **Kept.**
+- **Board / Network / Bureau** — no space-exclusive tables of their own; their data lives in
+  shared tables (`discussions`, `hubs`, `partner_*`, `tasks`) that other kept surfaces use.
+  Nothing to drop.
+
+Runtime safety of the drop: the only remaining code touching the 18 dropped tables is the
+account-purge helper (`admin/users/actions.ts`), whose `tryOp` wrapper explicitly swallows
+`42P01` / "does not exist", and its one non-wrapped `congress_topics` read degrades to
+`null` (supabase-js returns `{data:null,error}` rather than throwing). No app code change
+was required. Stale generated types in `src/types/database.ts` are harmless and will be
+refreshed by the next `supabase gen types` run.
 
 ## Verification (per batch)
 
