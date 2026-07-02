@@ -20,7 +20,7 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 
 ## Phase 3 — Retire the confirmed spaces (decided)
 
-**Decision (product owner):** retire **Stories, Network, Resources, Board, Annual Congress (`/app/congress`), Bureau, and the Events list page**. Keep everything that backs a kept feature (see "must-keep" below).
+**Decision (product owner):** retire **Stories, Network, Resources, Board, Annual Congress (`/app/congress`), Bureau, the Events list page, and Notifications (`/app/notifications`)**. Keep everything that backs a kept feature (see "must-keep" below).
 
 **Risk-minimized rollout — three stages, most-reversible first:**
 - **Stage A — Disable (this batch):** remove nav entries; block the routes centrally (retired-guard → redirect to `/app/dashboard`); rewire the one hard redirect from a kept surface (notifications → `/app/congress`). No page/lib/DB deletion. Instantly removes the spaces from the product, fully revertible.
@@ -35,7 +35,10 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S15-T07 | **Stage A** — remove nav items (Board, Network, Stories, Resources) + retire-guard for `/app/{stories,network,resources,board,congress,bureau}` and the exact `/app/comms/events` list page; rewire notifications redirect; update `role-access` tests | Opus 4.8 | In Progress | Central guard in `canAccessAppPath` + events list → redirect; one chokepoint, reversible |
+| S15-T07 | **Stage A** — remove nav items (Board, Network, Stories, Resources) + retire-guard for `/app/{stories,network,resources,board,congress,bureau,notifications}` and the exact `/app/comms/events` list page; rewire notifications redirect; update `role-access` tests | Opus 4.8 | Completed | Central guard in `canAccessAppPath`; events list → redirect; notifications bell auto-hidden (gated on `canAccessAppPath`) |
+| S15-T07b | **Retire Notifications** — add `notifications` to the retire-guard (blocks route + hides the top-nav bell); remove the Notifications panel from the admin dashboard (Field Newsfeed kept, full-width); drop the notifications query/metadata | Opus 4.8 | Completed | Notifications page redirects to dashboard |
+| S15-T07c | **Legacy links/buttons swept** — removed "Open Bureau →" + "Open the Bureau" text (admin dashboard), the Events quick-link card (personal dashboard) and "All events →" (team dashboard) pointing at the retired list; kept `/events/[id]` detail links | Opus 4.8 | Completed | |
+| S15-T07d | **Completed tasks disappear from "My tasks"** — the list rendered all tasks; now renders `openTasks` so completed/skipped vanish regardless of when they were completed | Opus 4.8 | Completed | Root cause: no filter existed on the list (only the stat cards used `openTasks`) |
 | S15-T08 | **Stage B — Board** `/app/board` + `src/components/board/*` | Opus 4.8 | Not Started | Delete after Stage A verified |
 | S15-T09 | **Stage B — Network** `/app/network` | Opus 4.8 | Not Started | |
 | S15-T10 | **Stage B — Resources** `/app/resources` | Opus 4.8 | Not Started | |

@@ -54,11 +54,6 @@ export function TeamDashboard({ data, canApprove = false, newsfeedRunStatus = nu
           title="Events"
           storageKey="comms-team-events"
           defaultCollapsed
-          actions={
-            <Link href="/app/comms/events" className="text-sm font-medium text-orange-600 hover:underline">
-              All events →
-            </Link>
-          }
         >
           <div className="overflow-hidden rounded-2xl border border-neutral-200 bg-white shadow-sm">
             <table className="w-full text-sm">

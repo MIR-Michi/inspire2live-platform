@@ -78,7 +78,7 @@ export function CommsDashboardPanel({
           title="My tasks"
           storageKey="comms-personal-tasks"
         >
-          <UnifiedTaskList tasks={tasks} />
+          <UnifiedTaskList tasks={openTasks} emptyLabel="No open tasks — you're all caught up." />
         </CollapsibleCard>
 
         <CollapsibleCard
@@ -173,12 +173,9 @@ export function CommsDashboardPanel({
         </CollapsibleCard>
       </TileGroup>
 
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid gap-3 md:grid-cols-2">
         <Link href="/app/comms/campus" className="rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-900 shadow-sm hover:border-orange-400">
           Campus feed
-        </Link>
-        <Link href="/app/comms/events" className="rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-900 shadow-sm hover:border-orange-400">
-          Events
         </Link>
         <Link href="/app/comms/library" className="rounded-xl border border-orange-200 bg-white px-4 py-3 text-sm font-semibold text-orange-900 shadow-sm hover:border-orange-400">
           Library

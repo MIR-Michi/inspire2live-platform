@@ -213,6 +213,7 @@ const RETIRED_APP_SECTIONS: ReadonlySet<string> = new Set([
   'resources',
   'congress',
   'bureau',
+  'notifications',
 ])
 
 /** True for the retired generic Events *list* page only — its `[id]` detail is kept. */
