@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { STAGE_META, STAGE_ORDER, normalizeStage } from '@/lib/demo-data'
-import type { InitiativeStage } from '@/lib/demo-data'
+import { STAGE_META, STAGE_ORDER, normalizeStage } from '@/lib/initiative-stages'
+import type { InitiativeStage } from '@/lib/initiative-stages'
 import { PlaceholderButton } from '@/components/ui/client-buttons'
 
 // ─── Status style map ─────────────────────────────────────────────────────────

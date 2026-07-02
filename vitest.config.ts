@@ -16,8 +16,6 @@ export default defineConfig({
       // UI (src/app, src/components) is validated via E2E smoke tests.
       include: ['src/lib/**/*.{ts,tsx}'],
       exclude: [
-        // Demo / seed content is intentionally large and not unit-tested.
-        'src/lib/demo-data.ts',
         // Thin wrappers around Next/Supabase runtime.
         'src/lib/supabase/**',
         // Supabase data-layer query files — require live DB or heavy mocking.
