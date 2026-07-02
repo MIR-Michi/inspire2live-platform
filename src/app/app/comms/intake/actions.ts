@@ -581,7 +581,6 @@ export async function routeIntakeItem(
     revalidatePath('/app/comms/events')
     revalidatePath('/app/comms/campus-log')
     revalidatePath('/app/comms/media')
-    revalidatePath('/app/notifications')
     if (route.routedToType === 'event' && route.routedToId) revalidatePath(`/app/comms/events/${route.routedToId}`)
     if (route.routedToType === 'campus_member' && route.routedToId) {
       revalidatePath(`/app/comms/campus-log/members/${route.routedToId}`)
