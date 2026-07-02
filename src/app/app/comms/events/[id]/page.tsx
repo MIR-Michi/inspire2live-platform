@@ -1167,18 +1167,6 @@ export default async function CommsEventDetailPage({
         )}
       </div>
 
-      {event.is_annual_congress && (
-        <div className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-5 py-4">
-          <p className="text-sm text-violet-900">Linked to the Annual Congress workspace.</p>
-          <Link
-            href="/app/congress"
-            className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-800"
-          >
-            Open Congress
-          </Link>
-        </div>
-      )}
-
       {/* Phase stepper */}
       <PhaseStepper
         phases={phaseConfigs}

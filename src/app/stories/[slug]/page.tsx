@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { WorkspaceDiagnostics } from '@/components/congress/workspace/workspace-diagnostics'
+import { QueryDiagnostics } from '@/components/ui/query-diagnostics'
 
 type Story = {
   title: string
@@ -36,7 +36,7 @@ export default async function PublicStoryPage({ params }: { params: Promise<{ sl
 
   return (
     <div className="mx-auto max-w-3xl space-y-8 px-4 py-10">
-      <WorkspaceDiagnostics issues={issues} />
+      <QueryDiagnostics issues={issues} />
 
       {!story ? (
         <div className="rounded-xl border border-dashed border-neutral-300 bg-neutral-50 p-8 text-center text-sm text-neutral-500">

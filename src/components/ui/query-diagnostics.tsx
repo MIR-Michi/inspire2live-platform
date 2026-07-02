@@ -1,13 +1,24 @@
 'use client'
 
-import type { WorkspaceQueryIssue } from '@/lib/congress-workspace/current-event'
+export type QueryDiagnosticIssue = {
+  scope: string
+  message: string
+  code?: string
+  hint?: string
+}
 
-export function WorkspaceDiagnostics({ issues }: { issues: WorkspaceQueryIssue[] }) {
+/**
+ * Generic Supabase-error panel. Renders nothing when there are no issues, and
+ * otherwise surfaces schema-drift / RLS / missing-table errors so a page can
+ * degrade visibly instead of silently. Deliberately domain-neutral so any
+ * public page can reuse it.
+ */
+export function QueryDiagnostics({ issues }: { issues: QueryDiagnosticIssue[] }) {
   if (!issues || issues.length === 0) return null
 
   return (
     <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-xs">
-      <p className="font-semibold text-amber-900">Workspace diagnostics</p>
+      <p className="font-semibold text-amber-900">Diagnostics</p>
       <p className="mt-0.5 text-amber-800">
         This panel appears when Supabase returns an error (schema drift / RLS / missing tables).
       </p>

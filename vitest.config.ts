@@ -29,7 +29,6 @@ export default defineConfig({
         'src/lib/comms-digest.ts',
         'src/lib/comms-event-pipeline.ts',
         'src/lib/comms-integration-intents.ts',
-        'src/lib/congress-workspace/current-event.ts',
         // External API / email dispatch wrappers — no unit-test value.
         'src/lib/whatsapp-send.ts',
         'src/lib/whatsapp-media.ts',

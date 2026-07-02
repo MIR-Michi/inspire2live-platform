@@ -29,9 +29,10 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 
 **Must-keep (shared with kept features):**
 - `events` domain — `events` table, `EventsPipelineShell`, `comms-events*` — Podcast & Conferences depend on it. Only the **list page** `/app/comms/events` is retired; `[id]` detail stays.
-- `congress_events` + `src/lib/congress-workspace/current-event.ts` — imported by the kept Admin → User Management page.
+- `congress_events` + `congress_assignments` **tables** — kept (data preserved). The reader lib `src/lib/congress-workspace/current-event.ts` was **decoupled and removed**: the Admin → User Management page no longer fetches the latest congress event nor renders the "Congress Roles" assignment button (retired with the space).
+- `src/lib/congress-guest-tokens.ts` — kept; backs the Conferences guest-token / attendance feature (`/congress/attend/*`, `/api/congress-guest/*`), which is **not** part of the retired internal congress workspace.
 - `congress_activity_log` — read by the kept Admin activity metrics (`user-activity.ts`).
-- Public patient-stories site `/stories` + `/stories/[slug]` — **separate decision** (external/SEO-facing URLs); not retired in this pass.
+- Public patient-stories site `/stories` + `/stories/[slug]` — **separate decision** (external/SEO-facing URLs); not retired in this pass. Their `WorkspaceDiagnostics` dependency was relocated to a neutral `src/components/ui/query-diagnostics.tsx` so congress code could be deleted.
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
@@ -39,12 +40,12 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 | S15-T07b | **Retire Notifications** — add `notifications` to the retire-guard (blocks route + hides the top-nav bell); remove the Notifications panel from the admin dashboard (Field Newsfeed kept, full-width); drop the notifications query/metadata | Opus 4.8 | Completed | Notifications page redirects to dashboard |
 | S15-T07c | **Legacy links/buttons swept** — removed "Open Bureau →" + "Open the Bureau" text (admin dashboard), the Events quick-link card (personal dashboard) and "All events →" (team dashboard) pointing at the retired list; kept `/events/[id]` detail links | Opus 4.8 | Completed | |
 | S15-T07d | **Completed tasks disappear from "My tasks"** — the list rendered all tasks; now renders `openTasks` so completed/skipped vanish regardless of when they were completed | Opus 4.8 | Completed | Root cause: no filter existed on the list (only the stat cards used `openTasks`) |
-| S15-T08 | **Stage B — Board** `/app/board` + `src/components/board/*` | Opus 4.8 | Not Started | Delete after Stage A verified |
-| S15-T09 | **Stage B — Network** `/app/network` | Opus 4.8 | Not Started | |
-| S15-T10 | **Stage B — Resources** `/app/resources` | Opus 4.8 | Not Started | |
-| S15-T11 | **Stage B — Stories (internal)** `/app/stories/*` + components; keep public `/stories` | Opus 4.8 | Not Started | Public site retirement is a separate decision |
-| S15-T12 | **Stage B — Bureau** `/app/bureau` | Opus 4.8 | Not Started | |
-| S15-T13 | **Stage B — Annual Congress** `/app/congress/*` + `/app/congress/workspace/*` + `src/components/congress/*` + congress libs **except** `congress-workspace/current-event.ts` | Opus 4.8 | Not Started | Keep `congress_events` + `congress_activity_log` (used by kept admin surfaces) |
+| S15-T08 | **Stage B — Board** `/app/board` + `src/components/board/*` | Opus 4.8 | Completed | Deleted in Stage B batch 1 (commit 0862aa5) |
+| S15-T09 | **Stage B — Network** `/app/network` | Opus 4.8 | Completed | Deleted in Stage B batch 1 (commit 0862aa5) |
+| S15-T10 | **Stage B — Resources** `/app/resources` | Opus 4.8 | Completed | Deleted in Stage B batch 1 (commit 0862aa5) |
+| S15-T11 | **Stage B — Stories (internal)** `/app/stories/*` + components; keep public `/stories` | Opus 4.8 | Completed | Internal pages deleted (commit 0862aa5); public `/stories` kept |
+| S15-T12 | **Stage B — Bureau** `/app/bureau` | Opus 4.8 | Completed | Deleted in Stage B batch 1 (commit 0862aa5) |
+| S15-T13 | **Stage B — Annual Congress** `/app/congress/*` + `/app/congress/workspace/*` + `src/components/congress/*` + congress libs (`congress.ts`, `congress-assignments.ts`, `congress-policy.ts`, `congress-workspace/current-event.ts`) + congress tests | Opus 4.8 | Completed | Kept `congress-guest-tokens.ts` + congress DB tables. Decoupled first: relocated `WorkspaceDiagnostics` → `ui/query-diagnostics.tsx` (public `/stories`), removed `AssignCongressRolesButton`/`VoteButton` + congress fetch from Admin users. `tsc`/lint/364 tests green; coverage 60.66% |
 | S15-T14 | **Stage B — Events list page** `/app/comms/events/page.tsx` + dashboard Events cards/loaders | Opus 4.8 | Not Started | Keep `[id]`, `EventsPipelineShell`, `events` domain (Podcast/Conferences) |
 | S15-T15 | **Stage C** — forward migrations dropping tables owned solely by retired spaces; keep shared tables | Opus 4.8 | Not Started | After Stage B; `DEMO_EMAILS` admin utility kept |
 
