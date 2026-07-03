@@ -64,11 +64,24 @@ today one table prefix), and a **declarative `manifest.ts`** that bridges the tw
    feature-flaggable, and *absence* is a clean, working state — generalizing today's `comms_team` flag
    and `lib/ai/feature-flag.ts`.
 
-5. **Transition is staged and reversible (Stage 0 → 5).** Stage 1 declares boundaries with **zero DB
-   change** (manifests + module moves + kernel + import lint). Stage 2 relocates tables prefix→schema one
-   component at a time, lowest-risk first. Stages 3–5 add the composable shell, a blueprint/catalog format
-   (proven by regenerating I2L from its own blueprint), and finally the three AI levels. No stage past 4
-   begins until the current platform has been regenerated from a blueprint.
+5. **Governance makes the boundaries self-enforcing against legacy pollution.** Legacy pollution
+   (Sprint 15's orphaned tables, dead files, unreachable spaces) is a **reconciliation gap** between three
+   sets that should be identical: what *exists* (physical tables/files), what is *owned* (claimed by a
+   manifest), and what is *reachable* (mounted in the live nav). Three **standing CI checks** keep them
+   reconciled on every PR: (a) **table-ownership reconciliation** — every physical table is claimed by a
+   manifest or listed in an explicit `db/quarantine.ts` with an owner and `dropBy` date, so a retired
+   space's tables can never linger silently; (b) **reachability** — every component with UI is mounted in
+   nav or declared public/headless; (c) **dead-code scan** (`knip`). The quarantine list turns Sprint 15's
+   prose "kept for reason X" into structured, re-reviewed data. This is the *same* invariant that
+   guarantees the L2 generator emits clean platforms (an orphan table cannot exist if CI requires an
+   owner), so anti-pollution and composability are one mechanism.
+
+6. **Transition is staged and reversible (Stage 0 → 5).** Stage 1 declares boundaries with **zero DB
+   change** (manifests + module moves + kernel + the three governance CI checks). Stage 2 relocates tables
+   prefix→schema one component at a time, lowest-risk first, and turns on table-ownership reconciliation.
+   Stages 3–5 add the composable shell, a blueprint/catalog format (proven by regenerating I2L from its own
+   blueprint), and finally the three AI levels. No stage past 4 begins until the current platform has been
+   regenerated from a blueprint.
 
 ## Alternatives considered
 
@@ -96,6 +109,9 @@ today one table prefix), and a **declarative `manifest.ts`** that bridges the tw
 
 - One capability is reasoned about once, in one place, across repo + DB + manifest.
 - Boundaries become CI-checkable (import lint) instead of convention.
+- Legacy pollution becomes a build failure, not a recurring cleanup sprint: the three governance checks
+  keep *exists = owned = reachable* reconciled continuously, so orphans/zombies/dangling refs surface the
+  moment they appear instead of accreting until the next Sprint-15-style audit.
 - The manifest catalog is exactly the input the L1 wizard, L2 generator, and L3 operator need — the AI
   transition sits on legibility we build incrementally, not a rewrite.
 - Fully staged and reversible; Stage 1 touches no database. The current platform keeps working throughout.
@@ -127,7 +143,8 @@ component/manifest structure is exactly what makes that later extraction tractab
 1. Add `src/modules/` and `src/kernel/`; extract the kernel (identity, rbac, shell, notifications,
    ai-client).
 2. Author `manifest.ts` for each component in §8 of the concept; move owning `lib`/`components` files in.
-3. Add the ESLint import-boundary rule generated from manifests; wire it into CI.
+3. Add the three governance CI checks (§10): import-boundary lint (from manifests), reachability, and the
+   `knip` dead-code scan; seed `db/quarantine.ts` with the residual orphans Sprint 15 surfaced.
 4. Scope requirement traceability per component in `docs/TRACEABILITY.md`.
 5. Pilot the full pattern on one low-risk component end-to-end (proposed: **feedback**).
 

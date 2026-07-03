@@ -24,9 +24,10 @@ platform).*
 7. [The Platform Kernel](#7-the-platform-kernel)
 8. [Initial Component Decomposition of Inspire2Live](#8-initial-component-decomposition-of-inspire2live)
 9. [Contract Rules That Keep Components Independent](#9-contract-rules-that-keep-components-independent)
-10. [The Three AI Levels — and How the Structure Feeds Them](#10-the-three-ai-levels--and-how-the-structure-feeds-them)
-11. [Transition Ladder (Stage 0 → Stage 5)](#11-transition-ladder-stage-0--stage-5)
-12. [What We Are Deliberately Not Doing Yet](#12-what-we-are-deliberately-not-doing-yet)
+10. [Governance — Keeping Legacy Pollution Out (Anti-Pollution)](#10-governance--keeping-legacy-pollution-out-anti-pollution)
+11. [The Three AI Levels — and How the Structure Feeds Them](#11-the-three-ai-levels--and-how-the-structure-feeds-them)
+12. [Transition Ladder (Stage 0 → Stage 5)](#12-transition-ladder-stage-0--stage-5)
+13. [What We Are Deliberately Not Doing Yet](#13-what-we-are-deliberately-not-doing-yet)
 
 ---
 
@@ -144,7 +145,7 @@ export const manifest = {
   roles: { read: ['comms_team', 'admin'], write: ['comms_team', 'admin'] },
   requirements: ['REQ-COMMS-INTAKE-001', 'REQ-COMMS-INTAKE-002'],
 
-  // OPERATE-LEVEL: agents/operations the L3 AI may invoke (§10).
+  // OPERATE-LEVEL: agents/operations the L3 AI may invoke (§11).
   operations: ['classify-inbound', 'suggest-structure'],
 } as const
 ```
@@ -329,7 +330,67 @@ Independence is a property you enforce, not one you hope for. Five rules:
 
 ---
 
-## 10. The Three AI Levels — and How the Structure Feeds Them
+## 10. Governance — Keeping Legacy Pollution Out (Anti-Pollution)
+
+The rules in §9 keep *new* code inside its boundary. This section keeps the platform from silently
+re-accumulating the exact debt Sprint 15 had to clean up by hand — orphaned tables, unreachable
+components, dead files. That cleanup was necessary because nothing **binds "a thing exists" to "a thing
+is used."** A one-off audit fixes today's drift; it does not stop tomorrow's. Sustainability requires the
+binding to be *enforced continuously*, and the manifest is exactly the artifact that can enforce it.
+
+### The core model: legacy pollution is a reconciliation gap
+
+Three sets should be identical. Pollution is precisely their symmetric difference:
+
+1. **Exists** — tables/files physically present (introspect `information_schema.tables`; walk the repo).
+2. **Owned** — declared by exactly one manifest's `data.tables` / module tree.
+3. **Reachable** — mounted in the live nav (`role-access.ts`) or a declared public/headless surface.
+
+- In **Exists** but not **Owned** → an **orphan** (a table no component claims; a dead file). This is the
+  `hub_members` / `discussions` / `partner_engagements` situation Sprint 15 left behind.
+- In **Owned** but not **Reachable** → a **zombie** (a component wired but no way to reach it).
+- In **Owned/Reachable** but not **Exists** → a **dangling reference** (a manifest or nav pointing at
+  something deleted).
+
+Governance = **assert these three sets stay reconciled, in CI, on every PR.** An unreconciled item is a
+build failure, not a future sprint.
+
+### The three standing CI checks
+
+1. **Table-ownership reconciliation.** Diff live DB tables against the union of every manifest's
+   `data.tables`. Any physical table that no manifest claims fails CI **unless** it is listed in an
+   explicit `db/quarantine.ts` with an owner and a `dropBy` date. This makes a retired space's tables
+   *impossible to leave lingering silently* — they must be owned, or scheduled for a forward-migration
+   drop. (Generalizes ADR-0008/Sprint-15's careful "keep only with a stated reason" into a machine check.)
+2. **Reachability.** Every component whose manifest declares `provides.ui` must be mounted in the live nav
+   or explicitly marked `surface: 'public' | 'headless'`. A component that falls out of nav surfaces as a
+   zombie instead of rotting quietly. (This is the Sprint-16 reachability idea, promoted from a one-time
+   audit to a permanent gate.)
+3. **Dead-code scan.** A standing `knip` (or equivalent) run for unused files/exports — the pass Sprint 15
+   listed as S15-T06 and had to run by hand. As a gate it never needs running by hand again.
+
+### The quarantine list — the honest home for "kept for a reason"
+
+Sprint 15 correctly kept several retired-space tables because of live readers, triggers, FK parents, or
+an RPC path (`congress_members`, `resources`, `notifications`, `hubs`, …). That knowledge lived only in a
+sprint doc's prose. The quarantine list makes it **structured and enforced**: each still-present-but-
+unowned table carries its keep-reason and a re-review date, so "we kept it on purpose" and "we forgot to
+drop it" stop being indistinguishable. The residual orphans Sprint 15's completion surfaced
+(`hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`, `partner_engagements`,
+`partner_audit_entries`, `resource_translations`, `topic_votes`) are the list's first entries — each
+resolved to *own it* or *drop it (forward migration)*, never left implicit.
+
+### Why this compounds with the AI transition
+
+The same reconciliation that prevents pollution is what guarantees the **L2 generator (§11)** emits a
+clean platform: if every table must be claimed by a manifest, a generated platform *cannot* contain an
+orphan table, because orphans fail CI in the source library. Anti-pollution governance and
+composability-by-generation are the same invariant viewed from two directions — which is why this is
+worth enforcing now, not deferring.
+
+---
+
+## 11. The Three AI Levels — and How the Structure Feeds Them
 
 The payoff. Each future AI level consumes the **same manifests** this architecture produces.
 
@@ -373,7 +434,7 @@ tomorrow. We are not building three AI systems on top of a monolith; we are maki
 
 ---
 
-## 11. Transition Ladder (Stage 0 → Stage 5)
+## 12. Transition Ladder (Stage 0 → Stage 5)
 
 A transition, not a rewrite. Each stage is independently valuable and shippable in the team's normal
 sprint cadence.
@@ -381,8 +442,8 @@ sprint cadence.
 | Stage | Name | What ships | DB change? |
 |---|---|---|---|
 | **0** | Hardwired (today) | One platform, flat lib, single `public` schema, informal prefixes | — |
-| **1** | **Declare boundaries** | `manifest.ts` per component; move files into `src/modules/*`; kernel extracted; ESLint import-boundary rule from manifests; per-component requirement traceability | **None** |
-| **2** | **Isolate the DB** | Prefix → per-component Postgres schema, one component at a time (lowest-risk first); published `security_invoker` views as read contracts; RLS per schema | Yes, incremental |
+| **1** | **Declare boundaries + governance gates** | `manifest.ts` per component; move files into `src/modules/*`; kernel extracted; the three §10 CI checks (import-boundary, reachability, dead-code); per-component requirement traceability | **None** |
+| **2** | **Isolate the DB** | Prefix → per-component Postgres schema, one component at a time (lowest-risk first); published `security_invoker` views as read contracts; RLS per schema; **table-ownership reconciliation (§10) turned on** — every table claimed by a manifest or quarantined | Yes, incremental |
 | **3** | **Composable shell** | Nav/routes composed from enabled manifests; every component genuinely optional (flag off = clean absence) | — |
 | **4** | **Catalog + blueprint** | Machine-readable catalog of all manifests; a `blueprint` format; **regenerate I2L from its own blueprint**; hand-compose a second small platform to prove reuse | — |
 | **5** | **AI levels** | L1 wizard over the catalog; L2 generator over blueprints; L3 operations formalized per manifest | — |
@@ -394,7 +455,7 @@ levels are only as good as the composition they sit on.
 
 ---
 
-## 12. What We Are Deliberately Not Doing Yet
+## 13. What We Are Deliberately Not Doing Yet
 
 - **No microservices, no per-component deploys.** Components are modular *within one Next.js app and one
   Postgres database*. Physical distribution is a non-goal; it would add operational cost with no benefit

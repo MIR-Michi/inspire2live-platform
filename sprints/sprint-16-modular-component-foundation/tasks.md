@@ -7,11 +7,22 @@ Theme: Modular Component Foundation (Stage 1) — declare boundaries, zero DB ch
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S16-T01 | Define the `manifest.ts` type + a runtime schema validator (Zod) matching §4 of the concept (`data`, `provides`, `dependsOn`, `featureFlag`, `config`, `personas`, `roles`, `requirements`, `operations`) | TBD | Not Started | Type lives in `src/kernel/manifest/`; validator is reused by the lint-config generator (S16-T03) |
+| S16-T01 | Define the `manifest.ts` type + a runtime schema validator (Zod) matching §4 of the concept (`data`, `provides`, `dependsOn`, `featureFlag`, `config`, `personas`, `roles`, `requirements`, `operations`) | TBD | Not Started | Type lives in `src/kernel/manifest/`; validator is reused by all three governance checks below |
 | S16-T02 | Stand up `src/kernel/` — move identity, rbac, shell, notifications, ai-client, ui out of flat `lib`/`components` into kernel sub-areas; update imports | TBD | Not Started | AI *client* only (`ai/client.ts`, `models.ts`, usage log); AI *features* stay in `ai-features` module |
-| S16-T03 | Import-boundary generator + CI wiring — read all `manifest.ts`, emit `eslint-plugin-boundaries` config (kernel + module-root imports allowed; deep imports forbidden); run in CI | TBD | Not Started | Include a fixture that deliberately violates a boundary and asserts CI fails |
 | S16-T04 | Add `src/modules/` with an empty scaffold per component (folder, `index.ts`, `README.md`, placeholder `manifest.ts`) for all §8 components | TBD | Not Started | Scaffold only; file moves happen per-component below |
-| S16-T04b | **Reachability check before any move** — validate the §8 cut against `role-access.ts` + public routes; confirm each component's table list is live; list retired-but-not-dropped tables (`hubs/hub_*`, `resources`, internal `congress_*`, Bureau/Board) as **non-components** / Stage-2 drop candidates — never given a manifest | TBD | Not Started | Guards against re-modularizing dead spaces Sprint 15 retired; see §6 boundary note |
+
+## Governance — the three standing CI checks (§10, anti-pollution)
+
+These are the sustainable fix for legacy pollution: they assert **exists = owned = reachable** on every
+PR, so orphans/zombies/dead code fail the build instead of accreting until the next cleanup sprint. Each
+is a *standing gate*, not a one-time audit.
+
+| ID | Task | Owner | Status | Notes |
+|---|---|---|---|---|
+| S16-T03a | **Check 1 — import-boundary lint.** Generator reads all `manifest.ts`, emits `eslint-plugin-boundaries` config (kernel + module-root `index.ts` imports allowed; deep `@/modules/x/domain/**` forbidden); wire into CI | TBD | Not Started | Include a fixture that deliberately violates a boundary and asserts CI fails |
+| S16-T03b | **Check 2 — table-ownership reconciliation.** Diff live DB tables (`information_schema.tables`) against the union of every manifest's `data.tables`; an unclaimed table fails CI unless it is in `src/kernel/db/quarantine.ts` with `{ owner, reason, dropBy }`. Seed the quarantine with the Sprint-15 residual orphans (`hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`, `partner_engagements`, `partner_audit_entries`, `resource_translations`, `topic_votes`) each set to *own-or-drop by Stage 2* | TBD | Not Started | This is the check that makes retired-space tables impossible to leave lingering silently; replaces the old one-time reachability audit |
+| S16-T03c | **Check 3 — reachability.** Assert every component whose manifest declares `provides.ui` is mounted in the live nav (`role-access.ts`) or marked `surface: 'public' \| 'headless'`; an unreachable component (zombie) fails CI. Also validates the §8 cut once during the move | TBD | Not Started | Promotes the Sprint-16 reachability idea from a manual pre-move audit to a permanent gate |
+| S16-T03d | **Dead-code scan.** Add `knip` (no dead-code tool is installed today); wire `pnpm knip` into CI as a standing gate — the S15-T06 scan that had to be run by hand | TBD | Not Started | Configure entrypoints (Next.js `app/`, cron routes, scripts) so route/handler files aren't false-flagged |
 
 ## Reference component (end-to-end template)
 
@@ -44,4 +55,4 @@ Theme: Modular Component Foundation (Stage 1) — declare boundaries, zero DB ch
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S16-T17 | Full gate — typecheck, lint (incl. new boundary rule), unit, e2e all green; assert `supabase/migrations/` is unchanged and no runtime behavior differs | TBD | Not Started | Stage 1 exit criterion; behavior parity is the whole point |
+| S16-T17 | Full gate — typecheck, lint, all three governance checks (import-boundary, table-ownership reconciliation, reachability + `knip`), unit, e2e all green; assert `supabase/migrations/` is unchanged and no runtime behavior differs | TBD | Not Started | Stage 1 exit criterion; behavior parity is the whole point |

@@ -18,8 +18,9 @@ without touching the database. Shipping this sprint produces:
    views), provides (public API, events, mountable UI), depends on (kernel + other components' contracts),
    how it is configured/flagged, whom it serves (personas, roles, `REQ-*`), and which L3 operations it
    exposes.
-4. **Enforced boundaries** — an ESLint import-boundary rule, generated from the manifests, that fails CI
-   when one module reaches past another's `index.ts`.
+4. **Enforced boundaries + anti-pollution governance** — the three standing CI checks (§10): import-boundary
+   lint (generated from manifests), table-ownership reconciliation (with a seeded quarantine list), and
+   reachability + `knip` dead-code — so orphans, zombies, and dead code fail the build.
 5. **Per-component traceability** — `docs/TRACEABILITY.md` scoped so every requirement maps to an owning
    component.
 6. **One component migrated end-to-end** — the **feedback** component fully converted to the new shape as
@@ -72,10 +73,22 @@ permissions, view-as, the `is_comms_team_or_admin()` policy family), `shell/` (n
 domain-foldered `src/components/*` files move into the module that owns them; imports update to the new
 paths. `src/app/*` stays a thin routing layer that delegates into modules.
 
-**Import-boundary enforcement.** A small script reads every `manifest.ts` and emits an
-`eslint-plugin-boundaries` (or `no-restricted-imports`) config: a module may import `@/kernel/*` and
-another module's package root `@/modules/<x>` (its `index.ts`) but never `@/modules/<x>/domain|ui|api/*`.
-CI runs lint; a boundary violation fails the build. This converts the boundary from convention into a check.
+**Governance — the three standing CI checks (concept §10, anti-pollution).** This is the sustainable fix
+for legacy pollution: rather than a one-time reachability audit, three checks assert **exists = owned =
+reachable** on every PR, so orphans/zombies/dead code fail the build instead of accreting until the next
+Sprint-15-style cleanup.
+1. **Import-boundary lint.** A script reads every `manifest.ts` and emits an `eslint-plugin-boundaries`
+   config: a module may import `@/kernel/*` and another module's package root `@/modules/<x>` (its
+   `index.ts`) but never `@/modules/<x>/domain|ui|api/*`. Converts the boundary from convention into a check.
+2. **Table-ownership reconciliation.** Diff live DB tables against the union of every manifest's
+   `data.tables`; an unclaimed table fails CI unless it is in `src/kernel/db/quarantine.ts` with an owner,
+   reason, and `dropBy`. This is what makes a retired space's tables impossible to leave lingering silently —
+   the exact debt Sprint 15 had to chase by hand. Seed the quarantine with the residual orphans Sprint 15
+   surfaced (`hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`, `partner_engagements`,
+   `partner_audit_entries`, `resource_translations`, `topic_votes`).
+3. **Reachability + dead-code.** Assert every component with `provides.ui` is mounted in the live nav (or
+   marked `public`/`headless`), and add `knip` (not installed today) as a standing dead-code gate — the
+   S15-T06 scan, made permanent so it never needs running by hand again.
 
 **Reference component — feedback.** `feedback_items` + `src/lib/feedback.ts` +
 `src/components/feedback/*` is small, self-contained, and depends only on the kernel — the ideal first
@@ -94,8 +107,11 @@ now.
       `manifest.ts`, an `index.ts` public API, and a `README.md`.
 - [ ] Every `manifest.ts` records the component's owned tables, migrations, read views, provided API/UI,
       dependencies, feature flag, config, personas, roles, and `REQ-*` — validated by a manifest schema check.
-- [ ] The ESLint import-boundary rule is generated from the manifests and runs in CI; a deliberate
-      boundary violation fails the build (proven by a test fixture).
+- [ ] **All three governance CI checks (§10) run in CI and can fail the build:** (1) import-boundary lint
+      (deliberate violation fails, proven by a fixture); (2) table-ownership reconciliation (an unclaimed,
+      un-quarantined table fails); (3) reachability + `knip` dead-code scan.
+- [ ] `src/kernel/db/quarantine.ts` exists and is seeded with the Sprint-15 residual orphans, each with an
+      owner, reason, and `dropBy` (Stage 2).
 - [ ] `docs/TRACEABILITY.md` maps every requirement to exactly one owning component; new
       `REQ-ARCH-MODULAR-00{1,2,3}` are recorded.
 - [ ] The **feedback** component is fully converted end-to-end and is the documented reference; feedback
