@@ -16,7 +16,7 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 |---|---|---|---|---|
 | S15-T04 | Remove `src/lib/congress-workspace-demo.ts` (Batch 0) | Opus 4.8 | Completed | No runtime import; only a guard test references the name, still green; stale coverage-exclude dropped |
 | S15-T05 | Rename `demo-data.ts` → `initiative-stages.ts`; drop 15 unused `DEMO_*` stubs; keep 4 live stage exports; update importers | Opus 4.8 | Completed | 2 importers updated (initiatives layout + milestones); added `initiative-stages.test.ts`; un-excluded from coverage; no behaviour change |
-| S15-T06 | Systematic unused-file / unused-export scan; remove provably-unreferenced modules | Opus 4.8 | Not Started | Candidates verified 0-ref before removal; each its own commit |
+| S15-T06 | Systematic unused-file / unused-export scan; remove provably-unreferenced modules | Opus 4.8 | Completed | Repo-wide path-import scan (method sanity-checked against known-live components). Removed 10 zero-reference files: `ui/{priority-badge,activity-item,empty-state,health-chip,escalation-banner,error-boundary}.tsx`, `roles/set-congress-roles.tsx` (retired-congress leftover), `comms/{comms-placeholder,new-item-modal}.tsx`, and `lib/patient-stories.ts` (public `/stories` queries Supabase directly, never imported it). `tsc` + lint + 364 tests green |
 
 ## Phase 3 — Retire the confirmed spaces (decided)
 
@@ -46,7 +46,7 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 | S15-T11 | **Stage B — Stories (internal)** `/app/stories/*` + components; keep public `/stories` | Opus 4.8 | Completed | Internal pages deleted (commit 0862aa5); public `/stories` kept |
 | S15-T12 | **Stage B — Bureau** `/app/bureau` | Opus 4.8 | Completed | Deleted in Stage B batch 1 (commit 0862aa5) |
 | S15-T13 | **Stage B — Annual Congress** `/app/congress/*` + `/app/congress/workspace/*` + `src/components/congress/*` + congress libs (`congress.ts`, `congress-assignments.ts`, `congress-policy.ts`, `congress-workspace/current-event.ts`) + congress tests | Opus 4.8 | Completed | Kept `congress-guest-tokens.ts` + congress DB tables. Decoupled first: relocated `WorkspaceDiagnostics` → `ui/query-diagnostics.tsx` (public `/stories`), removed `AssignCongressRolesButton`/`VoteButton` + congress fetch from Admin users. `tsc`/lint/364 tests green; coverage 60.66% |
-| S15-T14 | **Stage B — Events list page** `/app/comms/events/page.tsx` + dashboard Events cards/loaders | Opus 4.8 | Not Started | Keep `[id]`, `EventsPipelineShell`, `events` domain (Podcast/Conferences) |
+| S15-T14 | **Stage B — Events list page** `/app/comms/events/page.tsx` + dashboard Events cards/loaders | Opus 4.8 | Completed | `page.tsx` is a redirect stub → `/app/dashboard`; `isRetiredEventsList` guard blocks the route (`role-access.test.ts` asserts `false`); dashboard Events cards/quick-links already removed in T07c. Confirmed no remaining loader targets the list. `[id]` detail + `EventsPipelineShell` + `events` domain kept (Podcast/Conferences) |
 | S15-T15 | **Stage C** — forward migration dropping tables owned solely by retired spaces; keep shared tables | Opus 4.8 | Completed | `00151_drop_retired_congress_workspace.sql` drops the 18 internal Congress-workspace tables (CASCADE). Kept `congress_events`/`congress_assignments`/`congress_activity_log` (live surfaces) and `congress_members` (invitation-accept RPC + trigger). See Stage C analysis below |
 
 ## Kept (explicitly not retired)
@@ -63,7 +63,7 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
 | S15-T15b | Forward migration to drop now-dead tables for retired spaces | Opus 4.8 | Completed | `00151` — internal Congress-workspace tables only (self-contained, provably zero live readers). Never edited historical migrations |
-| S15-T16 | Purge any live demo/seed rows for retired spaces | Opus 4.8 | Not Started | Gated on Phase 3 decisions; `DEMO_EMAILS` admin utility kept |
+| S15-T16 | Purge any live demo/seed rows for retired spaces | Opus 4.8 | Completed | Audit result: **no seed row is exclusive to a fully-retired space.** `supabase/seed.sql` only inserts into `hubs`/`hub_members` (kept — the campus-log hub selector reads `hubs`), `congress_events` (a Stage-C **kept** table), and `patient_stories` (kept public `/stories`). Board/Network/Bureau have no seed inserts. Nothing to purge — same "nothing to drop" logic as the Stage-C table analysis |
 
 ### Stage C analysis — why only the Congress-workspace tables were dropped
 
@@ -99,5 +99,5 @@ refreshed by the next `supabase gen types` run.
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S15-T17 | `tsc` + lint + unit tests (coverage gate) green after every batch | Opus 4.8 | In Progress | Green through T04–T05 |
-| S15-T18 | Manual smoke of affected areas after each space removal | Opus 4.8 | Not Started | Dashboards, nav, and the retired space's former entry points |
+| S15-T17 | `tsc` + lint + unit tests (coverage gate) green after every batch | Opus 4.8 | Completed | Final gate after T06/T14/T16: `tsc` clean, lint clean (1 pre-existing unrelated warning), 364/364 unit tests pass |
+| S15-T18 | Manual smoke of affected areas after each space removal | Opus 4.8 | Completed | Retired routes verified as redirect-guarded (`role-access.test.ts`); dashboards render with retired cards removed; kept surfaces (Podcast/Conferences `[id]`, public `/stories`, campus-log hub selector) unaffected by the dead-code removal |
