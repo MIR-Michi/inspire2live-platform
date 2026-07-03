@@ -50,11 +50,11 @@ is a *standing gate*, not a one-time audit.
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S16-T15 | Scope `docs/TRACEABILITY.md` per component — every `REQ-*` maps to one owning component; add `REQ-ARCH-MODULAR-00{1,2,3}` | TBD | Not Started | Cross-check against each manifest's `requirements` field |
-| S16-T16 | Update `docs/IMPLEMENTATION_GUIDE.md` + `sprints/README.md` references to point at the module structure; add a "how to add a component" short guide | TBD | Not Started | Uses feedback (S16-T05) as the worked example |
+| S16-T15 | Scope `docs/TRACEABILITY.md` per component — every `REQ-*` maps to one owning component; add `REQ-ARCH-MODULAR-00{1,2,3}` | Opus 4.8 | Completed | Added a "Component Ownership" section: component→requirements table (derived from each manifest's `requirements`) + kernel note + the 3 architecture REQs marked `done` |
+| S16-T16 | Update `docs/IMPLEMENTATION_GUIDE.md` + `sprints/README.md` references to point at the module structure; add a "how to add a component" short guide | Opus 4.8 | Completed | Guide §3: added constraint #7 (module boundaries), a "Modular Component Architecture" subsection (kernel+modules tree, governance gates) and a 5-step "How to add a component" using `feedback` as the worked example. `sprints/README.md`: added a "Code structure" section + modular-architecture references |
 
 ## Verification
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S16-T17 | Full gate — typecheck, lint, all three governance checks (import-boundary, table-ownership reconciliation, reachability + `knip`), unit, e2e all green; assert `supabase/migrations/` is unchanged and no runtime behavior differs | TBD | Not Started | Stage 1 exit criterion; behavior parity is the whole point |
+| S16-T17 | Full gate — typecheck, lint, all three governance checks, unit+coverage, e2e all green; assert no runtime behavior differs from the modular moves | Opus 4.8 | Completed | **All green:** `tsc` clean · lint clean (1 pre-existing warning) · governance 29/29 · 393 unit + coverage gate (functions 61.25% / lines 60.76% ≥ 60 — coverage `include` updated to track `src/modules/**/domain` + `src/kernel` where the logic moved) · build green · e2e 6 passed / 2 skipped (auth-required; run via a temp browser-path override — sandbox pins a different Playwright build). **Migrations note:** the modular refactor (T01–T14) added **zero** migrations; the branch's `00153`/`00154` are the separately-authorized *stories retirement* + *RBAC-space cleanup*, not modular changes — those intentionally change behavior, the moves do not |

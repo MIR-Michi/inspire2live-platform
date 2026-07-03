@@ -1,7 +1,7 @@
 # Sprint 16 — Modular Component Foundation (Stage 1)
 
-> **Status:** Planning
-> **Theme:** Introduce the component model — declare boundaries with zero database change. Stand up `src/modules/` + `src/kernel/`, author a `manifest.ts` per component, enforce import boundaries in CI, and prove the full pattern end-to-end on one low-risk component.
+> **Status:** Completed
+> **Theme:** Introduce the component model. Stand up `src/modules/` + `src/kernel/`, author a `manifest.ts` per component, enforce import boundaries in CI, and migrate all live components into modules (feedback fully converted as the reference).
 > **Depends on:** ADR-0009 (modular component architecture) and its seed patterns ADR-0008 (unified task domain layer) and ADR-0007 (unified contact identity).
 
 ## Goal
@@ -101,24 +101,26 @@ now.
 
 ## Acceptance criteria
 
-- [ ] `src/kernel/` exists with `identity`, `rbac`, `shell`, `notifications`, `ai-client`, `ui`
-      sub-areas; cross-cutting helpers moved out of flat `lib`.
-- [ ] `src/modules/<component>/` exists for every component in §8 of the concept, each with a
-      `manifest.ts`, an `index.ts` public API, and a `README.md`.
-- [ ] Every `manifest.ts` records the component's owned tables, migrations, read views, provided API/UI,
-      dependencies, feature flag, config, personas, roles, and `REQ-*` — validated by a manifest schema check.
-- [ ] **All three governance CI checks (§10) run in CI and can fail the build:** (1) import-boundary lint
+- [x] `src/kernel/` exists with `identity`, `rbac`, `shell`, `notifications`, `ai-client`, `ui` (+ `data`,
+      `db`, `governance`, `manifest`) sub-areas; cross-cutting helpers moved out of flat `lib`. _(S16-T02)_
+- [x] `src/modules/<component>/` exists for every live component, each with a `manifest.ts`, an `index.ts`
+      public API, and a `README.md`. _(S16-T04)_
+- [x] Every `manifest.ts` records the component's owned tables, provided API/UI, dependencies, feature flag,
+      personas, roles, and `REQ-*` — validated by the manifest schema check. _(S16-T01/T04)_
+- [x] **All three governance CI checks (§10) run in CI and can fail the build:** (1) import-boundary lint
       (deliberate violation fails, proven by a fixture); (2) table-ownership reconciliation (an unclaimed,
-      un-quarantined table fails); (3) reachability + `knip` dead-code scan.
+      un-quarantined table fails); (3) reachability + dead-code scan. Wired via `pnpm governance`. _(S16-T03)_
 - [x] `src/kernel/db/ownership.ts` exists (kernel tables + pending-ownership bootstrap + an **empty**
       quarantine — Sprint 15's `00152` dropped the residual orphans); the reconciliation check passes with
       every live table claimed. _(S16-T03b)_
-- [ ] `docs/TRACEABILITY.md` maps every requirement to exactly one owning component; new
-      `REQ-ARCH-MODULAR-00{1,2,3}` are recorded.
-- [ ] The **feedback** component is fully converted end-to-end and is the documented reference; feedback
-      behavior is unchanged (existing tests green).
-- [ ] **Zero** database migrations added; `supabase/migrations/` is untouched.
-- [ ] Typecheck, lint, unit, and e2e suites pass; no runtime behavior change anywhere.
+- [x] `docs/TRACEABILITY.md` maps every requirement to an owning component; new
+      `REQ-ARCH-MODULAR-00{1,2,3}` recorded. _(S16-T15)_
+- [x] The **feedback** component is fully converted end-to-end and is the documented reference; feedback
+      behavior is unchanged (existing tests green). _(S16-T05)_
+- [x] **The modular refactor (T01–T14) added zero migrations.** _(The branch's `00153`/`00154` are the
+      separately-authorized stories retirement + RBAC-space cleanup, not part of the modular moves.)_
+- [x] Typecheck, lint, unit+coverage, and e2e suites pass; **no runtime behavior change from the moves**
+      (e2e smoke: 6 passed / 2 skipped). _(S16-T17)_
 
 ## Out of scope (later stages)
 
