@@ -6,7 +6,7 @@ const mocks = vi.hoisted(() => ({
   runAiMessage: vi.fn(),
 }))
 
-vi.mock('@/lib/ai/client', () => ({
+vi.mock('@/kernel/ai-client/client', () => ({
   runAiMessage: mocks.runAiMessage,
   wrapExternalData: (label: string, value: string) => [`[external-data:${label}:start]`, value, `[external-data:${label}:end]`].join('\n'),
 }))

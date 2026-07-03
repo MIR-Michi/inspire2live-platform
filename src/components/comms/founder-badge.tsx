@@ -1,5 +1,2 @@
-import { StatusBadge } from '@/components/ui/status-badge'
-
-export function FounderBadge({ label = 'Founder signal' }: { label?: string }) {
-  return <StatusBadge label={`★ ${label}`} tone="amber" />
-}
+// Stage-1 re-export shim (S16-Tintake). Canonical home: @/modules/intake/ui/founder-badge
+export * from '@/modules/intake/ui/founder-badge'

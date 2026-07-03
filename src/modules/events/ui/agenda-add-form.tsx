@@ -1,0 +1,115 @@
+'use client'
+
+import { useRef, useState } from 'react'
+import { addAgendaItem } from '@/app/app/comms/dashboard/actions'
+
+export function AgendaAddForm({
+  meetingDate,
+  campusSessionId,
+}: {
+  meetingDate: string
+  /** When set, the new item is attached to this monthly campus meeting. */
+  campusSessionId?: string
+}) {
+  const formRef = useRef<HTMLFormElement>(null)
+  const [open, setOpen] = useState(false)
+  const [pending, setPending] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        className="rounded-lg border border-dashed border-neutral-300 px-3 py-2 text-sm font-semibold text-neutral-600 transition hover:border-orange-400 hover:text-orange-700"
+      >
+        + Add agenda item
+      </button>
+    )
+  }
+
+  return (
+    <form
+      ref={formRef}
+      action={async (formData) => {
+        setPending(true)
+        setError(null)
+        try {
+          await addAgendaItem(formData)
+          formRef.current?.reset()
+          setOpen(false)
+        } catch (err) {
+          setError(err instanceof Error ? err.message : 'Could not add the agenda item.')
+        } finally {
+          setPending(false)
+        }
+      }}
+      className="space-y-2 rounded-xl border border-neutral-200 bg-neutral-50 p-3"
+    >
+      <input type="hidden" name="meeting_date" value={meetingDate} />
+      {campusSessionId && <input type="hidden" name="campus_session_id" value={campusSessionId} />}
+      <div>
+        <label htmlFor="agenda-title" className="text-xs font-semibold text-neutral-600">
+          Title
+        </label>
+        <input
+          id="agenda-title"
+          name="title"
+          required
+          maxLength={160}
+          placeholder="What should we discuss?"
+          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+        />
+      </div>
+      <div>
+        <label htmlFor="agenda-summary" className="text-xs font-semibold text-neutral-600">
+          Short summary
+        </label>
+        <textarea
+          id="agenda-summary"
+          name="summary"
+          rows={2}
+          maxLength={400}
+          placeholder="A sentence or two of context."
+          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+        />
+      </div>
+      <div>
+        <label htmlFor="agenda-meeting-notes" className="text-xs font-semibold text-neutral-600">
+          Meeting notes <span className="font-normal text-neutral-400">(optional)</span>
+        </label>
+        <textarea
+          id="agenda-meeting-notes"
+          name="meeting_notes"
+          rows={2}
+          maxLength={4000}
+          placeholder="Notes from the discussion (can be added later)."
+          className="mt-1 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+        />
+      </div>
+      <p className="text-[11px] text-neutral-500">
+        You&apos;ll be set as the owner and it will appear on the upcoming meeting agenda.
+      </p>
+      {error && <p className="text-xs font-medium text-red-600">{error}</p>}
+      <div className="flex items-center gap-2">
+        <button
+          type="submit"
+          disabled={pending}
+          className="rounded-lg bg-neutral-900 px-3 py-1.5 text-sm font-semibold text-white transition hover:bg-neutral-700 disabled:opacity-50"
+        >
+          {pending ? 'Adding…' : 'Add item'}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setOpen(false)
+            setError(null)
+          }}
+          className="rounded-lg px-3 py-1.5 text-sm font-medium text-neutral-500 hover:text-neutral-800"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  )
+}
