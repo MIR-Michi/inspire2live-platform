@@ -144,7 +144,8 @@ component/manifest structure is exactly what makes that later extraction tractab
    ai-client).
 2. Author `manifest.ts` for each component in §8 of the concept; move owning `lib`/`components` files in.
 3. Add the three governance CI checks (§10): import-boundary lint (from manifests), reachability, and the
-   `knip` dead-code scan; seed `db/quarantine.ts` with the residual orphans Sprint 15 surfaced.
+   `knip` dead-code scan; `db/quarantine.ts` starts empty (Sprint 15's `00152` already dropped the
+   residual orphans, so every remaining table is expected to be manifest-claimed).
 4. Scope requirement traceability per component in `docs/TRACEABILITY.md`.
 5. Pilot the full pattern on one low-risk component end-to-end (proposed: **feedback**).
 

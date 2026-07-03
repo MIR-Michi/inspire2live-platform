@@ -372,13 +372,15 @@ build failure, not a future sprint.
 ### The quarantine list — the honest home for "kept for a reason"
 
 Sprint 15 correctly kept several retired-space tables because of live readers, triggers, FK parents, or
-an RPC path (`congress_members`, `resources`, `notifications`, `hubs`, …). That knowledge lived only in a
+an RPC path (`congress_members`, `resources`, `notifications`, `hubs`, …) — those are genuinely *owned*
+(they have live readers, so a manifest will claim them). That keep-or-drop knowledge lived only in a
 sprint doc's prose. The quarantine list makes it **structured and enforced**: each still-present-but-
 unowned table carries its keep-reason and a re-review date, so "we kept it on purpose" and "we forgot to
-drop it" stop being indistinguishable. The residual orphans Sprint 15's completion surfaced
-(`hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`, `partner_engagements`,
-`partner_audit_entries`, `resource_translations`, `topic_votes`) are the list's first entries — each
-resolved to *own it* or *drop it (forward migration)*, never left implicit.
+drop it" stop being indistinguishable. Crucially, the quarantine **starts empty**: the residual orphans
+Sprint 15's completion surfaced (`hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`,
+`partner_engagements`, `partner_audit_entries`, `resource_translations`, `topic_votes`) were *resolved by
+dropping* them (migration `00152`) rather than parked — so the check enters Stage 1 with no legacy debt to
+carry, and exists to keep it that way.
 
 ### Why this compounds with the AI transition
 

@@ -48,6 +48,7 @@ Theme: retire legacy spaces, workflows & demo artefacts without disruption. Stat
 | S15-T13 | **Stage B — Annual Congress** `/app/congress/*` + `/app/congress/workspace/*` + `src/components/congress/*` + congress libs (`congress.ts`, `congress-assignments.ts`, `congress-policy.ts`, `congress-workspace/current-event.ts`) + congress tests | Opus 4.8 | Completed | Kept `congress-guest-tokens.ts` + congress DB tables. Decoupled first: relocated `WorkspaceDiagnostics` → `ui/query-diagnostics.tsx` (public `/stories`), removed `AssignCongressRolesButton`/`VoteButton` + congress fetch from Admin users. `tsc`/lint/364 tests green; coverage 60.66% |
 | S15-T14 | **Stage B — Events list page** `/app/comms/events/page.tsx` + dashboard Events cards/loaders | Opus 4.8 | Completed | `page.tsx` is a redirect stub → `/app/dashboard`; `isRetiredEventsList` guard blocks the route (`role-access.test.ts` asserts `false`); dashboard Events cards/quick-links already removed in T07c. Confirmed no remaining loader targets the list. `[id]` detail + `EventsPipelineShell` + `events` domain kept (Podcast/Conferences) |
 | S15-T15 | **Stage C** — forward migration dropping tables owned solely by retired spaces; keep shared tables | Opus 4.8 | Completed | `00151_drop_retired_congress_workspace.sql` drops the 18 internal Congress-workspace tables (CASCADE). Kept `congress_events`/`congress_assignments`/`congress_activity_log` (live surfaces) and `congress_members` (invitation-accept RPC + trigger). See Stage C analysis below |
+| S15-T15c | **Stage C (completion)** — drop the residual retired-space orphans the dead-code scan confirmed have zero live readers | Opus 4.8 | Completed | `00152_drop_retired_orphan_tables.sql` drops `hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`, `partner_engagements`, `partner_audit_entries`, `resource_translations`, `topic_votes` (CASCADE) + the two now-dead count-trigger functions. Verified: no inbound FK from a kept table, no view deps, account-purge helper is graceful, `seed.sql` `hub_members` block removed. Validated end-to-end against Postgres 16 (8 dropped, 4 kept survive). Kept the live parents `hubs`/`resources`/`notifications`/`congress_*` |
 
 ## Kept (explicitly not retired)
 
@@ -84,9 +85,14 @@ this test and was deliberately kept:
 - **Congress kept tables** — `congress_events`, `congress_assignments` (data preserved),
   `congress_activity_log` (Admin activity metrics), `congress_members` (invitation-accept
   RPC 00027 + live `updated_at` trigger). **Kept.**
-- **Board / Network / Bureau** — no space-exclusive tables of their own; their data lives in
-  shared tables (`discussions`, `hubs`, `partner_*`, `tasks`) that other kept surfaces use.
-  Nothing to drop.
+- **Board / Network / Bureau** — no space-exclusive tables were dropped *in 00151*. A later
+  reader-level re-check (during the S15-T06 dead-code scan) found that several of their tables
+  had in fact become zero-reader orphans once the spaces were retired: `discussions`,
+  `discussion_replies`, `partner_engagements`, `partner_audit_entries`, and the Network child
+  tables `hub_members` / `hub_initiatives`. These were dropped in the **completion migration
+  `00152`** (S15-T15c). The genuinely-shared parents stayed: `hubs` (World Campus Log selector),
+  `resources` (Initiatives → Evidence), `tasks` (everywhere). Lesson folded into ADR-0009
+  governance: "lives in a shared table" must be proven by an actual live reader, not assumed.
 
 Runtime safety of the drop: the only remaining code touching the 18 dropped tables is the
 account-purge helper (`admin/users/actions.ts`), whose `tryOp` wrapper explicitly swallows

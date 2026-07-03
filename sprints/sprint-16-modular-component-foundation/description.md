@@ -83,9 +83,9 @@ Sprint-15-style cleanup.
 2. **Table-ownership reconciliation.** Diff live DB tables against the union of every manifest's
    `data.tables`; an unclaimed table fails CI unless it is in `src/kernel/db/quarantine.ts` with an owner,
    reason, and `dropBy`. This is what makes a retired space's tables impossible to leave lingering silently —
-   the exact debt Sprint 15 had to chase by hand. Seed the quarantine with the residual orphans Sprint 15
-   surfaced (`hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`, `partner_engagements`,
-   `partner_audit_entries`, `resource_translations`, `topic_votes`).
+   the exact debt Sprint 15 had to chase by hand. The quarantine **starts empty**: Sprint 15's `00152`
+   already dropped the residual orphans, so at Stage 1 every remaining table is expected to be
+   manifest-claimed, and any unclaimed table the check finds is a genuine new finding.
 3. **Reachability + dead-code.** Assert every component with `provides.ui` is mounted in the live nav (or
    marked `public`/`headless`), and add `knip` (not installed today) as a standing dead-code gate — the
    S15-T06 scan, made permanent so it never needs running by hand again.
@@ -110,8 +110,8 @@ now.
 - [ ] **All three governance CI checks (§10) run in CI and can fail the build:** (1) import-boundary lint
       (deliberate violation fails, proven by a fixture); (2) table-ownership reconciliation (an unclaimed,
       un-quarantined table fails); (3) reachability + `knip` dead-code scan.
-- [ ] `src/kernel/db/quarantine.ts` exists and is seeded with the Sprint-15 residual orphans, each with an
-      owner, reason, and `dropBy` (Stage 2).
+- [ ] `src/kernel/db/quarantine.ts` exists (starts empty — Sprint 15's `00152` dropped the residual
+      orphans); the reconciliation check passes with every live table manifest-claimed.
 - [ ] `docs/TRACEABILITY.md` maps every requirement to exactly one owning component; new
       `REQ-ARCH-MODULAR-00{1,2,3}` are recorded.
 - [ ] The **feedback** component is fully converted end-to-end and is the documented reference; feedback
