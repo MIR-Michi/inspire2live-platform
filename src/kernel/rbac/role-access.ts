@@ -85,7 +85,6 @@ export type NavIcon =
   | 'podcast'
   | 'events'
   | 'network'
-  | 'stories'
   | 'library'
   | 'resources'
   | 'admin'

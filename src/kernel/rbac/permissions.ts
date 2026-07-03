@@ -32,7 +32,6 @@ export type PlatformSpace =
   | 'initiatives'
   | 'tasks'
   | 'congress'
-  | 'stories'
   | 'resources'
   | 'partners'
   | 'network'
@@ -50,7 +49,6 @@ export const PLATFORM_SPACES: PlatformSpace[] = [
   'initiatives',
   'tasks',
   'congress',
-  'stories',
   'resources',
   'partners',
   'network',
@@ -95,7 +93,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'edit',
     tasks:         'edit',
     congress:      'view',
-    stories:       'edit',
     resources:     'view',
     partners:      'invisible',
     network:       'view',
@@ -111,7 +108,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'edit',
     tasks:         'edit',
     congress:      'view',
-    stories:       'view',
     resources:     'view',
     partners:      'invisible',
     network:       'view',
@@ -127,7 +123,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'edit',
     tasks:         'edit',
     congress:      'view',
-    stories:       'view',
     resources:     'view',
     partners:      'invisible',
     network:       'view',
@@ -143,7 +138,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'view',
     tasks:         'invisible',
     congress:      'view',
-    stories:       'manage',
     resources:     'view',
     partners:      'invisible',
     network:       'view',
@@ -159,7 +153,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'view',
     tasks:         'invisible',
     congress:      'view',
-    stories:       'manage',
     resources:     'view',
     partners:      'invisible',
     network:       'view',
@@ -175,7 +168,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'manage',
     tasks:         'manage',
     congress:      'view',
-    stories:       'manage',
     resources:     'manage',
     partners:      'manage',
     network:       'view',
@@ -191,7 +183,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'invisible',
     tasks:         'invisible',
     congress:      'view',
-    stories:       'invisible',
     resources:     'view',
     partners:      'edit',
     network:       'view',
@@ -207,7 +198,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'view',
     tasks:         'invisible',
     congress:      'view',
-    stories:       'view',
     resources:     'view',
     partners:      'invisible',
     network:       'view',
@@ -223,7 +213,6 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     initiatives:   'manage',
     tasks:         'manage',
     congress:      'manage',
-    stories:       'manage',
     resources:     'manage',
     partners:      'manage',
     network:       'manage',

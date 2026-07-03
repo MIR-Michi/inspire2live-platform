@@ -136,8 +136,7 @@ describe('resolveAccessFromRole', () => {
     expect(resolveAccessFromRole('IndustryPartner', 'initiatives')).toBe('invisible')
   })
 
-  it('Moderator: manage stories, invisible tasks, invisible admin', () => {
-    expect(resolveAccessFromRole('Moderator', 'stories')).toBe('manage')
+  it('Moderator: invisible tasks, invisible comms, invisible admin', () => {
     expect(resolveAccessFromRole('Moderator', 'tasks')).toBe('invisible')
     expect(resolveAccessFromRole('Moderator', 'comms')).toBe('invisible')
     expect(resolveAccessFromRole('Moderator', 'admin')).toBe('invisible')
@@ -149,9 +148,8 @@ describe('resolveAccessFromRole', () => {
     expect(resolveAccessFromRole('Clinician', 'board')).toBe('invisible')
   })
 
-  it('Researcher: edit tasks, view stories, invisible admin', () => {
+  it('Researcher: edit tasks, invisible admin', () => {
     expect(resolveAccessFromRole('Researcher', 'tasks')).toBe('edit')
-    expect(resolveAccessFromRole('Researcher', 'stories')).toBe('view')
     expect(resolveAccessFromRole('Researcher', 'admin')).toBe('invisible')
   })
 })

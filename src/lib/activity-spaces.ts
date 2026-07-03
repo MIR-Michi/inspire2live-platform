@@ -18,7 +18,6 @@ const SPACE_LABELS: Record<string, string> = {
   podcast: 'Podcast',
   events: 'Events',
   network: 'Network',
-  stories: 'Stories',
   board: 'Board',
   tasks: 'Tasks',
   partners: 'Partners',
