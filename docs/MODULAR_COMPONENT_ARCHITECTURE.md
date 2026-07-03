@@ -203,7 +203,7 @@ template every other `domain/` folder copies.
 The database expresses component boundaries through **schema ownership + published read views**, mirroring
 the repo. This is a direct generalization of ADR-0008's `unified_tasks` view.
 
-**Target state — one schema per component:**
+**Target state — one schema per component** (live capabilities only — see the boundary note below):
 
 ```
 identity.*     profiles, auth links, contact spine (kernel-owned)
@@ -211,13 +211,27 @@ rbac.*         roles, permissions, overrides (kernel-owned)
 contacts.*     crm_contacts, crm_pipelines, campus_members, interactions
 intake.*       intake_items, classifier_rules, ai_suggestions
 content.*      content_calendar, media_assets, integration_intents
-events.*       events, conferences, congress_*, conference_guest_*
-initiatives.*  initiatives, hubs, milestones
+events.*       events, conferences, conference_guest_* (podcast + conference pipeline)
+initiatives.*  initiatives, milestones
 tasks.*        tasks, comms_tasks, member_onboarding_tasks + unified_tasks view (ADR-0008)
-stories.*      patient_stories
+stories.*      patient_stories (public patient-stories site only)
 feedback.*     feedback_items
 ai.*           ai_settings, ai_usage_log, org_feed, meeting_summaries (feature data)
 ```
+
+> **Boundary note — derive components from the live nav, not from table prefixes.** The decomposition
+> is drawn from what is actually reachable in `src/lib/role-access.ts` (the nav source of truth) and the
+> public routes, **not** from the historical table-prefix archaeology in the `public` schema. That
+> distinction matters because Sprint 15 (legacy cleanup) retired several spaces whose tables still
+> physically exist, referenced now only by admin cascade-cleanup: **`hubs`** (Network space, retired),
+> **`resources`** (Resources space, retired), and most **`congress_*`** tables (the internal Annual
+> Congress *workspace*, retired — `00151` dropped part of it; the congress **guest attend** flow is a
+> separate, kept surface). Likewise **`stories`** here means the **public** patient-stories site that
+> Sprint 15 explicitly kept — the internal editorial Stories workspace (`/app/app/stories/*`) was
+> deleted. **Retired-but-not-yet-dropped tables get no owning component.** They are Stage-2 drop
+> candidates (new forward migrations), never something to build a boundary around. Authoring each
+> manifest (Sprint 16) is the moment to re-verify its table list against reachability and prune anything
+> that only survives because a `DROP` has not been written yet.
 
 **Rules:**
 
@@ -263,26 +277,36 @@ The kernel is what a generated platform **always** includes. Components are what
 
 ## 8. Initial Component Decomposition of Inspire2Live
 
-Derived directly from the current table prefixes and lib groupings. This is the starting cut; boundaries
-will be refined as manifests are written.
+Derived from the **live** surfaces reachable in `src/lib/role-access.ts` and the public routes (not from
+table prefixes — see the §6 boundary note). The live nav exposes four in-app spaces — `/app/admin`,
+`/app/comms`, `/app/dashboard`, `/app/initiatives` — plus the public `/stories` site and the congress
+guest-attend flow. This is the starting cut; each table list is **re-verified against reachability when
+its manifest is written**, and any table that survives only because Sprint 15 has not yet dropped it is
+excluded.
 
 | Component | Owns (tables, abbreviated) | Owns (lib, abbreviated) | Serves |
 |---|---|---|---|
 | **contacts** | `comms_crm_*`, `campus_members`, contact identity | `comms-crm*`, `comms-conference-contacts` | comms, all |
 | **intake** | `intake_*`, WhatsApp webhook ingest | `comms-webhook*`, `comms-classifier`, `whatsapp-*` | comms |
 | **content** | `content_calendar`, `media_assets`, `comms_integration_intents` | `comms-media`, `comms-integrations`, `comms-digest` | comms |
-| **events** | `events`, `conferences`, `congress_*`, `conference_*`, `campus_sessions` | `comms-conferences`, `comms-events`, `congress-*`, `campus-*` | comms, congress |
-| **initiatives** | `initiatives`, `hubs`, `milestones` | `initiative-*` | coordinators |
+| **events** | `events`, `conferences`, `conference_*` (podcast + conference pipeline), `campus_sessions`, congress guest-attend | `comms-conferences`, `comms-events`, `campus-*`, `congress-guest-*` | comms |
+| **initiatives** | `initiatives`, `milestones` | `initiative-*` | coordinators |
 | **tasks** | `tasks`, `comms_tasks`, `member_onboarding_tasks`, `unified_tasks` view | `lib/tasks/*` (already modular) | all |
 | **onboarding** | `member_onboarding*` | `member-onboarding` | comms |
-| **stories** | `patient_stories`, `patient_story_events` | `patient-stories` | public/advocates |
+| **stories** | `patient_stories`, `patient_story_events` (public patient-stories site) | `patient-stories` | public/advocates |
 | **feedback** | `feedback_items` | `feedback` | all |
 | **ai-features** | `ai_settings`, `ai_usage_log`, `org_feed*`, `meeting_*`, `news_feed_items` | `lib/ai/*` | all |
 
-`events` is intentionally large and heterogeneous (conference vs congress vs campus have accreted
-separately). Writing its manifest first will likely reveal it should split into **events** (external
-conferences) and **congress** (the internal congress cycle) — which is exactly the kind of boundary
-clarification this exercise is meant to force.
+**Not components** (retired by Sprint 15, tables pending a forward-migration drop, referenced only by
+admin cascade-cleanup): the **Network** space (`hubs`, `hub_*`), the **Resources** space (`resources`),
+the internal **Annual Congress workspace** (`congress_topics/sessions/decisions/…` — distinct from the
+kept guest-attend flow), **Bureau/Board**, and the internal editorial **Stories** workspace. These do not
+get an owning component; they are Stage-2 drop candidates.
+
+The **events** component is still intentionally heterogeneous (external conferences, podcast pipeline,
+campus sessions, and the congress guest-attend surface have accreted separately). Writing its manifest is
+expected to split it further — the useful, live boundary question, now that the retired internal congress
+*workspace* is out of the picture.
 
 ---
 

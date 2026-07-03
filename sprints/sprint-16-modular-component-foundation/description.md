@@ -42,9 +42,12 @@ change. This keeps Stage 1 low-risk and fully reversible.
   `lib/ai/feature-flag.ts` + `comms_team` already gate optional surfaces. Stage 1 spreads these shapes to
   every capability rather than inventing anything new.
 - Doing the code layer first, with **zero DB change**, de-risks the harder Stage 2 (prefix→schema
-  relocation). Authoring the manifests also forces latent seams into the open — most likely that `events`
-  should split into external-events vs the internal congress cycle — improving the model before any
-  migration touches it.
+  relocation). Authoring the manifests also forces latent seams into the open — most likely that the live
+  `events` component splits (conferences vs podcast vs campus vs congress guest-attend) — improving the
+  model before any migration touches it.
+- The decomposition is drawn from the **live nav** (`role-access.ts`), not table prefixes — retired-but-
+  not-yet-dropped tables (`hubs`, `resources`, the internal `congress_*` workspace, the internal Stories
+  workspace) get no component; they are Stage-2 drop candidates.
 - Sequenced immediately after Sprint 15 (legacy cleanup) so the boundaries are drawn over a codebase with
   the retired spaces already removed, not around dead code.
 

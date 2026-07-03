@@ -99,8 +99,11 @@ today one table prefix), and a **declarative `manifest.ts`** that bridges the tw
 - The manifest catalog is exactly the input the L1 wizard, L2 generator, and L3 operator need — the AI
   transition sits on legibility we build incrementally, not a rewrite.
 - Fully staged and reversible; Stage 1 touches no database. The current platform keeps working throughout.
-- Writing manifests forces latent seams into the open (e.g. `events` likely splits into external-events vs
-  congress-cycle), improving the model as a side effect.
+- Writing manifests forces latent seams into the open (e.g. the live `events` component likely splits into
+  conferences vs podcast vs campus vs congress guest-attend), improving the model as a side effect. The
+  decomposition is derived from the **live nav** (`role-access.ts`), not table prefixes — several prefixed
+  table groups (`hubs`, `resources`, the internal `congress_*` workspace, the internal Stories workspace)
+  were retired by Sprint 15 and get **no** owning component; they are Stage-2 drop candidates.
 
 ### Negative / trade-offs
 
