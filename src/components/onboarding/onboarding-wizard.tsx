@@ -59,7 +59,6 @@ const GENERIC_FLOW: OnboardingFlow = {
   highlights: [
     { title: 'Initiatives', desc: 'Follow the initiatives you contribute to and their milestones.' },
     { title: 'Network', desc: 'Find collaborators across the Inspire2Live community.' },
-    { title: 'Stories', desc: 'Read and share patient stories that anchor the work.' },
   ],
   landingPath: '/app/dashboard',
 }

@@ -34,7 +34,7 @@ is a *standing gate*, not a one-time audit.
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S16-T06 | **stories** — manifest + move the **public** patient-stories site (`/stories`, `lib/patient-stories.ts`, `patient_stories*`) into `src/modules/stories/` | TBD | Not Started | Public site only — the internal editorial Stories workspace was deleted in Sprint 15; do not resurrect it. Low-risk, kernel-only deps |
+| S16-T06 | ~~**stories** — move the public patient-stories site into `src/modules/stories/`~~ **→ RETIRED instead** | Opus 4.8 | Completed | Product decision: the patient-stories feature is not needed. Deleted the `/stories` routes + module + registry entry; forward migration `00153` drops `patient_stories`/`patient_story_events`/`story_status_changes` + 4 trigger functions (validated on Postgres 16); seed rows removed. Follow-up (separate): the dead `'stories'` RBAC PlatformSpace vocabulary + 00022/00023 permission rows |
 | S16-T07 | **onboarding** — manifest + move `member-onboarding*` into `src/modules/onboarding/` | TBD | Not Started | Depends on contacts (CRM sync) + tasks (onboarding tasks) contracts |
 | S16-T08 | **tasks** — manifest + relocate existing `src/lib/tasks/*` into `src/modules/tasks/domain/`; document `unified_tasks` as its read view | TBD | Not Started | Already modular (ADR-0008); mostly a move + manifest |
 | S16-T09 | **contacts** — manifest + move `comms-crm*`, `campus_members`, contact-identity into `src/modules/contacts/`; publish the identity spine as its contract | TBD | Not Started | Holds the ADR-0007 spine; kernel identity references it — settle that seam here |

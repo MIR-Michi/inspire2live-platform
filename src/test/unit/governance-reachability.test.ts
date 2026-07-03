@@ -38,8 +38,10 @@ describe('reachability', () => {
   })
 
   it('every public component has a public route on disk', () => {
-    // The one public component today is `stories` → src/app/stories.
-    const publicRoutes: Record<string, string> = { stories: 'stories' }
+    // Map component id → public route dir under src/app. Empty today: the only
+    // public component (stories) was retired. Add an entry when a public
+    // component is introduced.
+    const publicRoutes: Record<string, string> = {}
     const missing = componentManifests
       .filter((m) => m.surface === 'public')
       .filter((m) => {
