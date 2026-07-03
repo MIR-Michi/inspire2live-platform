@@ -1,6 +1,6 @@
 # Sprint 15 — Legacy Cleanup (retire dead spaces, workflows & demo artefacts)
 
-> **Status:** In Progress
+> **Status:** Completed
 > **Theme:** Remove legacy spaces, workflows, demo content, and dead artefacts that create noise — **without disrupting anything in use.**
 > **Depends on:** Sprints 01–14 (the features being kept); the unified nav (`src/lib/role-access.ts`) as the source of truth for "active" surfaces.
 
@@ -30,12 +30,14 @@ Shipping this sprint produces a smaller, clearer runtime with no dead demo code,
 - [x] Route/space/demo audit captured as this sprint (was `docs/CLEANUP_SPRINT.md`, now moved here).
 - [x] **Batch 0 (provably dead):** `src/lib/congress-workspace-demo.ts` removed (no runtime import; guard test still green); stale coverage-exclude dropped.
 - [x] **Refactor:** `demo-data.ts` → `initiative-stages.ts` — keeps the 4 live stage exports, drops all 15 unused `DEMO_*` stubs; importers updated; a unit test added; no behaviour change.
-- [ ] **Dead-code scan:** systematic unused-file / unused-export pass; provably-unreferenced modules removed.
+- [x] **Dead-code scan:** systematic unused-file / unused-export pass; provably-unreferenced modules removed (10 files, S15-T06).
 - [x] **Per-space go/no-go recorded.** Retire: Stories, Network, Resources, Board, Annual Congress (`/app/congress`), Bureau, Events list page. Keep: shared domains (events/`[id]`, `congress_events`, `congress_activity_log`), public `/stories` (separate decision), Calendar/Media/Meetings.
-- [ ] **Stage A (disable):** retired spaces removed from nav and blocked at the route guard (redirect to `/app/dashboard`); the notifications→`/app/congress` redirect rewired; `role-access` tests updated.
-- [ ] **Stage B (delete code):** orphaned page/component/lib files deleted per space (one commit each); dashboard cards/links to retired spaces removed; tests updated. Shared code kept.
-- [ ] **Stage C (drop data):** forward migrations drop tables owned solely by retired spaces; shared tables kept.
-- [ ] `pnpm typecheck`, `pnpm lint`, `pnpm test` (coverage gate) green after every batch; manual smoke of affected areas.
+- [x] **Stage A (disable):** retired spaces removed from nav and blocked at the route guard (redirect to `/app/dashboard`); the notifications→`/app/congress` redirect rewired; `role-access` tests updated.
+- [x] **Stage B (delete code):** orphaned page/component/lib files deleted per space (one commit each); dashboard cards/links to retired spaces removed; tests updated. Shared code kept.
+- [x] **Stage C (drop data):** forward migration `00151` drops the 18 internal Annual-Congress-workspace tables (owned solely by that retired space); shared/kept tables preserved. See the Stage-C analysis in `tasks.md` for why every other retired-space table was deliberately kept (live readers, triggers, FK parents).
+- [x] `pnpm typecheck`, `pnpm lint`, `pnpm test` (coverage gate) green after every batch; manual smoke of affected areas.
+
+> **Residual-orphan resolution (Stage C completed).** Finishing the dead-*code* scan surfaced a handful of retired-space *tables* that Stage C's conservative first pass (`00151`) left in place but that now have **zero live readers** — `hub_members`, `hub_initiatives`, `discussions`, `discussion_replies`, `partner_engagements`, `partner_audit_entries`, `resource_translations`, `topic_votes`. Each was verified safe (no inbound FK from a kept table, no view deps, graceful account-purge helper) and dropped in the completion migration **`00152`** (S15-T15c), validated end-to-end against Postgres 16. The still-live parents of the same families (`hubs`, `resources`, `notifications`, `congress_*`) were kept. Net result: **no unowned-and-unused tables remain**, so the ADR-0009 governance quarantine starts empty — the standing table-ownership CI check (Sprint 16) exists to keep it that way, not to carry legacy debt forward.
 
 ## Out of scope
 

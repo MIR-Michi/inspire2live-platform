@@ -242,14 +242,8 @@ insert into public.hubs (id, name, country, region, coordinator_id, status, desc
   ('30000000-0000-0000-0000-000000000004','Japan Hub','JP','East Asia','00000000-0000-0000-0000-000000000004','forming','Emerging hub connecting Japanese oncology research with the global Inspire2Live network.',35.6762,139.6503,'Asia/Tokyo',null)
 on conflict (id) do nothing;
 
--- Hub members
-insert into public.hub_members (hub_id, user_id) values
-  ('30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000003'),
-  ('30000000-0000-0000-0000-000000000001','00000000-0000-0000-0000-000000000001'),
-  ('30000000-0000-0000-0000-000000000002','00000000-0000-0000-0000-000000000002'),
-  ('30000000-0000-0000-0000-000000000003','00000000-0000-0000-0000-000000000005'),
-  ('30000000-0000-0000-0000-000000000004','00000000-0000-0000-0000-000000000004')
-on conflict (hub_id, user_id) do nothing;
+-- (hub_members seed removed — the table was dropped in migration 00152. The
+--  kept `hubs` rows above back the World Campus Log hub selector.)
 
 -- Congress event
 insert into public.congress_events (id, year, theme, start_date, end_date, location, status) values
