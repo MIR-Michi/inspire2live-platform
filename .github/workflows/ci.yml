@@ -46,6 +46,11 @@ jobs:
       - name: Type check
         run: pnpm typecheck
 
+      # Modular-architecture governance gates (ADR-0009 §10): import boundaries,
+      # table-ownership reconciliation, reachability, and dead-code.
+      - name: Governance checks
+        run: pnpm governance
+
       - name: Build
         run: pnpm build
 

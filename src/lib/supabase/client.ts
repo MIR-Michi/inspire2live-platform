@@ -1,9 +1,2 @@
-import { createBrowserClient } from '@supabase/ssr'
-import type { Database } from '@/types/database'
-
-export function createClient() {
-  return createBrowserClient<Database>(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-  )
-}
+// Stage-1 re-export shim (S16-T02). Canonical home: @/kernel/data/client
+export * from '@/kernel/data/client'

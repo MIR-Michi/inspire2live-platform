@@ -110,8 +110,9 @@ now.
 - [ ] **All three governance CI checks (§10) run in CI and can fail the build:** (1) import-boundary lint
       (deliberate violation fails, proven by a fixture); (2) table-ownership reconciliation (an unclaimed,
       un-quarantined table fails); (3) reachability + `knip` dead-code scan.
-- [ ] `src/kernel/db/quarantine.ts` exists (starts empty — Sprint 15's `00152` dropped the residual
-      orphans); the reconciliation check passes with every live table manifest-claimed.
+- [x] `src/kernel/db/ownership.ts` exists (kernel tables + pending-ownership bootstrap + an **empty**
+      quarantine — Sprint 15's `00152` dropped the residual orphans); the reconciliation check passes with
+      every live table claimed. _(S16-T03b)_
 - [ ] `docs/TRACEABILITY.md` maps every requirement to exactly one owning component; new
       `REQ-ARCH-MODULAR-00{1,2,3}` are recorded.
 - [ ] The **feedback** component is fully converted end-to-end and is the documented reference; feedback
