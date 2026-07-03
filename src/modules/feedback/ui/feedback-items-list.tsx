@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useMemo } from 'react'
-import { shortUrl, FEEDBACK_TYPE_META, FEEDBACK_STATUS_META, type FeedbackItem } from '@/lib/feedback'
+import { shortUrl, FEEDBACK_TYPE_META, FEEDBACK_STATUS_META, type FeedbackItem } from '@/modules/feedback/domain/types'
 import { FeedbackStatusSelect } from './feedback-status-select'
 import { FeedbackDeleteButton } from './feedback-delete-button'
 

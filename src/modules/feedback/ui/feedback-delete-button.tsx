@@ -1,6 +1,6 @@
 'use client'
 
-import { deleteFeedbackItem } from '@/app/app/admin/feedback/actions'
+import { deleteFeedbackItem } from '@/modules/feedback/domain/actions'
 
 export function FeedbackDeleteButton({ itemId }: { itemId: string }) {
   return (

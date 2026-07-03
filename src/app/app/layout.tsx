@@ -6,8 +6,7 @@ import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access
 import { canAccess, resolveAllSpaces } from '@/lib/permissions'
 import { getViewAsRole, getViewAsUserId } from '@/lib/view-as'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
-import { TestModeProvider } from '@/components/feedback/test-mode-context'
-import { FeedbackOverlay } from '@/components/feedback/feedback-overlay'
+import { TestModeProvider, FeedbackOverlay } from '@/modules/feedback'
 import { ActivityTracker } from '@/components/activity/activity-tracker'
 
 function getInitials(name: string): string {

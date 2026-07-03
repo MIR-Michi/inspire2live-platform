@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
-import { createFeedbackItem } from '@/app/app/feedback/actions'
-import { useTestMode } from '@/components/feedback/test-mode-context'
-import type { FeedbackType } from '@/lib/feedback'
+import { createFeedbackItem } from '@/modules/feedback/domain/actions'
+import { useTestMode } from './test-mode-context'
+import type { FeedbackType } from '@/modules/feedback/domain/types'
 
 type CapturedContext = {
   pageUrl: string

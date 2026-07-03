@@ -1,8 +1,8 @@
 'use client'
 
 import { useRef, useState } from 'react'
-import { updateFeedbackStatus } from '@/app/app/admin/feedback/actions'
-import type { FeedbackItem, FeedbackStatus } from '@/lib/feedback'
+import { updateFeedbackStatus } from '@/modules/feedback/domain/actions'
+import type { FeedbackItem, FeedbackStatus } from '@/modules/feedback/domain/types'
 
 export function FeedbackStatusSelect({ item }: { item: FeedbackItem }) {
   const [status, setStatus] = useState<FeedbackStatus>(item.status)

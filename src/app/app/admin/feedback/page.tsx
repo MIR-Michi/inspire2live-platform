@@ -1,46 +1,27 @@
 import { redirect } from 'next/navigation'
-import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import {
   FEEDBACK_STATUS_META,
-  type FeedbackItem,
+  FeedbackItemsList,
+  loadFeedbackItems,
+  loadFeedbackStatusCounts,
+  requireFeedbackAdmin,
   type FeedbackStatus,
-} from '@/lib/feedback'
-import { FeedbackItemsList } from '@/components/feedback/feedback-items-list'
+} from '@/modules/feedback'
 
 export default async function AdminFeedbackPage({
   searchParams,
 }: {
   searchParams: Promise<{ status?: string }>
 }) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
-
-  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') redirect('/app/dashboard')
+  const gate = await requireFeedbackAdmin()
+  if (gate.reason === 'unauthenticated') redirect('/login')
+  if (gate.reason === 'forbidden') redirect('/app/dashboard')
 
   const params = await searchParams
   const statusFilter = (params.status as FeedbackStatus | 'all') ?? 'all'
 
-  const db = createAdminClient()
-  let query = db.from('feedback_items').select('*').order('created_at', { ascending: false })
-  if (statusFilter !== 'all') query = query.eq('status', statusFilter)
-
-  const { data: items } = await query
-  const allItems = (items ?? []) as unknown as FeedbackItem[]
-
-  // Counts per status for the filter tabs
-  const { data: counts } = await db.from('feedback_items').select('status')
-  const statusCounts = { open: 0, reviewed: 0, resolved: 0, all: 0 }
-  for (const row of (counts ?? []) as { status: string }[]) {
-    statusCounts.all++
-    if (row.status === 'open' || row.status === 'reviewed' || row.status === 'resolved') {
-      statusCounts[row.status]++
-    }
-  }
+  const allItems = await loadFeedbackItems({ status: statusFilter })
+  const statusCounts = await loadFeedbackStatusCounts()
 
   return (
     <div className="mx-auto max-w-5xl space-y-6">

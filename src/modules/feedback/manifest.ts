@@ -1,9 +1,9 @@
 /**
  * feedback — component manifest (see docs/MODULAR_COMPONENT_ARCHITECTURE.md §4).
  *
- * Stage-1 scaffold: the manifest declares what already exists (tables, surface,
- * contract). Behaviour is unchanged; the owning lib/ui/api files move into this
- * module in the per-component tasks (S16-T05+).
+ * Fully converted (S16-T05): the reference component. domain/ui/api live under
+ * src/modules/feedback and are exposed via index.ts; the `provides` below match
+ * that public API exactly.
  */
 
 import { defineManifest } from '@/kernel/manifest'
@@ -19,11 +19,19 @@ export const manifest = defineManifest({
     tables: ["feedback_items"],
   },
   provides: {
-    api: ["submitFeedback", "loadFeedbackItems"],
-    ui: ["FeedbackWidget", "FeedbackAdmin"],
+    api: [
+      "createFeedbackItem",
+      "updateFeedbackStatus",
+      "deleteFeedbackItem",
+      "loadFeedbackItems",
+      "loadFeedbackStatusCounts",
+      "requireFeedbackAdmin",
+      "handleFeedbackExport",
+    ],
+    ui: ["FeedbackOverlay", "FeedbackItemsList", "TestModeProvider"],
   },
   dependsOn: {
-    kernel: ["identity", "rbac", "notifications"],
+    kernel: ["identity", "rbac", "data"],
   },
   featureFlag: null,
   personas: ["all"],

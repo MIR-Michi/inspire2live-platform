@@ -28,7 +28,7 @@ is a *standing gate*, not a one-time audit.
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
-| S16-T05 | Convert **feedback** end-to-end: `feedback_items` + `lib/feedback.ts` + `components/feedback/*` → `src/modules/feedback/` (manifest, index, domain, ui, api, README); update app routes to import via `index.ts` | TBD | Not Started | Reference PR the other moves copy; existing feedback tests must stay green; no behavior change |
+| S16-T05 | Convert **feedback** end-to-end: `feedback_items` + `lib/feedback.ts` + `components/feedback/*` → `src/modules/feedback/` (manifest, index, domain, ui, api, README); update app routes to import via `index.ts` | Opus 4.8 | Completed | `lib/feedback.ts`→`domain/types.ts`; 5 components→`ui/`; extracted `domain/repository.ts` (reads) + `domain/actions.ts` (`'use server'` writes) + `api/export.ts` (export handler). `index.ts` is the public API; the 3 app routes (layout, admin page, export route) now import only `@/modules/feedback`; old `app/**/feedback/actions.ts` deleted. Pure move — `tsc`/lint/393 tests/governance/build all green; feedback routes build as dynamic |
 
 ## Component manifests + moves (one PR each, mechanical)
 
