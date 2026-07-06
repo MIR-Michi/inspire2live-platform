@@ -4,6 +4,7 @@ import { useState } from 'react'
 import Link from 'next/link'
 import { formatMeetingLabel, type AgendaMeetingGroup } from '@/lib/comms-agenda'
 import { AgendaAddForm } from '@/components/comms/agenda-add-form'
+import { MeetingDateEditForm } from '@/components/comms/meeting-date-edit-form'
 import { AgendaItemList } from '@/components/comms/agenda-item-list'
 import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-panel'
 import type { TaskOwnerOption } from '@/components/comms/task-details-button'
@@ -55,7 +56,10 @@ export function WeeklyAgenda({
                 Upcoming
               </span>
             </h3>
-            <AgendaAddForm meetingDate={current.meetingDate} />
+            <div className="flex flex-wrap items-center gap-2">
+              <MeetingDateEditForm meetingDate={current.meetingDate} />
+              <AgendaAddForm meetingDate={current.meetingDate} />
+            </div>
           </div>
           {current.items.length > 0 ? (
             <AgendaItemList items={current.items} ownerOptions={ownerOptions} />
@@ -142,6 +146,9 @@ function PreviousMeetingRow({
       </button>
       {open && (
         <div className="space-y-2 bg-neutral-50/50 px-4 pb-4 pt-1">
+          <div className="flex justify-end">
+            <MeetingDateEditForm meetingDate={group.meetingDate} />
+          </div>
           {count > 0 ? (
             <AgendaItemList items={group.items} ownerOptions={ownerOptions} />
           ) : (
