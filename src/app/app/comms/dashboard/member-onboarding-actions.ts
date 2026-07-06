@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { notifyUser } from '@/lib/notify'
+import { DEFAULT_ONBOARDING_TASKS, buildOnboardingSeedRows } from '@/lib/member-onboarding-template'
 
 // Loosely-typed client for the member_onboarding tables that are not yet in the
 // generated Database types.
@@ -82,7 +83,7 @@ export async function confirmMemberOnboarding(formData: FormData) {
   const id = asNullableUuid(formData.get('onboarding_id'))
   if (!id) throw new Error('Member is required.')
 
-  const { error } = await db
+  const { data: confirmed, error } = await db
     .from('member_onboarding')
     .update({
       status: 'active',
@@ -92,9 +93,66 @@ export async function confirmMemberOnboarding(formData: FormData) {
     })
     .eq('id', id)
     .eq('status', 'pending')
+    .select('id')
   if (error) throw new Error(error.message)
 
+  // Only seed the default checklist when this call actually flipped the member
+  // from pending → active (guards against double-seeding on a repeat confirm).
+  if (confirmed && confirmed.length > 0) {
+    await seedDefaultOnboardingTasks(db, id, user.id)
+  }
+
   revalidate()
+}
+
+/**
+ * Seeds the standard onboarding checklist (title + default owner) for a member
+ * that was just confirmed. Owners are resolved by name against profiles;
+ * unresolved owners leave the task unassigned for manual pickup. Any title that
+ * already exists for this member is skipped, so pre-added tasks aren't
+ * duplicated. Best-effort — seeding must never make confirmation fail.
+ */
+async function seedDefaultOnboardingTasks(db: AnyDb, onboardingId: string, actorId: string) {
+  try {
+    // Resolve default owners by name (case-insensitive) in one lookup.
+    const wantedNames = Array.from(new Set(DEFAULT_ONBOARDING_TASKS.map((t) => t.ownerName)))
+    const { data: profiles } = await db.from('profiles').select('id, name').in('name', wantedNames)
+
+    // Don't duplicate any checklist item the team already added while pending.
+    const { data: existing } = await db
+      .from('member_onboarding_tasks')
+      .select('title, position')
+      .eq('onboarding_id', onboardingId)
+
+    const rows = buildOnboardingSeedRows({
+      onboardingId,
+      actorId,
+      profiles: (profiles ?? []) as Array<{ id: string; name: string | null }>,
+      existing: (existing ?? []) as Array<{ title: string; position: number | null }>,
+    })
+    if (rows.length === 0) return
+
+    const { error } = await db.from('member_onboarding_tasks').insert(rows)
+    if (error) throw new Error(error.message)
+
+    // Let each assigned owner know (except the person doing the confirming).
+    const notified = new Set<string>()
+    for (const row of rows) {
+      if (!row.assignee_id || row.assignee_id === actorId || notified.has(row.assignee_id)) continue
+      notified.add(row.assignee_id)
+      await notifyUser({
+        recipientId: row.assignee_id,
+        event: 'task_assigned',
+        title: 'New onboarding tasks assigned to you',
+        body: 'A new member was confirmed and onboarding tasks were assigned to you.',
+        linkUrl: '/app/dashboard',
+      })
+    }
+  } catch (err) {
+    // Seeding is best-effort — a confirmed member with no checklist is
+    // recoverable (add tasks manually); a failed confirmation is not.
+    console.error('[onboarding] failed to seed default checklist', err)
+  }
 }
 
 export async function declineMemberOnboarding(formData: FormData) {
