@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { useActionState, useEffect, useMemo, useState } from 'react'
+import { useActionState, useEffect, useMemo, useRef, useState } from 'react'
 import {
   sendGenericGuestInvites,
   type GenericGuestInviteState,
@@ -39,6 +39,10 @@ export function ConferenceGuestBulkInvite() {
   const [sendEmail, setSendEmail] = useState(true)
   const [sendWhatsapp, setSendWhatsapp] = useState(false)
 
+  // Cache results per query so backspacing/retyping a term already searched is
+  // instant instead of re-hitting the server on every keystroke.
+  const cacheRef = useRef<Map<string, ConferenceContactOption[]>>(new Map())
+
   const trimmedQuery = query.trim()
   const visibleOptions = trimmedQuery.length < 2 ? [] : options
 
@@ -52,16 +56,25 @@ export function ConferenceGuestBulkInvite() {
         return
       }
 
+      const cached = cacheRef.current.get(text)
+      if (cached) {
+        setOptions(cached)
+        setSearching(false)
+        return
+      }
+
       setSearching(true)
       void searchConferenceContacts(text)
         .then((result) => {
+          const contacts = result.ok ? result.contacts : []
+          cacheRef.current.set(text, contacts)
           if (cancelled) return
-          setOptions(result.ok ? result.contacts : [])
+          setOptions(contacts)
         })
         .finally(() => {
           if (!cancelled) setSearching(false)
         })
-    }, text.length < 2 ? 0 : 250)
+    }, 250)
 
     return () => {
       cancelled = true
@@ -155,7 +168,7 @@ export function ConferenceGuestBulkInvite() {
                   type="search"
                   value={query}
                   onChange={(event) => setQuery(event.target.value)}
-                  placeholder="Type a name from CRM..."
+                  placeholder="Type a name or email from CRM..."
                   className="mt-1 w-full rounded-lg border border-neutral-300 bg-white px-3 py-2 text-sm text-neutral-800 focus:border-orange-400 focus:outline-none"
                 />
               </label>
