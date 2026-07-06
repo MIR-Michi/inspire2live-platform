@@ -64,7 +64,7 @@ export default async function CommsDashboardPage({
         <CommsDashboardPanel name={profile?.name} {...(await loadCommsPersonalDashboardData(supabase, user.id))} />
       ) : (
         <TeamDashboard
-          data={await loadCommsTeamDashboardData(supabase)}
+          data={await loadCommsTeamDashboardData(supabase, { viewerId: user.id })}
           canApprove={profile?.role === 'PlatformAdmin'}
           newsfeedRunStatus={await loadNewsfeedRunStatus()}
         />

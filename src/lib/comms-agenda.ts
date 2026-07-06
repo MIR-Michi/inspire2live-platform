@@ -60,7 +60,7 @@ export function groupAgendaByMeeting(
   items: AgendaItemRecord[],
   now: Date = new Date()
 ): AgendaMeetingGroup[] {
-  const upcoming = getNextMeetingDate(now)
+  const todayKey = toDateKey(new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate())))
   const byMeeting = new Map<string, AgendaItemRecord[]>()
 
   for (const item of items) {
@@ -68,6 +68,17 @@ export function groupAgendaByMeeting(
     list.push(item)
     byMeeting.set(item.meetingDate, list)
   }
+
+  // Meeting dates are manually editable, so the "upcoming" meeting is derived
+  // from the actual dates — the nearest meeting today or in the future — rather
+  // than assuming the default weekday. This way a manually rescheduled meeting
+  // stays flagged as upcoming instead of a phantom default-day group appearing
+  // alongside it. When nothing is scheduled ahead, fall back to the next
+  // default meeting date and surface it as an empty group to add items to.
+  const upcoming =
+    Array.from(byMeeting.keys())
+      .filter((date) => date >= todayKey)
+      .sort()[0] ?? getNextMeetingDate(now)
 
   // Always show the upcoming meeting group, even if empty.
   if (!byMeeting.has(upcoming)) byMeeting.set(upcoming, [])
