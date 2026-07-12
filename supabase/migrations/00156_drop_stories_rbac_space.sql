@@ -4,7 +4,7 @@
 --
 -- The 'stories' space governed the internal editorial Stories workspace, which
 -- Sprint 15 retired; the public patient-stories feature was then retired in
--- migration 00153. The space is removed from the application vocabulary
+-- migration 00155. The space is removed from the application vocabulary
 -- (PlatformSpace / PLATFORM_SPACES / ROLE_SPACE_DEFAULTS / NavIcon / labels), so
 -- any persisted 'stories' permission override is now orphan config.
 --
