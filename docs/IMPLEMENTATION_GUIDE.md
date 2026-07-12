@@ -47,6 +47,53 @@ These are distilled from §3 of the Design Document. **Any deviation requires an
 4. **Neutrality by architecture** — industry partner scope is enforced structurally (scoped DB access, audit trail, physical separation of partner content from editorial content).
 5. **Global-first UX** — timezone-aware, localization-ready, low-bandwidth conscious. Not internalized later.
 6. **Momentum over ceremony** — default views show what needs attention now, not achievement summaries. Empty states prompt action, not celebration.
+7. **Module boundaries enforced in code** (ADR-0009) — a component may import the kernel and another component's package root (`@/modules/<x>`), never its internals (`@/modules/<x>/domain|ui|api/...`), and the kernel never imports a component. Enforced by the import-boundary governance check in CI, not just convention.
+
+---
+
+### Modular Component Architecture (ADR-0009)
+
+The platform is organised as a **kernel + independent components** (see
+`docs/MODULAR_COMPONENT_ARCHITECTURE.md`). A component is represented identically
+in three places: a code module (`src/modules/<c>/`), a data domain (its
+manifest-owned tables), and a declarative `manifest.ts`.
+
+```
+src/
+  kernel/            cross-cutting, owned by no component (import via @/kernel/*)
+    manifest/        the ComponentManifest type + runtime validator
+    identity/ rbac/ notifications/ ai-client/ data/ shell/ ui/
+    db/              table-ownership declarations + migration→live-table reader
+    governance/      the CI-checked boundary rules
+  modules/<c>/
+    manifest.ts      declarative contract (owned tables, provides, deps, flag, REQs)
+    index.ts         the ONLY public import surface for other modules / app routes
+    domain/          types.ts · repository.ts (reads) · actions.ts (writes)
+    ui/  api/  jobs/
+  modules/registry.ts   the component catalog (every manifest)
+```
+
+**Three governance gates run in CI (`pnpm governance`)** and must stay green:
+import-boundary, table-ownership reconciliation (every live table is claimed by a
+manifest or the kernel), and reachability + dead-code.
+
+#### How to add a component (worked example: `feedback`, S16-T05)
+
+1. **Scaffold** `src/modules/<c>/` with `manifest.ts` (id, version, surface,
+   `data.tables`, `provides`, `dependsOn`, `featureFlag`, `roles`, `requirements`)
+   and an `index.ts`. Register it in `src/modules/registry.ts`.
+2. **Move the code in**: `domain/types.ts` (types + pure helpers),
+   `domain/repository.ts` (reads), `domain/actions.ts` (`'use server'` writes),
+   `ui/*`, and any route-handler logic in `api/*`. App routes under `src/app`
+   stay thin and import only from `@/modules/<c>`.
+3. **Own the tables** in `manifest.data.tables` so the reconciliation check
+   accounts for them (a live table claimed by no manifest fails CI).
+4. **Depend only** on the kernel and other components' `index.ts` — never their
+   internals. Add a `REQ-*` to `requirements` and record it in
+   `docs/TRACEABILITY.md` (Component Ownership section).
+5. **Verify**: `pnpm typecheck && pnpm governance && pnpm test && pnpm build`.
+
+The `feedback` module is the reference implementation; copy its shape.
 
 ---
 

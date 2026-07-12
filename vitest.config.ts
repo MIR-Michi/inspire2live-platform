@@ -12,31 +12,35 @@ export default defineConfig({
     exclude: ['src/test/e2e/**', 'node_modules/**'],
     coverage: {
       provider: 'v8',
-      // Unit tests in this repo focus on business logic in src/lib.
-      // UI (src/app, src/components) is validated via E2E smoke tests.
-      include: ['src/lib/**/*.{ts,tsx}'],
+      // Unit tests focus on business logic, which since Sprint 16 (ADR-0009)
+      // lives in src/lib (shared), each module's domain/ layer, and the kernel.
+      // UI (src/app, src/components, module ui/) is validated via E2E smoke tests.
+      include: [
+        'src/lib/**/*.{ts,tsx}',
+        'src/modules/**/domain/**/*.{ts,tsx}',
+        'src/kernel/**/*.{ts,tsx}',
+      ],
       exclude: [
-        // Thin wrappers around Next/Supabase runtime.
+        // Thin runtime wrappers around Next/Supabase.
         'src/lib/supabase/**',
+        'src/kernel/data/**',
         // Supabase data-layer query files — require live DB or heavy mocking.
-        'src/lib/comms-crm-data.ts',
-        'src/lib/comms-conference-contacts.ts',
-        'src/lib/comms-conference-guest-reports.ts',
-        'src/lib/comms-meeting-transcripts.ts',
-        'src/lib/ai/follow-up-tasks-store.ts',
-        'src/lib/ai/org-newsfeed-job.ts',
-        'src/lib/ai/org-newsfeed-run.ts',
-        'src/lib/comms-digest.ts',
-        'src/lib/comms-event-pipeline.ts',
-        'src/lib/comms-integration-intents.ts',
+        'src/modules/contacts/domain/comms-crm-data.ts',
+        'src/modules/events/domain/comms-conference-contacts.ts',
+        'src/modules/events/domain/comms-conference-guest-reports.ts',
+        'src/modules/events/domain/comms-meeting-transcripts.ts',
+        'src/modules/events/domain/comms-event-pipeline.ts',
+        'src/modules/events/domain/congress-guest-tokens.ts',
+        'src/modules/ai-features/domain/follow-up-tasks-store.ts',
+        'src/modules/ai-features/domain/org-newsfeed-job.ts',
+        'src/modules/ai-features/domain/org-newsfeed-run.ts',
+        'src/modules/content/domain/comms-digest.ts',
+        'src/modules/content/domain/comms-integration-intents.ts',
+        'src/modules/content/domain/comms-integrations.ts',
         // External API / email dispatch wrappers — no unit-test value.
-        'src/lib/whatsapp-send.ts',
-        'src/lib/whatsapp-media.ts',
+        'src/modules/intake/domain/whatsapp-send.ts',
+        'src/modules/intake/domain/whatsapp-media.ts',
         'src/lib/invitation-email.ts',
-        'src/lib/congress-guest-tokens.ts',
-        // Thin env-flag or type-only files.
-        'src/lib/comms-integrations.ts',
-        'src/lib/patient-stories.ts',
         // Depends on Next.js runtime cookies(); cover via E2E.
         'src/lib/view-as.ts',
         'src/types/**',

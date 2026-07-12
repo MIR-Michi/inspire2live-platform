@@ -65,8 +65,19 @@ These remain planning placeholders until the Sprint 04 pilot review is complete.
 4. On completion: update the row to `Completed`, link the PR or commit in Notes.
 5. When all acceptance criteria are checked off, mark the sprint complete in `description.md` and start the next one.
 
+## Code structure
+
+Since Sprint 16 the codebase is organised as a **kernel + independent components**
+(ADR-0009): cross-cutting code lives in `src/kernel/*` and each capability is a
+self-contained module in `src/modules/<component>/` (behind a single `index.ts`,
+declared by a `manifest.ts`). App routes under `src/app` are thin and import only
+a module's public API. See `docs/MODULAR_COMPONENT_ARCHITECTURE.md` and the
+"How to add a component" guide in `docs/IMPLEMENTATION_GUIDE.md` §3. Three
+governance gates (`pnpm governance`) keep the boundaries honest in CI.
+
 ## References
 
+- Modular architecture: `docs/MODULAR_COMPONENT_ARCHITECTURE.md`, `docs/ADR/0009-modular-component-architecture.md`
 - Strategic scope: `docs/MVP_SCOPE_AND_ROADMAP.md`
 - Concept update (Phase 1 source): `docs/PLATFORM_CONCEPT_UPDATE_v1.md`
 - Original spec (Phase 2+ source): `Inspire2Live_PLATFORM_DESIGN_DOCUMENT.md`

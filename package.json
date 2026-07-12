@@ -19,6 +19,7 @@
     "start": "next start",
     "lint": "eslint",
     "typecheck": "tsc --noEmit",
+    "governance": "vitest run src/test/unit/governance-table-ownership.test.ts src/test/unit/governance-boundaries.test.ts src/test/unit/governance-reachability.test.ts src/test/unit/governance-dead-code.test.ts src/test/unit/manifest-validate.test.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",

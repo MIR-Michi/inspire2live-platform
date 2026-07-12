@@ -186,3 +186,39 @@ Format: `REQ-[DOMAIN]-[NNN]` — see `docs/IMPLEMENTATION_GUIDE.md` §5 for doma
 | REQ-PERF-002 | Offline-capable essential views for hub coordinators (PWA) | §6, §11 | `planned` | Week 28–30 |
 | REQ-PERF-003 | Low-bandwidth optimization: first meaningful paint < 3s on 3G | §11 | `planned` | Week 28–30 |
 | REQ-A11Y-004 | French (FR) and Spanish (ES) localization | §10 | `planned` | Week 28–30 |
+
+---
+
+## Component Ownership (Sprint 16 — Modular Architecture)
+
+Per ADR-0009, every requirement now maps to exactly **one owning component**. The
+authoritative source is each module's `manifest.ts` `requirements` field — this
+table is derived from it and must stay in sync (keep this list aligned when a
+manifest's requirements change). The kernel owns cross-cutting requirements
+(identity, RBAC, notifications) that belong to no single component.
+
+| Component | Module | Owned requirements |
+|---|---|---|
+| **contacts** | `src/modules/contacts` | REQ-DATA-CONTACT-001, REQ-DATA-CONTACT-002 |
+| **intake** | `src/modules/intake` | REQ-COMMS-INTAKE-001, REQ-COMMS-INTAKE-002 |
+| **content** | `src/modules/content` | REQ-COMMS-CONTENT-001 |
+| **events** | `src/modules/events` | REQ-COMMS-EVENTS-001 |
+| **initiatives** | `src/modules/initiatives` | REQ-INIT-001 |
+| **tasks** | `src/modules/tasks` | REQ-TASK-001, REQ-TASK-002 |
+| **onboarding** | `src/modules/onboarding` | REQ-ONBOARD-001 |
+| **feedback** | `src/modules/feedback` | REQ-FEEDBACK-001 |
+| **ai-features** | `src/modules/ai-features` | REQ-AI-001 |
+
+> The Phase-0…3 matrices above remain the historical delivery record (organised by
+> phase). This section adds the **component dimension** the modular architecture
+> introduces: it answers "which component owns this?" rather than "when was it
+> built?". As the phase requirements are revisited, tag each with its owning
+> component here.
+
+### Architecture requirements (Sprint 16)
+
+| Requirement ID | Description | Status | Code Location | Notes |
+|---|---|---|---|---|
+| REQ-ARCH-MODULAR-001 | Independent components represented identically in the repo (`src/modules/<c>`) and in the DB (manifest-owned tables) | `done` | `src/modules/*`, `src/kernel/*`, `docs/ADR/0009-modular-component-architecture.md` | 10 components + kernel extracted (S16-T02/T04–T14) |
+| REQ-ARCH-MODULAR-002 | Machine-readable component catalog enabling composition (the manifest registry) | `done` | `src/modules/registry.ts`, `src/kernel/manifest/*` | Read today by the governance checks; the same catalog the future L1/L2 AI levels consume |
+| REQ-ARCH-MODULAR-003 | Standing governance gates keep components legible: import-boundary, table-ownership reconciliation, reachability, dead-code | `done` | `src/kernel/governance/*`, `src/kernel/db/*`, `src/test/unit/governance-*.test.ts`, `pnpm governance` | Wired into CI (S16-T03) |
