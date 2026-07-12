@@ -116,6 +116,9 @@ type ConferenceContactDb = {
       ilike: (column: string, pattern: string) => {
         order: (column: string, opts: { ascending: boolean }) => { limit: (n: number) => RowsResult }
       }
+      or: (filter: string) => {
+        order: (column: string, opts: { ascending: boolean }) => { limit: (n: number) => RowsResult }
+      }
       in: (column: string, values: string[]) => { limit: (n: number) => RowsResult }
     }
     insert: (payload: Row | Row[]) => {
@@ -598,14 +601,18 @@ export async function searchConferenceContacts(query: string): Promise<{ ok: tru
   const auth = await requireCommsUser()
   if (!auth.ok) return auth
 
-  const q = query.trim().replace(/[%_]/g, '')
+  // Strip characters that are wildcards (%, _) or that would break the
+  // PostgREST or() filter grammar (comma, parens, *).
+  const q = query.trim().replace(/[%_,*()]/g, '')
   if (q.length < 2) return { ok: true, contacts: [] }
 
   const db = createAdminClient() as unknown as ConferenceContactDb
+  // Match name OR email (people often search by either). Both columns have a
+  // pg_trgm GIN index (migration 00154) so the substring ILIKE stays fast.
   const { data, error } = await db
     .from('comms_crm_contacts')
     .select('id, full_name, email, phone, whatsapp_id, title, organisation')
-    .ilike('full_name', `%${q}%`)
+    .or(`full_name.ilike.*${q}*,email.ilike.*${q}*`)
     .order('full_name', { ascending: true })
     .limit(8)
 
