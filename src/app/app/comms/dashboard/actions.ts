@@ -98,6 +98,29 @@ export async function addAgendaItem(formData: FormData) {
   revalidatePath(CAMPUS_MONTH_ROUTE, 'page')
 }
 
+export async function updateMeetingDate(formData: FormData) {
+  const { supabase } = await requireCommsOperator()
+  const agendaSupabase = supabase as unknown as CommsDbClient
+
+  const currentDate = asText(formData.get('current_meeting_date'))
+  const nextDate = asText(formData.get('meeting_date'))
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(currentDate)) throw new Error('The current meeting date is invalid.')
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(nextDate)) throw new Error('Enter a valid meeting date.')
+  if (currentDate === nextDate) return
+
+  // A meeting is every agenda item (and its transcript) sharing a meeting_date,
+  // owned by several people. Moving all of them runs through a SECURITY DEFINER
+  // RPC so it isn't blocked by the owner-scoped row update policy.
+  const { error } = await agendaSupabase.rpc('reschedule_weekly_meeting', {
+    p_current_date: currentDate,
+    p_new_date: nextDate,
+  })
+  if (error) throw new Error(error.message)
+
+  revalidatePath('/app/comms/dashboard')
+  revalidatePath('/app/comms/meetings')
+}
+
 export async function updateAgendaItem(formData: FormData) {
   const { supabase } = await requireCommsOperator()
   const agendaSupabase = supabase as unknown as CommsDbClient

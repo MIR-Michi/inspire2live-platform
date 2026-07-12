@@ -76,6 +76,34 @@ describe('weekly agenda helpers', () => {
     expect(groups.some((g) => g.meetingDate === '2026-06-01')).toBe(true)
   })
 
+  it('flags a manually rescheduled future meeting as upcoming (no phantom default group)', () => {
+    // A meeting was moved to Wed 2026-06-10; the default weekday is Mon 06-08.
+    const now = new Date('2026-06-07T12:00:00Z')
+    const items: AgendaItemRecord[] = [
+      {
+        id: '1',
+        meetingDate: '2026-06-10',
+        title: 'Rescheduled topic',
+        summary: null,
+        meetingNotes: null,
+        ownerId: 'a',
+        ownerLabel: 'Ana',
+        ownerRole: 'Comms',
+        ownerAvatarUrl: null,
+        position: 0,
+        createdAt: '2026-06-01T10:00:00Z',
+        linkedTasks: [],
+      },
+    ]
+    const groups = groupAgendaByMeeting(items, now)
+    // The nearest future meeting (06-10) is upcoming — not the default Monday.
+    const upcoming = groups.find((g) => g.isUpcoming)
+    expect(upcoming?.meetingDate).toBe('2026-06-10')
+    // No empty default-weekday (06-08) group is injected alongside it.
+    expect(groups.some((g) => g.meetingDate === '2026-06-08')).toBe(false)
+    expect(groups).toHaveLength(1)
+  })
+
   it('orders items within a meeting by position, then creation time', () => {
     const base = {
       meetingDate: '2026-06-08',
