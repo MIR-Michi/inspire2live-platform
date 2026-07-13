@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useTransition } from 'react'
+import { ResizableSplit } from '@/components/ui/resizable-split'
 import Link from 'next/link'
 import { useFormStatus } from 'react-dom'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
@@ -182,7 +183,10 @@ export function ConferenceOperatingShell({
       <StageRail realStage={realStage} activeStage={activeStage} prep={prep} onSelect={setActiveStage} />
 
       {/* Active stage section + lean sidebar */}
-      <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
+      <ResizableSplit
+        storageKey="conference-operating"
+        defaultRatio={0.72}
+        left={
         <div>
           {activeStage === 'intended' && (
             <IntendedPanel conference={conference} notes={notes} tracked={realStage !== null} onAdvanced={handleAdvanced} />
@@ -213,9 +217,9 @@ export function ConferenceOperatingShell({
             </div>
           )}
         </div>
-
-        <Sidebar conference={conference} prep={prep} profiles={profiles} assignedContacts={assignedContacts} />
-      </div>
+        }
+        right={<Sidebar conference={conference} prep={prep} profiles={profiles} assignedContacts={assignedContacts} />}
+      />
     </div>
   )
 }

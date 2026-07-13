@@ -29,7 +29,7 @@ export const manifest = defineManifest({
   },
   provides: {
     api: ["loadOrgFeed", "summarizeMeeting", "categorizeWhatsAppFeed"],
-    ui: ["OrgNewsFeed", "AiSettings", "WhatsAppDigestShell"],
+    ui: ["OrgNewsFeed", "AiSettings", "WhatsAppWorkspaceShell"],
   },
   dependsOn: {
     kernel: ["identity", "rbac", "ai-client", "notifications"],

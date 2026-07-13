@@ -1,158 +1,135 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { signInboundMediaUrl } from '@/lib/whatsapp-media'
-import { WhatsAppInboxShell, type WhatsAppFeedItem } from '@/components/comms/whatsapp-inbox-shell'
+import { isAiEnabled } from '@/lib/ai/feature-flag'
+import { deriveDefaultWindow } from '@/lib/ai/whatsapp-feed-categorization'
+import { loadWhatsAppFeed } from '@/lib/comms-whatsapp-feed'
+import { loadCampusSessionDates } from '@/modules/ai-features/domain/whatsapp-feed-store'
+import {
+  WhatsAppWorkspaceShell,
+  type CampusOption,
+  type DigestItem,
+  type DigestSummary,
+} from '@/modules/intake/ui/whatsapp-workspace-shell'
 
-function isMissingColumn(error: { message?: string } | null | undefined, column: string): boolean {
-  const message = error?.message?.toLowerCase() ?? ''
-  return message.includes(column) && (
-    message.includes('could not find') ||
-    message.includes('does not exist') ||
-    message.includes('schema cache') ||
-    message.includes('column')
-  )
+export const metadata = { title: 'WhatsApp · Comms' }
+
+function fallbackWindow(): { start: string; end: string } {
+  const end = new Date()
+  const start = new Date(end.getTime() - 35 * 24 * 60 * 60 * 1000)
+  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
 }
-
-function isMissingSoftDeleteColumn(error: { message?: string } | null | undefined): boolean {
-  return isMissingColumn(error, 'whatsapp_deleted_at')
-}
-
-const INBOUND_MEDIA_COLUMNS = 'media_type, media_mime_type, media_storage_path, media_filename, media_status'
 
 export default async function CommsWhatsAppPage() {
   const supabase = await createClient()
   const {
     data: { user },
   } = await supabase.auth.getUser()
-
   if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('role')
-    .eq('id', user.id)
-    .maybeSingle()
+  const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+  if (!canAccessCommsWorkspace(profile?.role)) redirect('/app/comms')
 
-  if (!profile || !canAccessCommsWorkspace(profile.role)) {
-    redirect('/app/comms')
-  }
+  const aiEnabled = isAiEnabled()
+  const canDelete = profile?.role === 'PlatformAdmin'
+
+  // Default window from the two most recent campus meetings; fall back to ~5 weeks.
+  const sessionDates = await loadCampusSessionDates(supabase)
+  const derived = deriveDefaultWindow(sessionDates)
+  const defaultWindow = derived ?? fallbackWindow()
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const db = supabase as any
-
-  // `media` and `softDelete` degrade independently: an inbound query may run on
-  // a DB where the media columns (00114) or the soft-delete columns (00113)
-  // aren't applied yet.
-  const loadInbound = (withSoftDeleteFilter: boolean, withMedia: boolean) => {
-    const columns = withMedia
-      ? `id, sender_name, sender_whatsapp_id, raw_content, status, captured_at, ${INBOUND_MEDIA_COLUMNS}`
-      : 'id, sender_name, sender_whatsapp_id, raw_content, status, captured_at'
-    let query = db.from('intake_items').select(columns).not('sender_whatsapp_id', 'is', null)
-    if (withSoftDeleteFilter) query = query.is('whatsapp_deleted_at', null)
-    return query.order('captured_at', { ascending: false }).limit(100)
-  }
-
-  const loadOutbound = (withSoftDeleteFilter: boolean) => {
-    let query = db
-      .from('whatsapp_outbound_messages')
-      .select('id, recipient_whatsapp_id, body, delivery_status, error_detail, sent_at, delivered_at, read_at')
-    if (withSoftDeleteFilter) query = query.is('whatsapp_deleted_at', null)
-    return query.order('sent_at', { ascending: false }).limit(100)
-  }
-
-  let softDelete = true
-  let withMedia = true
-  let [inboundResult, outboundResult] = await Promise.all([loadInbound(softDelete, withMedia), loadOutbound(softDelete)])
-
-  // Drop media columns if they aren't there yet, then retry.
-  if (isMissingColumn(inboundResult.error, 'media_')) {
-    withMedia = false
-    inboundResult = await loadInbound(softDelete, withMedia)
-  }
-  // Drop the soft-delete filter if those columns aren't there yet, then retry.
-  if (isMissingSoftDeleteColumn(inboundResult.error) || isMissingSoftDeleteColumn(outboundResult.error)) {
-    softDelete = false
-    ;[inboundResult, outboundResult] = await Promise.all([loadInbound(softDelete, withMedia), loadOutbound(softDelete)])
-  }
-
-  if (inboundResult.error) throw new Error(inboundResult.error.message)
-  if (outboundResult.error) throw new Error(outboundResult.error.message)
-
-  // Stored media lives in a private bucket; mint short-lived signed URLs with a
-  // service-role client. Guard for environments without the service key.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const inboundRows = (inboundResult.data ?? []).filter((item: any) => item.sender_whatsapp_id)
-  const needsSigning = inboundRows.some(
-    (item: { media_status?: string; media_storage_path?: string | null }) =>
-      item.media_status === 'stored' && item.media_storage_path
+  const { data: sessionRows } = await db
+    .from('campus_sessions')
+    .select('id, session_date, theme')
+    .order('session_date', { ascending: false })
+    .limit(12)
+  const campusOptions: CampusOption[] = ((sessionRows ?? []) as Array<{ id: string; session_date: string; theme: string | null }>).map(
+    (s) => ({ id: s.id, label: `${s.session_date}${s.theme ? ` — ${s.theme}` : ''}` })
   )
-  let mediaAdmin: ReturnType<typeof createAdminClient> | null = null
-  if (needsSigning) {
-    try {
-      mediaAdmin = createAdminClient()
-    } catch {
-      mediaAdmin = null
+
+  // Latest reviewable digest (most recent pending or saved run).
+  const { data: summaryRows } = await db
+    .from('whatsapp_feed_summaries')
+    .select('id, window_start, window_end, monthly, tldr, monthly_summary, message_count, status, model, created_at')
+    .in('status', ['pending', 'saved'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+
+  const summaryRow = (summaryRows ?? [])[0] as
+    | {
+        id: string
+        window_start: string
+        window_end: string
+        monthly: boolean
+        tldr: string
+        monthly_summary: string | null
+        message_count: number
+        status: string
+        model: string | null
+      }
+    | undefined
+
+  let summary: DigestSummary | null = null
+  let items: DigestItem[] = []
+
+  if (summaryRow) {
+    summary = {
+      id: summaryRow.id,
+      windowStart: summaryRow.window_start,
+      windowEnd: summaryRow.window_end,
+      monthly: Boolean(summaryRow.monthly),
+      tldr: summaryRow.tldr,
+      monthlySummary: summaryRow.monthly_summary,
+      status: summaryRow.status,
+      messageCount: summaryRow.message_count ?? 0,
+      model: summaryRow.model,
     }
+
+    const { data: itemRows } = await db
+      .from('whatsapp_feed_items')
+      .select('id, category, title, person, item_date, detail, source_message_ids, proposal_status, linked_type')
+      .eq('summary_id', summaryRow.id)
+      .order('created_at', { ascending: true })
+
+    items = ((itemRows ?? []) as Array<Record<string, unknown>>).map((row) => ({
+      id: String(row.id),
+      category: String(row.category),
+      title: String(row.title ?? ''),
+      person: (row.person as string | null) ?? null,
+      date: (row.item_date as string | null) ?? null,
+      detail: (row.detail as string | null) ?? null,
+      sourceMessageIds: Array.isArray(row.source_message_ids) ? (row.source_message_ids as string[]) : [],
+      proposalStatus: String(row.proposal_status ?? 'none'),
+      linkedType: (row.linked_type as string | null) ?? null,
+    }))
   }
 
-  const inbound: WhatsAppFeedItem[] = await Promise.all(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    inboundRows.map(async (item: any): Promise<WhatsAppFeedItem> => {
-      const mediaType = (item.media_type ?? null) as 'image' | 'video' | 'document' | 'audio' | null
-      let media: WhatsAppFeedItem['media'] = null
-      if (mediaType) {
-        let url: string | null = null
-        if (mediaAdmin && item.media_status === 'stored' && item.media_storage_path) {
-          url = await signInboundMediaUrl(mediaAdmin, item.media_storage_path as string)
-        }
-        media = {
-          type: mediaType,
-          url,
-          mimeType: (item.media_mime_type as string | null) ?? null,
-          filename: (item.media_filename as string | null) ?? null,
-          status: (item.media_status as string | null) ?? 'none',
-        }
-      }
-      return {
-        id: item.id,
-        direction: 'inbound',
-        whatsappId: item.sender_whatsapp_id,
-        displayName: item.sender_name,
-        text: item.raw_content,
-        timestamp: item.captured_at,
-        status: item.status,
-        media,
-      }
-    })
+  // Right column: the media-rich feed. Scope to the digest window when there is
+  // one, otherwise show the recent feed so the page isn't empty.
+  const feed = summaryRow
+    ? await loadWhatsAppFeed(supabase, { startIso: summaryRow.window_start, endIso: summaryRow.window_end })
+    : await loadWhatsAppFeed(supabase, { limit: 200 })
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h1 className="text-2xl font-bold text-neutral-900">WhatsApp</h1>
+        <p className="text-sm text-neutral-500">
+          AI summary and categorization of the community feed on the left; the raw feed (with images and video) on the right. Every item
+          is traceable back to its source message.
+        </p>
+      </div>
+      <WhatsAppWorkspaceShell
+        aiEnabled={aiEnabled}
+        canDelete={canDelete}
+        defaultWindow={defaultWindow}
+        campusSessions={campusOptions}
+        summary={summary}
+        items={items}
+        feed={feed}
+      />
+    </div>
   )
-
-  const outbound: WhatsAppFeedItem[] = (outboundResult.data ?? []).map((item: {
-    id: string
-    recipient_whatsapp_id: string
-    body: string
-    delivery_status: string
-    error_detail: string | null
-    sent_at: string
-    delivered_at: string | null
-    read_at: string | null
-  }) => ({
-    id: item.id,
-    direction: 'outbound',
-    whatsappId: item.recipient_whatsapp_id,
-    displayName: item.recipient_whatsapp_id,
-    text: item.body,
-    timestamp: item.sent_at,
-    status: item.delivery_status,
-    errorDetail: item.error_detail,
-    deliveredAt: item.delivered_at,
-    readAt: item.read_at,
-  }))
-
-  const feed = [...inbound, ...outbound].sort(
-    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-  )
-
-  return <WhatsAppInboxShell feed={feed} canDeleteMessages={profile.role === 'PlatformAdmin'} />
 }

@@ -15,6 +15,7 @@ import {
   type AiModelSelection,
   type AiWorkloadPolicy,
 } from '@/lib/ai/models'
+import { ResizableSplit } from '@/components/ui/resizable-split'
 import { saveAiSettings, testAiSettingsConnection } from './actions'
 
 type SearchParams = {
@@ -98,7 +99,10 @@ export default async function AdminAiSettingsPage({
 
       <StatusBanner params={params} />
 
-      <div className="grid gap-4 lg:grid-cols-[1.2fr_0.8fr]">
+      <ResizableSplit
+        storageKey="admin-ai"
+        defaultRatio={0.6}
+        left={
         <form className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
           <div>
             <h2 className="text-lg font-semibold text-neutral-900">Provider configuration</h2>
@@ -211,7 +215,8 @@ export default async function AdminAiSettingsPage({
             </button>
           </div>
         </form>
-
+        }
+        right={
         <aside className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
           <div>
             <h2 className="text-lg font-semibold text-neutral-900">Current model profile</h2>
@@ -239,7 +244,8 @@ export default async function AdminAiSettingsPage({
             AI integration guide
           </a>
         </aside>
-      </div>
+        }
+      />
     </div>
   )
 }
