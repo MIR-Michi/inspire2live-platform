@@ -1,6 +1,7 @@
 export type AiModelId =
   | 'claude-opus-4-8'
   | 'claude-opus-4-7'
+  | 'claude-sonnet-5'
   | 'claude-sonnet-4-6'
   | 'claude-haiku-4-5'
   | 'claude-fable-5'
@@ -73,9 +74,20 @@ export const AI_MODEL_CATALOG: readonly AiModelCatalogEntry[] = [
     cacheWriteCostPerMillionTokens: 6.25,
   },
   {
+    id: 'claude-sonnet-5',
+    label: 'Claude Sonnet 5',
+    description: 'Current Sonnet — near-Opus quality on coding, classification, extraction, and summaries at Sonnet cost.',
+    defaultEffort: 'medium',
+    allowedEfforts: ['low', 'medium', 'high', 'xhigh', 'max'],
+    inputCostPerMillionTokens: 3,
+    outputCostPerMillionTokens: 15,
+    cacheReadCostPerMillionTokens: 0.3,
+    cacheWriteCostPerMillionTokens: 3.75,
+  },
+  {
     id: 'claude-sonnet-4-6',
     label: 'Claude Sonnet 4.6',
-    description: 'Balanced model for frequent classification, extraction, search, and short summaries.',
+    description: 'Previous-generation Sonnet for frequent classification, extraction, search, and short summaries.',
     defaultEffort: 'medium',
     allowedEfforts: ['low', 'medium', 'high', 'max'],
     inputCostPerMillionTokens: 3,
