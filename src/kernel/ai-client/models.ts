@@ -29,6 +29,8 @@ export type AiWorkloadId =
   | 'intake_structure'
   | 'meeting_summary'
   | 'meeting_summary_chunk'
+  | 'whatsapp_feed_categorization'
+  | 'whatsapp_feed_monthly_summary'
   | 'org_newsfeed'
   | 'conference_discovery'
   | 'conference_detail'
@@ -146,6 +148,26 @@ export const AI_WORKLOAD_POLICIES: readonly AiWorkloadPolicy[] = [
     recommendedModel: 'claude-sonnet-4-6',
     recommendedEffort: 'medium',
     recommendation: 'Sonnet is a good cost/quality balance for chunk notes; the final reduce can stay on Opus.',
+  },
+  {
+    id: 'whatsapp_feed_categorization',
+    section: 'WhatsApp',
+    label: 'WhatsApp feed categorization',
+    description:
+      'Summarizes the WhatsApp community feed for a time window and classifies messages into birthdays, new members, events, questions, news, I2L initiatives, and other — each with a source-message reference.',
+    recommendedModel: 'claude-sonnet-5',
+    recommendedEffort: 'low',
+    recommendation:
+      'Sonnet 5 at low effort is a good cost/quality fit for high-volume, reviewable classification: a human confirms every proposed action, and each item cites the source message.',
+  },
+  {
+    id: 'whatsapp_feed_monthly_summary',
+    section: 'WhatsApp',
+    label: 'WhatsApp monthly summary',
+    description: 'Produces the publication-ready monthly rollup of the WhatsApp community feed.',
+    recommendedModel: 'claude-sonnet-5',
+    recommendedEffort: 'low',
+    recommendation: 'Shares the categorization workload profile; bump to medium if the monthly blurb needs richer synthesis.',
   },
   {
     id: 'org_newsfeed',

@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **WhatsApp feed AI categorization** (`/app/comms/whatsapp/digest`): for a time window (default: previous → most recent campus meeting), Claude summarizes the community WhatsApp feed and classifies messages into birthday / new member / event / question / news / I2L initiative / other. Two-column review UI with click-to-highlight source traceability (each item cites the `intake_items` message it came from). Human-confirmed downstream routing: birthday/event → `content_calendar`, new member → `member_onboarding`; optional monthly rollup summary. New `ai_features` tables `whatsapp_feed_summaries` / `whatsapp_feed_items` (migration `00157`), `claude-sonnet-5` catalog entry, and `whatsapp_feed_categorization` / `whatsapp_feed_monthly_summary` AI workloads (default Sonnet 5 / low). See `docs/WHATSAPP_FEED_AI_CATEGORIZATION_REPORT.md`.
+
 ### Changed
 - **MVP scope pivot (2026-05-17):** Communications Workspace + World Campus Channel Intake adopted as the new Phase 1 / MVP scope per `docs/PLATFORM_CONCEPT_UPDATE_v1.md` v1.0. Initiative workspace, bureau, congress slice, resource library, and partner portal reclassified as Phase 2 surface area (no code removed).
 - Active delivery process changed from Work Packages to **sprints** — see `sprints/`.
