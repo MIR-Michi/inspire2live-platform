@@ -30,9 +30,16 @@ on:
       - "supabase/config.toml"
       - ".github/workflows/db-migrations.yml"
 
+# Do NOT cancel an in-progress validation when a follow-up push lands. This job
+# is a correctness gate whose whole point is to confirm migrations apply, and it
+# only runs when migration/seed/config files change (see `paths:` above), so it
+# is infrequent and cheap to let each run finish. Cancelling mid-`supabase start`
+# left a spurious "Cancelled after 1m" red check on the superseded commit
+# (rapid successive merges to main, or quick follow-up pushes on a PR) even
+# though the migrations were fine. Serialize per ref and let each run complete.
 concurrency:
   group: db-migrations-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 jobs:
   validate:
