@@ -4,6 +4,7 @@ import { TopNav, type PreviewUserOption } from '@/components/layouts/top-nav'
 import { SideNav } from '@/components/layouts/side-nav'
 import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access'
 import { canAccess, resolveAllSpaces } from '@/lib/permissions'
+import { countCurrentCampusIncoming } from '@/lib/campus-metrics'
 import { getViewAsRole, getViewAsUserId } from '@/lib/view-as'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
 import { TestModeProvider, FeedbackOverlay } from '@/modules/feedback'
@@ -111,17 +112,10 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Campus badge: show whenever the user can see the comms space (admins always can).
   const canViewComms = isAdmin || canAccess(effectiveSpaces.comms, 'view')
 
-  const now = new Date()
-  const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
-  const nextMonthStart = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString()
-  const { count: commsUnreadCount } = canViewComms
-    ? await supabase
-        .from('intake_items')
-        .select('id', { count: 'exact', head: true })
-        .eq('status', 'unreviewed')
-        .gte('captured_at', currentMonthStart)
-        .lt('captured_at', nextMonthStart)
-    : { count: 0 }
+  // Campus badge = canonical "incoming" for the current/next campus meeting
+  // (unreviewed campus-channel intake in that meeting's window), so the nav,
+  // the Campus overview cards, and the month-detail header all agree.
+  const commsUnreadCount = canViewComms ? await countCurrentCampusIncoming(supabase) : 0
 
   return (
     <RoleLayersProvider platformRole={effectiveRole}>

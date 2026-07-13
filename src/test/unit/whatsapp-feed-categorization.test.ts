@@ -16,6 +16,7 @@ import {
   WHATSAPP_CATEGORIES,
   isWhatsAppCategory,
   deriveDefaultWindow,
+  deriveMeetingWindow,
   formatWhatsAppFeed,
   validateCategorization,
   categorizeWhatsAppFeed,
@@ -70,6 +71,33 @@ describe('deriveDefaultWindow', () => {
   it('returns null when fewer than two valid dates exist', () => {
     expect(deriveDefaultWindow(['2026-02-01'])).toBeNull()
     expect(deriveDefaultWindow([])).toBeNull()
+  })
+})
+
+describe('deriveMeetingWindow', () => {
+  const dates = ['2025-12-07', '2026-01-04', '2026-02-01', '2026-03-01']
+
+  it('spans the previous meeting up to the given meeting', () => {
+    expect(deriveMeetingWindow(dates, '2026-02-01')).toEqual({ start: '2026-01-04', end: '2026-02-01' })
+  })
+
+  it('works for the most recent (upcoming/current) meeting', () => {
+    expect(deriveMeetingWindow(dates, '2026-03-01')).toEqual({ start: '2026-02-01', end: '2026-03-01' })
+  })
+
+  it('has a null start for the earliest meeting', () => {
+    expect(deriveMeetingWindow(dates, '2025-12-07')).toEqual({ start: null, end: '2025-12-07' })
+  })
+
+  it('ignores meetings on/after the target and invalid dates', () => {
+    expect(deriveMeetingWindow(['2026-02-01', 'bad', '', '2026-02-01'], '2026-02-01')).toEqual({
+      start: null,
+      end: '2026-02-01',
+    })
+  })
+
+  it('returns null for an invalid meeting date', () => {
+    expect(deriveMeetingWindow(dates, 'not-a-date')).toBeNull()
   })
 })
 

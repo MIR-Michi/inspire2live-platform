@@ -72,7 +72,7 @@ export async function loadTasksForUser(
   }
   const idList = (kind: TaskContextKind) => Array.from(idsByKind.get(kind) ?? [])
 
-  const [initiativeRes, campusRes, memberRes, agendaRes] = await Promise.all([
+  const [initiativeRes, campusRes, memberRes, agendaRes, topicRes] = await Promise.all([
     idList('initiative').length
       ? db.from('initiatives').select('id, title').in('id', idList('initiative'))
       : Promise.resolve({ data: [] }),
@@ -84,6 +84,9 @@ export async function loadTasksForUser(
       : Promise.resolve({ data: [] }),
     idList('agenda_item').length
       ? db.from('comms_weekly_agenda_items').select('id, title').in('id', idList('agenda_item'))
+      : Promise.resolve({ data: [] }),
+    idList('whatsapp_topic').length
+      ? db.from('whatsapp_feed_items').select('id, title').in('id', idList('whatsapp_topic'))
       : Promise.resolve({ data: [] }),
   ])
 
@@ -101,6 +104,9 @@ export async function loadTasksForUser(
   )
   const agendaTitle = new Map<string, string>(
     ((agendaRes.data ?? []) as Array<{ id: string; title: string | null }>).map((r) => [r.id, r.title ?? 'Agenda item'])
+  )
+  const topicTitle = new Map<string, string>(
+    ((topicRes.data ?? []) as Array<{ id: string; title: string | null }>).map((r) => [r.id, r.title ?? 'WhatsApp topic'])
   )
 
   // Owner label (single lookup — all rows are owned by this user).
@@ -143,6 +149,13 @@ export async function loadTasksForUser(
           id,
           label: id ? memberName.get(id) ?? 'New member' : null,
           href: '/app/comms/dashboard?view=team',
+        }
+      case 'whatsapp_topic':
+        return {
+          kind: 'whatsapp_topic',
+          id,
+          label: id ? topicTitle.get(id) ?? 'WhatsApp topic' : null,
+          href: '/app/comms/whatsapp',
         }
       default:
         return { kind: 'standalone', id: null, label: null, href: '/app/comms/dashboard' }

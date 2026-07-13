@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { deriveDefaultWindow } from '@/lib/ai/whatsapp-feed-categorization'
+import { loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { loadWhatsAppFeed } from '@/lib/comms-whatsapp-feed'
 import { loadCampusSessionDates } from '@/modules/ai-features/domain/whatsapp-feed-store'
 import {
@@ -32,6 +33,7 @@ export default async function CommsWhatsAppPage() {
 
   const aiEnabled = isAiEnabled()
   const canDelete = profile?.role === 'PlatformAdmin'
+  const teamMembers = await loadCommsTeamMembers(supabase)
 
   // Default window from the two most recent campus meetings; fall back to ~5 weeks.
   const sessionDates = await loadCampusSessionDates(supabase)
@@ -126,6 +128,7 @@ export default async function CommsWhatsAppPage() {
         canDelete={canDelete}
         defaultWindow={defaultWindow}
         campusSessions={campusOptions}
+        teamMembers={teamMembers}
         summary={summary}
         items={items}
         feed={feed}

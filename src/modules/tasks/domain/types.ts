@@ -14,6 +14,7 @@ export type TaskContextKind =
   | 'campus_session'
   | 'agenda_item'
   | 'onboarding_member'
+  | 'whatsapp_topic'
   | 'standalone'
 
 export type TaskContext = {

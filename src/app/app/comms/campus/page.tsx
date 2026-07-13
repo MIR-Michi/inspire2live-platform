@@ -2,6 +2,8 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { createCampusSession } from '@/app/app/comms/campus-log/actions'
 import { PresenterAvatar } from '@/components/comms/presenter-avatar'
+import { deriveMeetingWindow } from '@/modules/ai-features/domain/whatsapp-feed-categorization'
+import { isWithinWindow } from '@/lib/campus-metrics'
 
 function monthKey(value: string) {
   return value.slice(0, 7)
@@ -76,10 +78,11 @@ export default async function CommsCampusPage({
       .limit(24),
     supabase
       .from('intake_items')
-      .select('id, status, content_type, captured_at, raw_content')
-      .neq('status', 'dismissed')
+      .select('id, captured_at')
+      .eq('channel', 'campus')
+      .eq('status', 'unreviewed')
       .order('captured_at', { ascending: false })
-      .limit(100),
+      .limit(1000),
     supabase
       .from('campus_members')
       .select('id, name, country, organisation, role_description, date_welcomed')
@@ -120,12 +123,16 @@ export default async function CommsCampusPage({
   }
 
   // One meeting per month (most recent session of the month wins on tie).
+  const allSessionDates = (sessions ?? []).map((s) => s.session_date)
   const byMonth = new Map<string, Meeting>()
   for (const session of sessions ?? []) {
     const key = monthKey(session.session_date)
     if (byMonth.has(key)) continue
     const [year, month] = key.split('-')
-    const monthIntake = (intakeItems ?? []).filter((item) => monthKey(item.captured_at) === key)
+    // Canonical incoming: unreviewed campus intake in this meeting's window
+    // (previous meeting → this meeting), not the calendar month.
+    const window = deriveMeetingWindow(allSessionDates, session.session_date)
+    const incoming = window ? (intakeItems ?? []).filter((item) => isWithinWindow(item.captured_at, window)).length : 0
     const presenter = presenterById.get(session.id)
     byMonth.set(key, {
       id: session.id,
@@ -137,7 +144,7 @@ export default async function CommsCampusPage({
       description: session.summary || session.theme || null,
       presenterName: presenter?.name ?? null,
       presenterAvatarUrl: presenter?.avatar ?? null,
-      unreviewed: monthIntake.filter((item) => item.status === 'unreviewed').length,
+      unreviewed: incoming,
       openTasks: openTasksById.get(session.id) ?? 0,
     })
   }

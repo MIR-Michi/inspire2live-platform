@@ -1,6 +1,5 @@
 import Link from 'next/link'
 import { startCampusMeeting } from '@/app/app/comms/campus-log/actions'
-import { deleteIntakeItem, markIntakeReviewed } from '@/app/app/comms/intake/actions'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { CampusMeetingChecklist } from '@/components/comms/campus-meeting-checklist'
 import { CampusHighlight } from '@/components/comms/campus-highlight'
@@ -9,20 +8,15 @@ import { MeetingTranscriptPanel } from '@/components/comms/meeting-transcript-pa
 import { CampusBriefingPanel } from '@/components/comms/campus-briefing-panel'
 import { loadCampusMeetingTasks, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { loadCampusSessionTranscript } from '@/lib/comms-meeting-transcripts'
+import { loadCampusDigest } from '@/modules/ai-features/domain/whatsapp-feed-store'
+import { WhatsAppDigestPanel } from '@/modules/intake/ui/whatsapp-digest-panel'
+import { deriveMeetingWindow } from '@/modules/ai-features/domain/whatsapp-feed-categorization'
+import { campusWindowIso, countCampusIncoming } from '@/lib/campus-metrics'
+import { ResizableSplit } from '@/components/ui/resizable-split'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import type { CampusBriefing } from '@/lib/ai/campus-briefing'
 import { normalizeRole } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
-
-async function markReviewedAction(formData: FormData) {
-  'use server'
-  await markIntakeReviewed(undefined, formData)
-}
-
-async function deleteIntakeAction(formData: FormData) {
-  'use server'
-  await deleteIntakeItem(undefined, formData)
-}
 
 function monthBounds(year: string, month: string) {
   const numericYear = Number(year)
@@ -58,20 +52,11 @@ function formatDate(value: string | null | undefined) {
   return new Intl.DateTimeFormat('en-GB', { day: 'numeric', month: 'short' }).format(date)
 }
 
-function typeLabel(value: string) {
-  return value.replaceAll('_', ' ')
-}
-
 const TABS = ['Briefing', 'Field newsfeed', 'WhatsApp'] as const
 type IncomingTab = (typeof TABS)[number]
 
 function tabKey(value: string | undefined): IncomingTab {
   return TABS.find((s) => s.toLowerCase() === value?.toLowerCase()) ?? 'Briefing'
-}
-
-function sourceLinkFor(item: { source_url?: string | null; raw_content: string }) {
-  if (item.source_url) return item.source_url
-  return (item.raw_content ?? '').match(/https?:\/\/[^\s)]+/i)?.[0] ?? null
 }
 
 type CampusMonthPageProps = {
@@ -108,14 +93,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
   const endDate = dateOnly(end)
   const supabase = await createClient()
 
-  const [{ data: whatsappData }, { data: newsfeedData }, { data: sessions }] = await Promise.all([
-    supabase
-      .from('intake_items')
-      .select('id, sender_name, content_type, raw_content, source_url, status, captured_at')
-      .eq('channel', 'campus')
-      .gte('captured_at', start.toISOString())
-      .lt('captured_at', end.toISOString())
-      .order('captured_at', { ascending: false }),
+  const [{ data: newsfeedData }, { data: sessions }, { data: recentSessionRows }] = await Promise.all([
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (supabase as any)
       .from('news_feed_items')
@@ -135,6 +113,8 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
       // first-created session (the one its checklist was seeded on).
       .order('session_date', { ascending: false })
       .order('created_at', { ascending: true }),
+    // Recent session dates to derive this meeting's window (previous → this).
+    supabase.from('campus_sessions').select('session_date').order('session_date', { ascending: false }).limit(24),
   ])
 
   type NewsfeedItem = {
@@ -142,8 +122,8 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
     region: string | null; source_url: string | null; source_name: string | null
     published_at: string | null; created_at: string | null
   }
-  const whatsappItems = whatsappData ?? []
   const newsfeedItems: NewsfeedItem[] = (newsfeedData ?? []) as NewsfeedItem[]
+  const recentSessionDates = ((recentSessionRows ?? []) as Array<{ session_date: string | null }>).map((r) => r.session_date)
   const meetingTitle = `${formatMonth(start)} meeting`
   const returnPath = `/app/comms/campus/${year}/${month}`
 
@@ -157,6 +137,13 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
       ])
     : [[], [], null]
   const transcriptOwners = teamMembers.map((member) => ({ id: member.id, label: member.label }))
+  // Shared WhatsApp digest for this meeting — read-only here; generated in the
+  // WhatsApp workspace and resolved via campus_session_id. Never re-run here.
+  const campusDigest = primarySession ? await loadCampusDigest(supabase, primarySession.id) : null
+  // Canonical incoming for this meeting's window (previous → this meeting) —
+  // the same number the nav badge and Campus overview show.
+  const meetingWindow = primarySession ? deriveMeetingWindow(recentSessionDates, primarySession.session_date) : null
+  const incomingCount = meetingWindow ? await countCampusIncoming(supabase, campusWindowIso(meetingWindow)) : 0
   const aiEnabled = isAiEnabled()
   const completedMeetingTasks = meetingTasks.filter((task) => task.status === 'completed').length
   const monthLastWednesday = lastWednesdayOf(year, month)
@@ -224,14 +211,19 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
         </div>
       </header>
 
-      <div className="grid min-h-[720px] overflow-hidden rounded-xl border border-neutral-200 bg-white lg:grid-cols-[7fr_3fr]">
-        <section className="border-neutral-200 lg:order-last lg:border-l">
+      <ResizableSplit
+        variant="seam"
+        storageKey="campus-month"
+        defaultRatio={0.7}
+        className="min-h-[720px] overflow-hidden rounded-xl border border-neutral-200 bg-white"
+        right={
+        <section className="border-neutral-200">
           <div className="border-b border-neutral-200 bg-neutral-50 px-5 py-3">
             <div className="flex items-center gap-2">
               <h2 className="text-base font-semibold text-neutral-900">Incoming</h2>
               {selectedTab !== 'Briefing' && (
                 <span className="rounded-full bg-orange-600 px-2.5 py-0.5 text-xs font-bold text-white">
-                  {selectedTab === 'Field newsfeed' ? newsfeedItems.length : whatsappItems.length}
+                  {selectedTab === 'Field newsfeed' ? newsfeedItems.length : incomingCount}
                 </span>
               )}
             </div>
@@ -311,65 +303,23 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
               </>
             )}
 
-            {selectedTab === 'WhatsApp' && (
-              <>
-                {whatsappItems.map((item) => {
-                  const sourceLink = sourceLinkFor(item)
-                  return (
-                    <article key={item.id} className="rounded-lg border border-neutral-200 bg-neutral-50">
-                      <div className="flex flex-wrap items-center justify-between gap-2 border-b border-neutral-200 px-4 py-2">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="rounded-full bg-blue-900 px-2 py-0.5 text-xs font-bold text-white">{typeLabel(item.content_type)}</span>
-                          <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700">{item.status}</span>
-                        </div>
-                        <p className="text-xs font-medium text-neutral-500">{item.sender_name} · {formatDate(item.captured_at)}</p>
-                      </div>
-                      <div className="px-4 py-3">
-                        <p className="text-sm font-semibold text-neutral-950">{(item.raw_content ?? '').slice(0, 90)}</p>
-                        <p className="mt-1 line-clamp-3 text-sm leading-5 text-neutral-600">{item.raw_content}</p>
-                        <div className="mt-3 flex flex-wrap gap-2">
-                          {item.status === 'unreviewed' && (
-                            <form action={markReviewedAction}>
-                              <input type="hidden" name="intake_item_id" value={item.id} />
-                              <input type="hidden" name="return_path" value={returnPath} />
-                              <button type="submit" className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-100">
-                                Review
-                              </button>
-                            </form>
-                          )}
-                          {sourceLink && (
-                            <a
-                              href={sourceLink}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="rounded-lg border border-blue-200 bg-white px-3 py-1 text-xs font-semibold text-blue-800 hover:bg-blue-50"
-                            >
-                              Open link
-                            </a>
-                          )}
-                          <form action={deleteIntakeAction}>
-                            <input type="hidden" name="intake_item_id" value={item.id} />
-                            <input type="hidden" name="return_path" value={returnPath} />
-                            <button type="submit" className="rounded-lg border border-red-200 bg-white px-3 py-1 text-xs font-semibold text-red-700 hover:bg-red-50">
-                              Delete
-                            </button>
-                          </form>
-                        </div>
-                      </div>
-                    </article>
-                  )
-                })}
-                {whatsappItems.length === 0 && (
-                  <p className="rounded-lg border border-dashed border-neutral-300 py-10 text-center text-sm text-neutral-500">
-                    No WhatsApp messages from the campus group this month.
-                  </p>
-                )}
-              </>
-            )}
+            {selectedTab === 'WhatsApp' &&
+              (campusDigest ? (
+                <WhatsAppDigestPanel summary={campusDigest.summary} items={campusDigest.items} teamMembers={teamMembers} editable={false} />
+              ) : (
+                <p className="rounded-lg border border-dashed border-neutral-300 py-10 text-center text-sm text-neutral-500">
+                  No WhatsApp digest for this meeting yet. Generate it in the{' '}
+                  <Link href="/app/comms/whatsapp" className="font-semibold text-orange-600 hover:underline">
+                    WhatsApp workspace
+                  </Link>{' '}
+                  — it will appear here automatically.
+                </p>
+              ))}
           </div>
         </section>
-
-        <aside className="bg-white lg:order-first">
+        }
+        left={
+        <aside className="bg-white">
           <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-3">
             <h2 className="text-base font-semibold text-neutral-900">Meeting details</h2>
           </div>
@@ -465,7 +415,8 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
             )}
           </div>
         </aside>
-      </div>
+        }
+      />
     </div>
   )
 }
