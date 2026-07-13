@@ -18,8 +18,9 @@ classifies salient messages into `birthday`, `new_member`, `event`, `question`,
 message(s) it came from — the domain drops any item it can't ground in a real
 message, so the review UI can always highlight the origin (left→right
 traceability). `domain/whatsapp-feed-store.ts` loads the feed window and campus
-meeting dates; the review surface lives at `/app/comms/whatsapp/digest`
-(two-column: generated content left, raw feed right). Downstream routing is
+meeting dates; the review surface is the unified WhatsApp workspace at
+`/app/comms/whatsapp` (two-column, drag-resizable: generated content left,
+media-rich raw feed right). Downstream routing is
 reviewable and human-confirmed: birthday/event → `content_calendar`, new member
 → `member_onboarding`. See `docs/WHATSAPP_FEED_AI_CATEGORIZATION_REPORT.md`.
 
