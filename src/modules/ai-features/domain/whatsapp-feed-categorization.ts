@@ -149,6 +149,30 @@ export function deriveDefaultWindow(sessionDates: Array<string | null | undefine
 }
 
 /**
+ * The window that a given campus meeting "closes": from the previous meeting up
+ * to (and including) this meeting's date. `sessionDates` may be in any order.
+ * Returns null when `meetingDate` is invalid; `start` is null when there is no
+ * earlier meeting (the caller decides how far back to reach).
+ *
+ * This is the per-meeting generalization of `deriveDefaultWindow` — the WhatsApp
+ * workspace default window and the Campus per-meeting window both derive from
+ * this one helper so they always agree.
+ */
+export function deriveMeetingWindow(
+  sessionDates: Array<string | null | undefined>,
+  meetingDate: string
+): { start: string | null; end: string } | null {
+  if (!meetingDate || Number.isNaN(new Date(meetingDate).getTime())) return null
+  const meetingTime = new Date(meetingDate).getTime()
+  const previous = sessionDates
+    .map((d) => (typeof d === 'string' ? d.trim() : ''))
+    .filter((d) => d.length > 0 && !Number.isNaN(new Date(d).getTime()))
+    .filter((d) => new Date(d).getTime() < meetingTime)
+    .sort((a, b) => new Date(b).getTime() - new Date(a).getTime())
+  return { start: previous[0] ?? null, end: meetingDate }
+}
+
+/**
  * Format the feed for the prompt, assigning each message a short, stable ref
  * (m1, m2, …). Returns the prompt block plus the ref→intake-id map used to
  * resolve the model's citations back to real message ids for traceability.

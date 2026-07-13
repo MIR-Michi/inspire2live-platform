@@ -13,6 +13,7 @@ const CONTEXT_LABEL: Record<TaskContextKind, string> = {
   campus_session: 'Campus',
   agenda_item: 'Agenda',
   onboarding_member: 'Onboarding',
+  whatsapp_topic: 'WhatsApp',
   standalone: 'Task',
 }
 
@@ -21,6 +22,7 @@ const CONTEXT_CHIP: Record<TaskContextKind, string> = {
   campus_session: 'bg-blue-50 text-blue-700',
   agenda_item: 'bg-violet-50 text-violet-700',
   onboarding_member: 'bg-amber-50 text-amber-700',
+  whatsapp_topic: 'bg-orange-50 text-orange-700',
   standalone: 'bg-neutral-100 text-neutral-600',
 }
 

@@ -4,6 +4,7 @@ import type { SupabaseClient } from '@supabase/supabase-js'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
+import { notifyUser } from '@/kernel/notifications/notify'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { categorizeWhatsAppFeed, type WhatsAppCategory } from '@/lib/ai/whatsapp-feed-categorization'
 import { loadWhatsAppFeedWindow } from '@/modules/ai-features/domain/whatsapp-feed-store'
@@ -92,7 +93,21 @@ export async function runWhatsAppDigest(
     if (startDate > endDate) return { ok: false, error: 'The start date must be on or before the end date.' }
 
     const monthly = asText(formData.get('monthly')) === 'true'
-    const campusSessionId = asText(formData.get('campus_session_id')) || null
+    let campusSessionId = asText(formData.get('campus_session_id')) || null
+
+    // Auto-link to the campus meeting the window closes on (window end === a
+    // meeting date), so the Campus WhatsApp tab resolves this same digest record
+    // without re-running the AI. Explicit selection wins.
+    if (!campusSessionId) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { data: closing } = await (supabase as any)
+        .from('campus_sessions')
+        .select('id')
+        .eq('session_date', endDate)
+        .order('created_at', { ascending: true })
+        .limit(1)
+      campusSessionId = (closing ?? [])[0]?.id ?? null
+    }
 
     const startIso = `${startDate}T00:00:00.000Z`
     const endIso = `${endDate}T23:59:59.999Z`
@@ -320,6 +335,61 @@ export async function confirmNewMember(
     return { ok: true, message: `${fullName} set up for onboarding.` }
   } catch (error) {
     return { ok: false, error: error instanceof Error ? error.message : 'Could not set up the new member.' }
+  }
+}
+
+/**
+ * Turn a categorized WhatsApp topic into an assigned comms task. The task is a
+ * normal `comms_tasks` row linked to the topic via `whatsapp_feed_item_id`, so
+ * it surfaces in the owner's "my dashboard" through the unified_tasks view with
+ * the topic as its context. Owner + optional deadline; the topic supplies the
+ * context label/link (no data duplicated).
+ */
+export async function createTopicTask(
+  _prev: DigestActionState = INITIAL_STATE,
+  formData: FormData
+): Promise<DigestActionState> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const itemId = asText(formData.get('item_id'))
+    const title = asText(formData.get('title'))
+    if (!itemId) return { ok: false, error: 'Topic is required.' }
+    if (!title) return { ok: false, error: 'A task title is required.' }
+
+    const ownerRaw = asText(formData.get('owner_id'))
+    const ownerId = ownerRaw && ownerRaw !== 'none' ? ownerRaw : user.id
+    const description = asText(formData.get('description')) || null
+    const dueRaw = asText(formData.get('due_date'))
+    const dueDate = /^\d{4}-\d{2}-\d{2}$/.test(dueRaw) ? dueRaw : null
+
+    const db = supabase as unknown as LooseDb
+    const { error } = await db.from('comms_tasks').insert({
+      title,
+      description,
+      owner_id: ownerId,
+      due_date: dueDate,
+      status: 'not_started',
+      whatsapp_feed_item_id: itemId,
+      created_by: user.id,
+    })
+    if (error) throw new Error(error.message)
+
+    if (ownerId !== user.id) {
+      await notifyUser({
+        recipientId: ownerId,
+        event: 'task_assigned',
+        title: 'New task assigned to you',
+        body: `You have been assigned a task: "${title}"`,
+        linkUrl: '/app/comms/dashboard',
+      })
+    }
+
+    revalidatePath(DIGEST_PATH)
+    revalidatePath('/app/comms/dashboard')
+    revalidatePath('/app/dashboard')
+    return { ok: true, message: 'Task created and assigned.' }
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not create the task.' }
   }
 }
 

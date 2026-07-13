@@ -3,6 +3,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import type { WhatsAppFeedMessage } from './whatsapp-feed-categorization'
+import { toDigestItem, toDigestSummary, type DigestBundle } from '@/lib/whatsapp-digest-types'
 
 type AppSupabaseClient = SupabaseClient<Database>
 
@@ -72,6 +73,66 @@ export async function loadWhatsAppFeedWindow(
     text: typeof row.raw_content === 'string' ? row.raw_content : '',
     timestamp: typeof row.captured_at === 'string' ? row.captured_at : new Date().toISOString(),
   }))
+}
+
+// whatsapp_feed_summaries / whatsapp_feed_items reads for the shared digest.
+type LooseDigestDb = {
+  from: (table: string) => {
+    select: (columns: string) => {
+      eq: (
+        column: string,
+        value: string
+      ) => {
+        in: (
+          column: string,
+          values: string[]
+        ) => {
+          order: (
+            column: string,
+            opts: { ascending: boolean }
+          ) => { limit: (n: number) => Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }> }
+        }
+        order: (
+          column: string,
+          opts: { ascending: boolean }
+        ) => Promise<{ data: Record<string, unknown>[] | null; error: { message: string } | null }>
+      }
+    }
+  }
+}
+
+/**
+ * Load the shared WhatsApp digest for a campus meeting: the most recent
+ * pending-or-saved `whatsapp_feed_summaries` row linked to that session, plus its
+ * items. Returns null when none has been generated. Campus reads through this —
+ * it never runs the AI, so the digest is generated once (in the WhatsApp
+ * workspace) and read in both places.
+ */
+export async function loadCampusDigest(supabase: AppSupabaseClient, campusSessionId: string): Promise<DigestBundle | null> {
+  const db = supabase as unknown as LooseDigestDb
+
+  const { data: summaryRows, error } = await db
+    .from('whatsapp_feed_summaries')
+    .select('id, window_start, window_end, monthly, tldr, monthly_summary, message_count, status, model, created_at')
+    .eq('campus_session_id', campusSessionId)
+    .in('status', ['pending', 'saved'])
+    .order('created_at', { ascending: false })
+    .limit(1)
+  if (error) throw new Error(error.message)
+
+  const summaryRow = (summaryRows ?? [])[0]
+  if (!summaryRow) return null
+
+  const { data: itemRows } = await db
+    .from('whatsapp_feed_items')
+    .select('id, category, title, person, item_date, detail, source_message_ids, proposal_status, linked_type')
+    .eq('summary_id', String(summaryRow.id))
+    .order('created_at', { ascending: true })
+
+  return {
+    summary: toDigestSummary(summaryRow),
+    items: (itemRows ?? []).map(toDigestItem),
+  }
 }
 
 /** Load campus session dates (most recent first) for default window derivation. */

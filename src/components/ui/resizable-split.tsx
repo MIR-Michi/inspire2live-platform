@@ -30,9 +30,10 @@ export function ResizableSplit({
   defaultRatio = 0.66,
   minRatio = DEFAULT_MIN_RATIO,
   maxRatio = DEFAULT_MAX_RATIO,
-  handlePx = DEFAULT_HANDLE_PX,
+  handlePx,
   className = '',
   ariaLabel = 'Resize columns',
+  variant = 'gap',
 }: {
   storageKey: string
   left: ReactNode
@@ -43,7 +44,15 @@ export function ResizableSplit({
   handlePx?: number
   className?: string
   ariaLabel?: string
+  /**
+   * 'gap' — a spaced divider with a pill handle (default, for card layouts).
+   * 'seam' — a thin full-height line, no gap, for seamless bordered containers
+   *          (e.g. the campus month grid) where a gap would break the border.
+   */
+  variant?: 'gap' | 'seam'
 }) {
+  const seam = variant === 'seam'
+  const effectiveHandlePx = handlePx ?? (seam ? 9 : DEFAULT_HANDLE_PX)
   const containerRef = useRef<HTMLDivElement | null>(null)
   const [ratio, setRatio] = useState(() => clampRatio(defaultRatio, minRatio, maxRatio))
   const [dragging, setDragging] = useState(false)
@@ -113,11 +122,12 @@ export function ResizableSplit({
     persist(value)
   }
 
+  const gapClass = seam ? 'gap-0' : 'gap-6 lg:gap-0'
   return (
     <div
       ref={containerRef}
-      style={{ ['--split-cols' as string]: columnsTemplate(ratio, handlePx, minRatio, maxRatio) }}
-      className={`grid grid-cols-1 gap-6 lg:gap-0 lg:[grid-template-columns:var(--split-cols)] ${dragging ? 'select-none' : ''} ${className}`.trim()}
+      style={{ ['--split-cols' as string]: columnsTemplate(ratio, effectiveHandlePx, minRatio, maxRatio) }}
+      className={`grid grid-cols-1 ${gapClass} lg:[grid-template-columns:var(--split-cols)] ${dragging ? 'select-none' : ''} ${className}`.trim()}
     >
       <div className="min-w-0 min-h-0">{left}</div>
       <div
@@ -139,11 +149,19 @@ export function ResizableSplit({
           dragging ? 'touch-none' : ''
         }`}
       >
-        <span
-          className={`h-16 w-1 rounded-full transition-colors ${
-            dragging ? 'bg-orange-500' : 'bg-neutral-200 group-hover:bg-orange-400 group-focus:bg-orange-400'
-          }`}
-        />
+        {seam ? (
+          <span
+            className={`h-full w-px transition-colors ${
+              dragging ? 'bg-orange-500' : 'bg-neutral-200 group-hover:bg-orange-400 group-focus:bg-orange-400'
+            }`}
+          />
+        ) : (
+          <span
+            className={`h-16 w-1 rounded-full transition-colors ${
+              dragging ? 'bg-orange-500' : 'bg-neutral-200 group-hover:bg-orange-400 group-focus:bg-orange-400'
+            }`}
+          />
+        )}
       </div>
       <div className="min-w-0 min-h-0">{right}</div>
     </div>

@@ -3,106 +3,23 @@
 import Link from 'next/link'
 import { useActionState, useRef, useState } from 'react'
 import { ResizableSplit } from '@/components/ui/resizable-split'
+import type { TeamMemberOption } from '@/lib/comms-dashboard-data'
 import type { WhatsAppThreadMessage } from '@/lib/comms-whatsapp-thread'
-import {
-  runWhatsAppDigest,
-  saveWhatsAppDigest,
-  discardWhatsAppDigest,
-  confirmBirthday,
-  confirmEvent,
-  confirmNewMember,
-  dismissWhatsAppItem,
-  type DigestActionState,
-} from '@/app/app/comms/whatsapp/digest/actions'
+import { runWhatsAppDigest, type DigestActionState } from '@/app/app/comms/whatsapp/digest/actions'
 import { WhatsAppFeedList } from './whatsapp-feed-list'
+import { WhatsAppDigestPanel, type DigestItem, type DigestSummary } from './whatsapp-digest-panel'
 
-export type DigestItem = {
-  id: string
-  category: string
-  title: string
-  person: string | null
-  date: string | null
-  detail: string | null
-  sourceMessageIds: string[]
-  proposalStatus: string
-  linkedType: string | null
-}
-
-export type DigestSummary = {
-  id: string
-  windowStart: string
-  windowEnd: string
-  monthly: boolean
-  tldr: string
-  monthlySummary: string | null
-  status: string
-  messageCount: number
-  model: string | null
-}
-
+export type { DigestItem, DigestSummary } from './whatsapp-digest-panel'
 export type CampusOption = { id: string; label: string }
 
 const INITIAL: DigestActionState = { ok: false }
-
-const CATEGORY_META: Record<string, { label: string; badge: string }> = {
-  birthday: { label: 'Birthday', badge: 'bg-pink-100 text-pink-700' },
-  new_member: { label: 'New member', badge: 'bg-emerald-100 text-emerald-700' },
-  event: { label: 'Event', badge: 'bg-amber-100 text-amber-700' },
-  question: { label: 'Question / request', badge: 'bg-sky-100 text-sky-700' },
-  news: { label: 'News / info', badge: 'bg-indigo-100 text-indigo-700' },
-  i2l_initiative: { label: 'I2L initiative', badge: 'bg-orange-100 text-orange-700' },
-  other: { label: 'Other', badge: 'bg-neutral-100 text-neutral-600' },
-}
-
-const CONFIRM_ACTION: Record<string, typeof confirmBirthday> = {
-  birthday: confirmBirthday,
-  new_member: confirmNewMember,
-  event: confirmEvent,
-}
-
-function formatDate(value: string) {
-  const d = new Date(value)
-  return Number.isNaN(d.getTime()) ? value : new Intl.DateTimeFormat('en-GB', { dateStyle: 'medium' }).format(d)
-}
-
-function ActionButton({
-  action,
-  hidden,
-  label,
-  pendingLabel,
-  variant = 'neutral',
-}: {
-  action: (prev: DigestActionState, fd: FormData) => Promise<DigestActionState>
-  hidden: Record<string, string>
-  label: string
-  pendingLabel: string
-  variant?: 'primary' | 'neutral' | 'ghost'
-}) {
-  const [state, formAction, pending] = useActionState(action, INITIAL)
-  const cls =
-    variant === 'primary'
-      ? 'bg-orange-600 text-white hover:bg-orange-500'
-      : variant === 'ghost'
-        ? 'text-neutral-500 hover:text-neutral-800'
-        : 'bg-neutral-900 text-white hover:bg-neutral-700'
-  return (
-    <form action={formAction} className="inline-flex flex-col">
-      {Object.entries(hidden).map(([k, v]) => (
-        <input key={k} type="hidden" name={k} value={v} />
-      ))}
-      <button type="submit" disabled={pending} className={`rounded-lg px-3 py-1.5 text-xs font-semibold transition disabled:opacity-50 ${cls}`}>
-        {pending ? pendingLabel : label}
-      </button>
-      {state.error && <span className="mt-1 text-[11px] font-medium text-red-600">{state.error}</span>}
-    </form>
-  )
-}
 
 export function WhatsAppWorkspaceShell({
   aiEnabled,
   canDelete,
   defaultWindow,
   campusSessions,
+  teamMembers,
   summary,
   items,
   feed,
@@ -111,6 +28,7 @@ export function WhatsAppWorkspaceShell({
   canDelete: boolean
   defaultWindow: { start: string; end: string }
   campusSessions: CampusOption[]
+  teamMembers: TeamMemberOption[]
   summary: DigestSummary | null
   items: DigestItem[]
   feed: WhatsAppThreadMessage[]
@@ -128,8 +46,6 @@ export function WhatsAppWorkspaceShell({
     const first = item.sourceMessageIds.find((id) => feedRefs.current.has(id))
     if (first) feedRefs.current.get(first)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
   }
-
-  const activeItems = items.filter((i) => i.proposalStatus !== 'dismissed')
 
   const runControls = (
     <form action={runAction} className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
@@ -176,76 +92,13 @@ export function WhatsAppWorkspaceShell({
   const generatedPanel = (
     <section className="space-y-4">
       {runControls}
-      {!summary ? (
+      {summary ? (
+        <WhatsAppDigestPanel summary={summary} items={items} teamMembers={teamMembers} selectedSourceIds={selectedIds} onSelectItem={selectItem} />
+      ) : (
         <p className="rounded-2xl border border-dashed border-neutral-300 bg-neutral-50 p-6 text-center text-sm text-neutral-500">
-          No categorization yet. Pick a window and run it to see the summary and categorized items; the raw feed on the right updates to
+          No categorization yet. Pick a window and run it to see the summary and categorized topics; the raw feed on the right updates to
           match.
         </p>
-      ) : (
-        <>
-          <div className="rounded-2xl border border-neutral-200 bg-white p-4 shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <h2 className="text-sm font-semibold text-neutral-900">
-                  Summary · {formatDate(summary.windowStart)} → {formatDate(summary.windowEnd)}
-                </h2>
-                <p className="text-xs text-neutral-500">
-                  {summary.messageCount} message{summary.messageCount === 1 ? '' : 's'} · <span className="uppercase tracking-wide">{summary.status}</span>
-                  {summary.model ? ` · ${summary.model}` : ''}
-                </p>
-              </div>
-              {summary.status === 'pending' && (
-                <div className="flex items-center gap-2">
-                  <ActionButton action={saveWhatsAppDigest} hidden={{ summary_id: summary.id }} label="Save digest" pendingLabel="Saving…" variant="primary" />
-                  <ActionButton action={discardWhatsAppDigest} hidden={{ summary_id: summary.id }} label="Discard" pendingLabel="…" variant="ghost" />
-                </div>
-              )}
-            </div>
-            <p className="mt-3 text-sm text-neutral-700">{summary.tldr}</p>
-            {summary.monthlySummary && (
-              <div className="mt-3 rounded-xl bg-orange-50 p-3">
-                <p className="text-xs font-semibold uppercase tracking-wide text-orange-700">Monthly summary</p>
-                <p className="mt-1 text-sm text-neutral-700">{summary.monthlySummary}</p>
-              </div>
-            )}
-          </div>
-
-          <div className="space-y-2">
-            {activeItems.length === 0 && (
-              <p className="rounded-xl border border-neutral-200 bg-white p-4 text-sm text-neutral-500">No categorized items for this window.</p>
-            )}
-            {activeItems.map((item) => {
-              const meta = CATEGORY_META[item.category] ?? CATEGORY_META.other
-              const isSelected = item.sourceMessageIds.some((id) => selectedIds.has(id))
-              const canConfirm = item.proposalStatus === 'proposed' && CONFIRM_ACTION[item.category]
-              return (
-                <div key={item.id} className={`rounded-xl border bg-white p-3 shadow-sm transition ${isSelected ? 'border-orange-400 ring-1 ring-orange-300' : 'border-neutral-200'}`}>
-                  <button type="button" onClick={() => selectItem(item)} className="w-full text-left">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${meta.badge}`}>{meta.label}</span>
-                      <span className="text-sm font-medium text-neutral-900">{item.title}</span>
-                    </div>
-                    {(item.person || item.date || item.detail) && (
-                      <p className="mt-1 text-xs text-neutral-500">{[item.person, item.date, item.detail].filter(Boolean).join(' · ')}</p>
-                    )}
-                    <p className="mt-1 text-[11px] text-orange-600">
-                      {item.sourceMessageIds.length} source message{item.sourceMessageIds.length === 1 ? '' : 's'} — click to locate
-                    </p>
-                  </button>
-                  {item.proposalStatus === 'confirmed' && (
-                    <p className="mt-2 text-[11px] font-semibold text-emerald-600">✓ Confirmed{item.linkedType ? ` → ${item.linkedType.replace('_', ' ')}` : ''}</p>
-                  )}
-                  {canConfirm && (
-                    <div className="mt-2 flex items-center gap-2">
-                      <ActionButton action={CONFIRM_ACTION[item.category]} hidden={{ item_id: item.id }} label={item.category === 'new_member' ? 'Set up onboarding' : 'Add to calendar'} pendingLabel="…" variant="primary" />
-                      <ActionButton action={dismissWhatsAppItem} hidden={{ item_id: item.id }} label="Dismiss" pendingLabel="…" variant="ghost" />
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-          </div>
-        </>
       )}
     </section>
   )
@@ -256,7 +109,7 @@ export function WhatsAppWorkspaceShell({
         <div className="flex items-center justify-between gap-2 border-b border-neutral-100 px-4 py-2">
           <div>
             <h2 className="text-sm font-semibold text-neutral-900">Raw WhatsApp feed</h2>
-            <p className="text-xs text-neutral-500">Click an item on the left to highlight its source here.</p>
+            <p className="text-xs text-neutral-500">Click a topic on the left to highlight its source here.</p>
           </div>
           <Link href="/app/comms/whatsapp/health" className="shrink-0 rounded-lg border border-neutral-200 px-2 py-1 text-xs font-semibold text-neutral-600 hover:bg-neutral-50">
             Health →
