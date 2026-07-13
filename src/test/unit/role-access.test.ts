@@ -72,6 +72,7 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
       'Planner',
       'Campus',
       'WhatsApp',
+      'WhatsApp digest',
       'CRM',
       'Conferences',
       'Podcast',

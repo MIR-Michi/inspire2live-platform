@@ -16,11 +16,20 @@ export const manifest = defineManifest({
   surface: "internal",
   data: {
     schema: "ai_features",
-    tables: ["ai_settings", "ai_usage_log", "org_feed_config", "news_feed_items", "meeting_summaries", "meeting_transcripts"],
+    tables: [
+      "ai_settings",
+      "ai_usage_log",
+      "org_feed_config",
+      "news_feed_items",
+      "meeting_summaries",
+      "meeting_transcripts",
+      "whatsapp_feed_summaries",
+      "whatsapp_feed_items",
+    ],
   },
   provides: {
-    api: ["loadOrgFeed", "summarizeMeeting"],
-    ui: ["OrgNewsFeed", "AiSettings"],
+    api: ["loadOrgFeed", "summarizeMeeting", "categorizeWhatsAppFeed"],
+    ui: ["OrgNewsFeed", "AiSettings", "WhatsAppDigestShell"],
   },
   dependsOn: {
     kernel: ["identity", "rbac", "ai-client", "notifications"],
@@ -30,7 +39,7 @@ export const manifest = defineManifest({
   personas: ["communications-coordinator", "platform-admin"],
   roles: { read: ["authenticated"], write: ["admin"] },
   requirements: ["REQ-AI-001"],
-  operations: ["org-newsfeed-run", "meeting-summary", "net-monitoring"],
+  operations: ["org-newsfeed-run", "meeting-summary", "whatsapp-feed-categorization", "net-monitoring"],
 })
 
 export default manifest
