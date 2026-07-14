@@ -1,6 +1,6 @@
 # Sprint 17 — Platform Settings Space (Stage 1.5)
 
-> **Status:** Draft (not started)
+> **Status:** Not Started
 > **Theme:** Re-root platform configuration under a first-class **Platform Settings** space, and build the
 > manifest-driven settings machinery that doubles as the composition/blueprint layer for the modular
 > toolbox future.
@@ -26,9 +26,10 @@ sprint produces:
    *rendered from the manifest*, not hand-coded.
 4. **Two reference settings panels** rendered end-to-end from that machinery — **Organization/Brand**
    (kernel) and **one component config panel** — the way `feedback` was the reference component in Sprint 16.
-5. **Migrated existing surfaces** — AI Settings, Org Feed, Permissions, and User Activity move *into* the
-   settings shell as sections with **no behaviour change**; **Feedback** moves *out* to its component
-   operational surface (guest-submissions already did).
+5. **Migrated existing surfaces** — AI Settings, Org Feed, Permissions, User Activity, and **Feedback**
+   move into / stay within the settings shell as sections with **no behaviour change**. Feedback is
+   **kept in** under *Observability & Review*; only guest-submissions (external-authored content) remains
+   in its component, and it already moved there.
 6. **Extended governance** — settings-ownership reconciliation + panel reachability added to the ADR-0009
    §10 CI gates, so orphan settings and zombie panels fail the build.
 7. **Docs + traceability** — ADR-0010, `REQ-SETTINGS-*`, updated `docs/TRACEABILITY.md`, `docs/README.md`,
@@ -90,8 +91,9 @@ claimed by a manifest/kernel panel or fails CI (orphan); (2) a component declari
 a panel and vice-versa (zombie); (3) a lint flag for new `process.env.*` reads of tunables. Wired into
 `pnpm governance`.
 
-**Feedback moves out.** `feedback` admin surface relocates from `/app/admin` to its component operational
-route (mirrors the guest-submissions move already done); no feedback behaviour change.
+**Feedback kept in.** The `feedback` admin surface stays within the settings space, re-homed under
+*Observability & Review* alongside User Activity; no feedback behaviour change. (Guest-submissions —
+external-authored content — remains in its component, already moved.)
 
 ## Acceptance criteria
 
@@ -109,8 +111,8 @@ route (mirrors the guest-submissions move already done); no feedback behaviour c
       form code beyond the shared field renderers. _(S17-T06, T07)_
 - [ ] AI Settings, Org Feed, Permissions, and User Activity are reachable as sections inside the settings
       shell with **no behaviour change** (existing tests green). _(S17-T08)_
-- [ ] **Feedback** is moved out of `/app/admin` to its component operational surface; feedback behaviour
-      unchanged. _(S17-T09)_
+- [ ] **Feedback** remains reachable within the settings space under *Observability & Review*; feedback
+      behaviour unchanged. _(S17-T09)_
 - [ ] Governance extended and green in CI: settings-ownership reconciliation (orphan setting fails), panel
       reachability (zombie panel fails), env-tunable lint. `pnpm governance` covers them. _(S17-T10)_
 - [ ] `docs/PLATFORM_SETTINGS_CONCEPT.md` referenced; ADR-0010 authored; `REQ-SETTINGS-00{1..n}` recorded in

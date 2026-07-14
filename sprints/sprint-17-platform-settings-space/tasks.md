@@ -1,7 +1,7 @@
 # Sprint 17 — Tasks
 
 > Status values: `Not Started` · `In Progress` · `Completed` · `Blocked`.
-> See `sprints/README.md` for the workflow. All tasks start `Not Started` (this sprint is a draft).
+> See `sprints/README.md` for the workflow. All tasks start `Not Started`.
 
 | ID | Task | Owner | Status | Notes |
 |---|---|---|---|---|
@@ -13,7 +13,7 @@
 | S17-T06 | **Field renderers + Organization/Brand panel (kernel reference).** Shared renderer per field type; kernel Organization panel (name, logo, colours, timezone, locale) rendered from a kernel panel declaration, read/write via resolver. | TBD | Not Started | Concept §5, §7 #2. First reference panel. |
 | S17-T07 | **Component config panel (component reference).** Render one component's settings entirely from its manifest `config` (candidate: **intake** — `classifier`, `channels`). Proves add-a-field → add-a-control with zero UI code. | TBD | Not Started | Concept §5. Second reference panel; template others copy. |
 | S17-T08 | **Migrate existing surfaces in.** Move AI Settings, Org Feed, Permissions, User Activity under the settings shell as sections; internals untouched; imports/routes updated. | TBD | Not Started | `src/app/app/admin/{ai,org-feed,permissions,activity}`. Behaviour unchanged. |
-| S17-T09 | **Move Feedback out.** Relocate the feedback admin surface from `/app/admin` to its component operational route (mirror the guest-submissions move). | TBD | Not Started | `src/modules/feedback`. No behaviour change. |
+| S17-T09 | **Keep Feedback in.** Re-home the feedback admin surface under the settings *Observability & Review* section (kept in, not moved out); routes/imports updated. | TBD | Not Started | `src/modules/feedback`. No behaviour change. |
 | S17-T10 | **Governance extension.** Add settings-ownership reconciliation (orphan setting fails), panel reachability (zombie panel fails), and an env-tunable lint; wire into `pnpm governance`. | TBD | Not Started | Concept §8; extends ADR-0009 §10 gates in `src/kernel/governance`. |
 | S17-T11 | **Docs + traceability.** Author ADR-0010; record `REQ-SETTINGS-*`; update `docs/TRACEABILITY.md`, `docs/README.md`, `sprints/README.md`. | TBD | Not Started | Concept is `docs/PLATFORM_SETTINGS_CONCEPT.md` (already drafted). |
 | S17-T12 | **Verification.** Typecheck, lint, unit+coverage, e2e green; smoke every migrated section + both reference panels; confirm no runtime behaviour change from the moves. | TBD | Not Started | Definition of Done per `docs/IMPLEMENTATION_GUIDE.md`. |

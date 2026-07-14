@@ -103,9 +103,11 @@ frequency, admin-authored, and (mostly) blueprint-portable.
 
 **NOT settings:**
 
-- **Operational work queues** — feedback triage, guest-submission review. These are *daily work on
-  content*, not configuration. They belong to the owning component's operational surface. (Guest
-  submissions already moved; **feedback should follow** — out of `/app/admin`, into its component.)
+- **Operational work queues** — guest-submission review is *daily work on externally-authored content*,
+  not configuration, and belongs to the owning component's operational surface (already moved).
+  **Feedback is the deliberate exception:** it is platform-wide user feedback addressed to admins, so it
+  is kept **in** the settings space under *Observability & Review* as an admin monitoring/review surface,
+  alongside the audit trail — a pragmatic co-location, not a re-classification of feedback as config.
 - **The audit trail of what others did** — user activity is *observability*, not a knob. It stays
   admin-only and read-only, but it lives in an **Observability** section of settings, clearly separated
   from anything editable (it configures nothing; it reports).
@@ -149,13 +151,13 @@ Platform Settings   (/app/settings — space id: admin, label: "Platform Setting
 ├── Automation                   ← jobs & cadences
 │   └── Scheduled Jobs     (NEW: digest cadence, feed refresh, classifier mode — today hardcoded)
 │
-└── Observability                ← read-only, configures nothing
-    ├── User Activity     (today /app/admin/activity)
+└── Observability & Review        ← admin monitoring; mostly read-only
+    ├── User Activity     (today /app/admin/activity — read-only audit)
+    ├── Feedback          (today /app/admin/feedback — KEPT IN; admin review queue)
     ├── AI Usage          (surfaced from ai_usage_log)
     └── Platform Health   (governance reconciliation status + version/changelog)
 
 Moved OUT of settings:
-  • Feedback  → component operational surface (out of /app/admin "Account")
   • Guest submissions → already moved to /app/comms/conferences/submissions
 ```
 
@@ -320,7 +322,7 @@ Aligned to the ADR-0009 stages; this concept lives between Stage 1 (declared bou
 
 | Step | What ships | DB change? |
 |---|---|---|
-| **A — Re-root the IA** | Introduce Platform Settings space; move Users/Permissions/AI/Org-Feed/Activity in as sections; drop the header-button hub; move Feedback out. Behaviour of moved pages unchanged. | None |
+| **A — Re-root the IA** | Introduce Platform Settings space; move Users/Permissions/AI/Org-Feed/Activity in as sections; drop the header-button hub; keep Feedback in under *Observability & Review*. Behaviour of moved pages unchanged. | None |
 | **B — Settings store + resolver** | Kernel `platform_settings` store; typed resolver (manifest default → DB → env); audited writes; secret-reference pattern generalised from `ai_settings`. | Yes (1 table) |
 | **C — Manifest config vocabulary** | Typed `config` field types + `settingsPanel` surface in the manifest type; governance checks extended (§8). | None |
 | **D — Two reference panels** | Organization/Brand (kernel) + one component config panel rendered *entirely from manifest*, proving the pattern (feedback-as-reference, repeated for settings). | None |
