@@ -56,6 +56,7 @@ These remain planning placeholders until the Sprint 04 pilot review is complete.
 - [`sprint-14-ai-augmentation/`](sprint-14-ai-augmentation/description.md) — Claude-powered comms intelligence: structure incoming content, summarize meetings + propose follow-up tasks from uploaded transcripts, an admin-configured organization news feed, and per-user net monitoring.
 - [`sprint-15-legacy-cleanup/`](sprint-15-legacy-cleanup/description.md) — retire disused spaces and dead code ahead of the modular restructuring.
 - [`sprint-16-modular-component-foundation/`](sprint-16-modular-component-foundation/description.md) — Stage 1 of the modular component architecture (ADR-0009): declare component boundaries with **zero database change** — stand up `src/kernel/` + `src/modules/`, author a manifest per component, enforce import boundaries in CI, and convert `feedback` end-to-end as the reference. See `docs/MODULAR_COMPONENT_ARCHITECTURE.md`.
+- [`sprint-17-platform-settings-space/`](sprint-17-platform-settings-space/description.md) — **Draft.** Stage 1.5: re-root platform configuration under a first-class **Platform Settings** space and build the manifest-driven settings machinery that doubles as the composition/blueprint layer for the toolbox future. See `docs/PLATFORM_SETTINGS_CONCEPT.md`.
 
 ## How to read a sprint
 
