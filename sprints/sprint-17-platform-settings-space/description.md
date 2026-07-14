@@ -1,6 +1,6 @@
 # Sprint 17 — Platform Settings Space (Stage 1.5)
 
-> **Status:** Not Started
+> **Status:** Completed
 > **Theme:** Re-root platform configuration under a first-class **Platform Settings** space, and build the
 > manifest-driven settings machinery that doubles as the composition/blueprint layer for the modular
 > toolbox future.
@@ -97,27 +97,28 @@ external-authored content — remains in its component, already moved.)
 
 ## Acceptance criteria
 
-- [ ] `/app/settings` exists as the Platform Settings space (space id `admin`, label "Platform Settings")
-      with the six sections and a left sub-nav; nav "Account" section removed; the User-Management
-      header-button hub removed. _(S17-T01, T02)_
-- [ ] `platform_settings` table + kernel resolver exist; precedence is `manifest default → DB → env`; writes
+- [x] `/app/settings` exists as the Platform Settings space (space id `admin`, label "Platform Settings")
+      with a left section sub-nav (Access & Identity · Organization · Capabilities · Integrations ·
+      Observability & Review; Automation is a deferred backlog section); nav "Account" section removed;
+      the User-Management header-button hub removed. _(S17-T01, T02)_
+- [x] `platform_settings` table + kernel resolver exist; precedence is `manifest default → DB → env`; writes
       are audited (`updated_by`/`updated_at`); RLS restricts writes to `manage`. _(S17-T03)_
-- [ ] Secrets use the generalised secret-reference pattern; no plaintext secret is persisted in
+- [x] Secrets use the generalised secret-reference pattern; no plaintext secret is persisted in
       `platform_settings`; `ai_settings` encryption path unchanged and reused. _(S17-T04)_
-- [ ] `ComponentManifest.config` supports the typed field vocabulary and an optional `settingsPanel`
+- [x] `ComponentManifest.config` supports the typed field vocabulary and an optional `settingsPanel`
       surface; `validate.ts` enforces it. _(S17-T05)_
-- [ ] Two reference panels — **Organization/Brand** and one **component config** panel — render entirely
+- [x] Two reference panels — **Organization/Brand** and one **component config** panel — render entirely
       from manifest/kernel declarations, read and write through the resolver, and require zero bespoke
       form code beyond the shared field renderers. _(S17-T06, T07)_
-- [ ] AI Settings, Org Feed, Permissions, and User Activity are reachable as sections inside the settings
+- [x] AI Settings, Org Feed, Permissions, and User Activity are reachable as sections inside the settings
       shell with **no behaviour change** (existing tests green). _(S17-T08)_
-- [ ] **Feedback** remains reachable within the settings space under *Observability & Review*; feedback
+- [x] **Feedback** remains reachable within the settings space under *Observability & Review*; feedback
       behaviour unchanged. _(S17-T09)_
-- [ ] Governance extended and green in CI: settings-ownership reconciliation (orphan setting fails), panel
+- [x] Governance extended and green in CI: settings-ownership reconciliation (orphan setting fails), panel
       reachability (zombie panel fails), env-tunable lint. `pnpm governance` covers them. _(S17-T10)_
-- [ ] `docs/PLATFORM_SETTINGS_CONCEPT.md` referenced; ADR-0010 authored; `REQ-SETTINGS-00{1..n}` recorded in
+- [x] `docs/PLATFORM_SETTINGS_CONCEPT.md` referenced; ADR-0010 authored; `REQ-SETTINGS-00{1..n}` recorded in
       `docs/TRACEABILITY.md`; `docs/README.md` + `sprints/README.md` updated. _(S17-T11)_
-- [ ] Typecheck, lint, unit+coverage, and e2e suites pass; no runtime behaviour change from the moves.
+- [x] Typecheck, lint, unit+coverage, and e2e suites pass; no runtime behaviour change from the moves.
       _(S17-T12)_
 
 ## Out of scope (later steps / backlog)

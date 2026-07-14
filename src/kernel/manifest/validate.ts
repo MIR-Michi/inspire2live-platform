@@ -9,13 +9,17 @@
  * governance CI checks) can collect and report every problem in one pass.
  */
 
-import type { ComponentManifest, ComponentSurface } from '@/kernel/manifest/types'
+import type { ComponentManifest, ComponentSurface, ConfigFieldType } from '@/kernel/manifest/types'
+import { isConfigField } from '@/kernel/manifest/types'
 
 export type ValidationResult =
   | { ok: true; manifest: ComponentManifest }
   | { ok: false; errors: string[] }
 
 const SURFACES: readonly ComponentSurface[] = ['internal', 'public', 'headless']
+const CONFIG_FIELD_TYPES: readonly ConfigFieldType[] = [
+  'string', 'text', 'boolean', 'enum', 'number', 'cron', 'color', 'url', 'email', 'secret',
+]
 const ID_RE = /^[a-z][a-z0-9-]*$/
 const SEMVER_RE = /^\d+\.\d+\.\d+$/
 
@@ -90,6 +94,9 @@ export function validateManifest(input: unknown): ValidationResult {
           at(id, `\`provides.${k}\` must be an array of strings when present`)
         }
       }
+      if (m.provides.settingsPanel !== undefined && typeof m.provides.settingsPanel !== 'boolean') {
+        at(id, '`provides.settingsPanel` must be a boolean when present')
+      }
     }
   }
 
@@ -135,9 +142,35 @@ export function validateManifest(input: unknown): ValidationResult {
     }
   }
 
-  // --- config (optional record) ---
-  if (m.config !== undefined && !isRecord(m.config)) {
-    at(id, '`config` must be an object when present')
+  // --- config (optional record of typed fields or legacy plain defaults) ---
+  let typedFieldCount = 0
+  if (m.config !== undefined) {
+    if (!isRecord(m.config)) {
+      at(id, '`config` must be an object when present')
+    } else {
+      for (const [key, field] of Object.entries(m.config)) {
+        if (!isConfigField(field)) continue // legacy plain-literal default — allowed
+        typedFieldCount++
+        if (!CONFIG_FIELD_TYPES.includes(field.type)) {
+          at(id, `\`config.${key}.type\` must be one of ${CONFIG_FIELD_TYPES.join(' | ')}`)
+        }
+        if (field.type === 'enum' && !isStringArray(field.options)) {
+          at(id, `\`config.${key}\` is an enum and must declare a string \`options\` array`)
+        }
+        if (field.options !== undefined && !isStringArray(field.options)) {
+          at(id, `\`config.${key}.options\` must be an array of strings when present`)
+        }
+      }
+    }
+  }
+
+  // --- settingsPanel ↔ typed config consistency (ADR-0010 §6 governance) ---
+  const declaresPanel = isRecord(m.provides) && m.provides.settingsPanel === true
+  if (declaresPanel && typedFieldCount === 0) {
+    at(id, '`provides.settingsPanel` is true but `config` declares no typed fields (zombie panel)')
+  }
+  if (!declaresPanel && typedFieldCount > 0) {
+    at(id, '`config` declares typed fields but `provides.settingsPanel` is not true (orphan config)')
   }
 
   if (errors.length > 0) return { ok: false, errors }

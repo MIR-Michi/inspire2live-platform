@@ -61,31 +61,13 @@ export default async function AdminUsersPage() {
     <div className="mx-auto max-w-5xl space-y-5">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-neutral-900">User Management</h1>
+          {/* Now a section of the Platform Settings space (ADR-0010) — the old
+              header-button hub to AI / Org Feed / Permissions is replaced by the
+              settings sub-nav. */}
+          <h1 className="text-2xl font-bold text-neutral-900">Users</h1>
           <p className="text-sm text-neutral-500">{users.length} users · {totalActive} active</p>
         </div>
         <div className="flex items-center gap-2">
-          <a
-            href="/app/admin/ai"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
-          >
-            AI Settings
-          </a>
-          <a
-            href="/app/admin/org-feed"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
-          >
-            Org Feed
-          </a>
-          <a
-            href="/app/admin/permissions"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-3 py-2 text-sm font-medium text-neutral-700 hover:bg-neutral-50"
-          >
-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M9 12.75L11.25 15 15 9.75m-3-7.036A11.959 11.959 0 013.598 6 11.99 11.99 0 003 9.749c0 5.592 3.824 10.29 9 11.623 5.176-1.332 9-6.03 9-11.622 0-1.31-.21-2.571-.598-3.751h-.152c-3.196 0-6.1-1.248-8.25-3.285z" />
-            </svg>
-            Permissions
-          </a>
           <PurgeDemoUsersButton demoUsers={demoUsers} />
           <InviteUserButton />
         </div>

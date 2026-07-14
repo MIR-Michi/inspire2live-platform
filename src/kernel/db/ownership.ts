@@ -37,6 +37,8 @@ export const KERNEL_TABLES: readonly string[] = [
   'activity_log',
   'user_activity_events',
   'email_log',
+  // platform settings store (ADR-0010) — kernel-owned, no single component
+  'platform_settings',
 ]
 
 /**

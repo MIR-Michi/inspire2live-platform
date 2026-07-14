@@ -115,12 +115,14 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
     expect(labels).toContain('Initiatives')
   })
 
-  it('shows the full extended tree for PlatformAdmin, incl. User Management', () => {
+  it('shows the full extended tree for PlatformAdmin, incl. Platform Settings', () => {
     const sections = getSideNavSections('PlatformAdmin', spacesFor('PlatformAdmin'))
-    const account = sections.find((s) => s.label === 'Account')
-    expect(account?.items.some((i) => i.id === 'admin')).toBe(true)
+    // Platform Settings (ADR-0010) replaces the old "Account" section as the
+    // single admin-gated entry into the settings space.
+    const platform = sections.find((s) => s.label === 'Platform')
+    expect(platform?.items.some((i) => i.id === 'settings')).toBe(true)
     const labels = sections.flatMap((s) => s.items.map((i) => i.label))
-    expect(labels).toEqual(expect.arrayContaining(['Planner', 'CRM', 'Initiatives', 'User Management']))
+    expect(labels).toEqual(expect.arrayContaining(['Planner', 'CRM', 'Initiatives', 'Platform Settings']))
   })
 
   it('reveals comms items to a NON-comms role when a space override grants access', () => {
