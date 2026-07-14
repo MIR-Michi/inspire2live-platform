@@ -351,7 +351,7 @@ Aligned to the ADR-0009 stages; this concept lives between Stage 1 (declared bou
 
 ## References
 
-- ADR-0010 — Platform Settings Space (decision record for this concept — to be authored with the sprint)
+- ADR-0010 — Platform Settings Space (`docs/ADR/0010-platform-settings-space.md`) — decision record for this concept
 - ADR-0009 — Modular Component Architecture (the composition model this settings layer edits)
 - ADR-0008 — Unified Task Domain Layer (the "config in code, authoritative store centralised" seed)
 - ADR-0004 — Role Model Design; `docs/ROLE_PERMISSION_MODEL.md` — the access matrix this re-homes

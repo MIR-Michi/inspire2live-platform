@@ -135,7 +135,7 @@ external-authored content — remains in its component, already moved.)
 
 - Concept: `docs/PLATFORM_SETTINGS_CONCEPT.md`
 - Architecture: `docs/MODULAR_COMPONENT_ARCHITECTURE.md`, ADR-0009
-- Decision: ADR-0010 — Platform Settings Space (to be authored in this sprint)
+- Decision: ADR-0010 — Platform Settings Space (`docs/ADR/0010-platform-settings-space.md`)
 - Seed patterns: ADR-0008 (centralised authoritative store), `ai_settings` (secret-at-rest)
 - Access model: `docs/ROLE_PERMISSION_MODEL.md`, ADR-0004
 - Conventions: `docs/IMPLEMENTATION_GUIDE.md`, `sprints/README.md`
