@@ -1,6 +1,8 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
+import { resolveEffectiveViewer } from '@/lib/view-as'
+import { normalizeRole } from '@/lib/role-access'
 import { CommsDashboardToggle } from '@/components/comms/comms-dashboard-toggle'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
 import { TeamDashboard } from '@/components/comms/team-dashboard'
@@ -38,18 +40,14 @@ export default async function CommsDashboardPage({
   const view = VALID_VIEWS.has(params.view ?? '') ? (params.view as 'personal' | 'team') : 'team'
 
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
 
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('name, role')
-    .eq('id', user.id)
-    .maybeSingle()
+  // Resolve the effective viewer so an admin previewing another user (view-as)
+  // sees that user's dashboard, not their own. Only admins can ever preview;
+  // otherwise this is the logged-in user.
+  const viewer = await resolveEffectiveViewer(supabase)
+  if (!viewer) redirect('/login')
 
-  if (!canAccessCommsWorkspace(profile?.role)) {
+  if (!canAccessCommsWorkspace(viewer.role)) {
     redirect('/app/dashboard')
   }
 
@@ -61,11 +59,11 @@ export default async function CommsDashboardPage({
       </div>
 
       {view === 'personal' ? (
-        <CommsDashboardPanel name={profile?.name} {...(await loadCommsPersonalDashboardData(supabase, user.id))} />
+        <CommsDashboardPanel name={viewer.name} {...(await loadCommsPersonalDashboardData(supabase, viewer.userId))} />
       ) : (
         <TeamDashboard
-          data={await loadCommsTeamDashboardData(supabase, { viewerId: user.id })}
-          canApprove={profile?.role === 'PlatformAdmin'}
+          data={await loadCommsTeamDashboardData(supabase, { viewerId: viewer.userId })}
+          canApprove={normalizeRole(viewer.role) === 'PlatformAdmin'}
           newsfeedRunStatus={await loadNewsfeedRunStatus()}
         />
       )}
