@@ -4,7 +4,8 @@ import { createClient } from '@/lib/supabase/server'
 import type { Tables } from '@/types/database'
 import { getDashboardConfig } from '@/lib/dashboard-config'
 import { buildDashboardGreeting, resolveDashboardVariant } from '@/lib/dashboard-view'
-import { getViewAsRole } from '@/lib/view-as'
+import { getViewAsRole, resolveEffectiveViewer } from '@/lib/view-as'
+import { normalizeRole } from '@/lib/role-access'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-data'
@@ -378,9 +379,15 @@ export default async function DashboardPage() {
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
   const actualRole = profile?.role ?? 'PatientAdvocate'
-  const isAdmin = actualRole === 'PlatformAdmin'
-  const viewAsRole = isAdmin ? await getViewAsRole() : null
-  const role = viewAsRole ?? actualRole
+  const isAdmin = normalizeRole(actualRole) === 'PlatformAdmin'
+
+  // Preview-aware: an admin viewing-as another user sees that user's dashboard.
+  // User preview wins over role-only preview (mirrors the app layout).
+  const viewer = await resolveEffectiveViewer(supabase)
+  const roleOnlyPreview = isAdmin && !viewer?.isPreviewing ? await getViewAsRole() : null
+  const role = viewer?.isPreviewing ? normalizeRole(viewer.role) : roleOnlyPreview ?? actualRole
+  const effectiveUserId = viewer?.userId ?? user.id
+  const effectiveName = viewer?.name ?? profile?.name
 
   // Comms has its own dashboard (the personal/team toggle) and uses it as the
   // landing page. Send Comms users there from the shared dashboard.
@@ -428,23 +435,23 @@ export default async function DashboardPage() {
     const { data: memberRows } = await supabase
       .from('initiative_members')
       .select('initiative_id')
-      .eq('user_id', user.id)
+      .eq('user_id', effectiveUserId)
     const memberIds = memberRows?.map((r) => r.initiative_id) ?? []
     myInitiatives = initiatives.filter((i) => i.id && memberIds.includes(i.id))
 
     const { data: taskRows } = await supabase
       .from('tasks')
       .select('id, title, status, priority, due_date, initiative_id')
-      .eq('assignee_id', user.id)
+      .eq('assignee_id', effectiveUserId)
       .neq('status', 'done')
       .order('due_date', { ascending: true })
     myTasks = taskRows ?? []
   }
 
-  const greeting = buildDashboardGreeting(profile?.name)
+  const greeting = buildDashboardGreeting(effectiveName)
 
   const commsPersonalData = showCommsBlocks
-    ? await loadCommsPersonalDashboardData(supabase, user.id)
+    ? await loadCommsPersonalDashboardData(supabase, effectiveUserId)
     : null
 
   // Field Newsfeed: org-wide, citation-backed items (Sprint 14 Capability 4).
