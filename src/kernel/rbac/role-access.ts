@@ -89,6 +89,7 @@ export type NavIcon =
   | 'resources'
   | 'admin'
   | 'feedback'
+  | 'settings'
 
 export type NavItem = {
   /** Stable id for keys/tests. */
@@ -143,11 +144,9 @@ export const MASTER_NAV: NavSection[] = [
     ],
   },
   {
-    label: 'Account',
+    label: 'Platform',
     items: [
-      { id: 'admin',    label: 'User Management', href: '/app/admin/users',    space: 'admin', icon: 'admin',     minLevel: 'manage' },
-      { id: 'activity', label: 'User Activity',   href: '/app/admin/activity', space: 'admin', icon: 'dashboard', minLevel: 'manage' },
-      { id: 'feedback', label: 'Feedback',        href: '/app/admin/feedback', space: 'admin', icon: 'feedback',  minLevel: 'manage' },
+      { id: 'settings', label: 'Platform Settings', href: '/app/settings', space: 'admin', icon: 'settings', minLevel: 'manage' },
     ],
   },
 ]
@@ -196,6 +195,10 @@ function getAppSection(pathname: string): string | null {
   if (!pathname.startsWith('/app')) return null
   if (pathname === '/app' || pathname === '/app/') return 'dashboard'
   const [, , section] = pathname.split('/')
+  // The Platform Settings space (ADR-0010) is served at /app/settings but keeps
+  // the RBAC space id `admin` — no permission-matrix migration. Alias it here so
+  // middleware and nav gate it exactly like the legacy /app/admin routes.
+  if (section === 'settings') return 'admin'
   return section || 'dashboard'
 }
 

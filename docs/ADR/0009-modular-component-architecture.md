@@ -1,6 +1,6 @@
 # ADR-0009: Modular Component Architecture (manifest-described components, kernel + composition)
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-03
 - **Owners:** Michael Wittinger
 

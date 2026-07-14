@@ -22,6 +22,31 @@ export const manifest = defineManifest({
     api: ["loadIntakeQueue", "promoteIntakeItem"],
     events: ["intake.item.promoted"],
     ui: ["IntakeQueue"],
+    settingsPanel: true,
+  },
+  // Typed, operator-tunable config — rendered as the reference COMPONENT settings
+  // panel in the Platform Settings space (ADR-0010 §5). Resolver precedence:
+  // these defaults → platform_settings → env.
+  config: {
+    classifier: {
+      type: "enum",
+      label: "Classifier mode",
+      description: "How inbound messages are triaged into signal vs noise.",
+      options: ["rules", "ai", "hybrid"],
+      default: "hybrid",
+    },
+    autoPromoteThreshold: {
+      type: "number",
+      label: "Auto-promote confidence (%)",
+      description: "AI confidence at or above which an item is promoted without review.",
+      default: 90,
+    },
+    aiEnabled: {
+      type: "boolean",
+      label: "AI assistance",
+      description: "Use the AI client to structure and score inbound items.",
+      default: true,
+    },
   },
   dependsOn: {
     kernel: ["identity", "rbac", "notifications", "ai-client"],

@@ -11,7 +11,9 @@ export type {
   ComponentProvides,
   ComponentDependsOn,
   ComponentRoles,
+  ConfigField,
+  ConfigFieldType,
 } from '@/kernel/manifest/types'
-export { defineManifest } from '@/kernel/manifest/types'
+export { defineManifest, isConfigField } from '@/kernel/manifest/types'
 export { validateManifest, assertManifest } from '@/kernel/manifest/validate'
 export type { ValidationResult } from '@/kernel/manifest/validate'

@@ -43,6 +43,60 @@ export type ComponentProvides = {
   events?: string[]
   /** Mountable UI surfaces (component names). */
   ui?: string[]
+  /**
+   * True when this component exposes an editable settings panel in the Platform
+   * Settings space (ADR-0010). It is rendered from `config`'s typed fields — no
+   * bespoke form code. The settings governance check asserts this stays in sync
+   * with `config`: a component that declares typed `config` fields must set this,
+   * and vice-versa (no zombie panel, no orphan config).
+   */
+  settingsPanel?: boolean
+}
+
+// ─── Typed config vocabulary (ADR-0010) ──────────────────────────────────────
+//
+// `config` fields describe a component's operator-tunable settings. A field is
+// either a typed `ConfigField` descriptor (rendered as a control in the settings
+// shell and reconciled by governance) or, for backwards compatibility, a plain
+// literal default. New settings should always use `ConfigField`.
+
+/** The renderable field types the settings shell knows how to draw. */
+export type ConfigFieldType =
+  | 'string'
+  | 'text'
+  | 'boolean'
+  | 'enum'
+  | 'number'
+  | 'cron'
+  | 'color'
+  | 'url'
+  | 'email'
+  /** A credential: never persisted in `platform_settings` as plaintext (§6). */
+  | 'secret'
+
+/** A single typed, self-rendering config field. */
+export type ConfigField = {
+  type: ConfigFieldType
+  /** Human label shown above the control (defaults to a humanised key). */
+  label?: string
+  /** Optional helper text under the control. */
+  description?: string
+  /** Default value — the first link in the resolver chain (default → DB → env). */
+  default?: unknown
+  /** Allowed values for `type: 'enum'`. */
+  options?: readonly string[]
+  /** For `type: 'secret'`: the env var / secret reference the value resolves from. */
+  secretRef?: string
+}
+
+/** True for a typed `ConfigField` (vs a legacy plain-literal default). */
+export function isConfigField(v: unknown): v is ConfigField {
+  return (
+    typeof v === 'object' &&
+    v !== null &&
+    !Array.isArray(v) &&
+    typeof (v as { type?: unknown }).type === 'string'
+  )
 }
 
 /** What a component is allowed to depend on. */
@@ -79,8 +133,12 @@ export type ComponentManifest = {
   dependsOn?: ComponentDependsOn
   /** Feature flag that mounts/unmounts the component; `null` = always on. */
   featureFlag?: string | null
-  /** Composition config the generator can set (shape is component-specific). */
-  config?: Record<string, unknown>
+  /**
+   * Composition config the generator can set and the Platform Settings space
+   * renders (ADR-0010). Values are typed `ConfigField` descriptors (preferred)
+   * or legacy plain-literal defaults. Keyed by a stable config key.
+   */
+  config?: Record<string, ConfigField | unknown>
   /** Personas served (traceability). */
   personas?: string[]
   /** Role gate. */

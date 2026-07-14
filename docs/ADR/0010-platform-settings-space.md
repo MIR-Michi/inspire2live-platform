@@ -1,6 +1,6 @@
 # ADR-0010: Platform Settings Space (manifest-driven settings as the human blueprint editor)
 
-- **Status:** proposed
+- **Status:** accepted
 - **Date:** 2026-07-14
 - **Owners:** Michael Wittinger
 
