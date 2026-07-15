@@ -9,6 +9,8 @@ import { normalizeRole } from '@/lib/role-access'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-data'
+import { AdminDashboard } from '@/components/admin/admin-dashboard'
+import { loadAdminDashboardData } from '@/lib/admin-dashboard-data'
 
 type InitiativeHealth = Tables<'initiative_health'>
 type MemberActivity = Tables<'member_activity_summary'>
@@ -392,6 +394,27 @@ export default async function DashboardPage() {
   // Comms has its own dashboard (the personal/team toggle) and uses it as the
   // landing page. Send Comms users there from the shared dashboard.
   if (role === 'Comms') redirect('/app/comms/dashboard')
+
+  // PlatformAdmin (when not previewing another user) gets a dedicated admin
+  // dashboard — a lean, platform-health + triage view, distinct from the
+  // initiative-centric coordinator variant. Short-circuits before the
+  // initiative-health queries so the admin view stays light. During view-as the
+  // effective role is the previewed user's, so the admin sees *their* dashboard.
+  if (role === 'PlatformAdmin') {
+    const adminData = await loadAdminDashboardData(supabase)
+    const greeting = buildDashboardGreeting(profile?.name)
+    return (
+      <div className="mx-auto max-w-5xl space-y-6">
+        <div>
+          <h1 className="text-2xl font-bold text-neutral-900">Admin dashboard</h1>
+          <p className="mt-1 text-sm text-neutral-500">
+            {greeting} Platform health and what needs your attention.
+          </p>
+        </div>
+        <AdminDashboard data={adminData} />
+      </div>
+    )
+  }
 
   const dashboardConfig = getDashboardConfig(role)
   const showCommsBlocks = role === 'Comms'
