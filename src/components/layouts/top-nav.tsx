@@ -25,6 +25,8 @@ interface TopNavProps {
   userAvatarUrl?: string | null
   unreadCount?: number
   isAdmin?: boolean
+  /** Superadmin-only: may open the view-as / preview control. */
+  canPreview?: boolean
   viewAsRole?: string | null
   viewAsUser?: PreviewUserOption | null
   previewUsers?: PreviewUserOption[]
@@ -39,6 +41,7 @@ export function TopNav({
   userAvatarUrl,
   unreadCount = 0,
   isAdmin = false,
+  canPreview = false,
   viewAsRole,
   viewAsUser,
   previewUsers = [],
@@ -132,7 +135,7 @@ export function TopNav({
 
         {/* Right: preview (admin) + notifications + profile */}
         <div className="flex items-center gap-2">
-          {isAdmin && (
+          {canPreview && (
             <PreviewPanel
               viewAsRole={viewAsRole}
               viewAsUser={viewAsUser}

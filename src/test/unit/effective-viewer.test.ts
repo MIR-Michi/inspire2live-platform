@@ -30,9 +30,12 @@ function fakeSupabase(userId: string | null, profiles: Record<string, Profile>) 
   } as any
 }
 
-const adminProfile: Profile = { id: ADMIN, name: 'Michael', email: 'm@x', role: 'PlatformAdmin' }
+// View-as is a Superadmin-only capability (a plain PlatformAdmin cannot preview).
+const adminProfile: Profile = { id: ADMIN, name: 'Michael', email: 'm@x', role: 'Superadmin' }
 const otherProfile: Profile = { id: OTHER, name: 'Atefeh', email: 'a@x', role: 'Comms' }
 const nonAdminProfile: Profile = { id: NONADMIN, name: 'Nina', email: 'n@x', role: 'Comms' }
+const PLAIN_ADMIN = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
+const plainAdminProfile: Profile = { id: PLAIN_ADMIN, name: 'Dana', email: 'd@x', role: 'PlatformAdmin' }
 
 beforeEach(() => {
   viewAsUserCookie = undefined
@@ -45,10 +48,10 @@ describe('resolveEffectiveViewer', () => {
 
   it('resolves to self when no preview cookie is set', async () => {
     const v = await resolveEffectiveViewer(fakeSupabase(ADMIN, { [ADMIN]: adminProfile }))
-    expect(v).toMatchObject({ userId: ADMIN, name: 'Michael', role: 'PlatformAdmin', isPreviewing: false })
+    expect(v).toMatchObject({ userId: ADMIN, name: 'Michael', role: 'Superadmin', isPreviewing: false })
   })
 
-  it('lets an admin preview another user (effective = previewed user)', async () => {
+  it('lets a Superadmin preview another user (effective = previewed user)', async () => {
     viewAsUserCookie = OTHER
     const v = await resolveEffectiveViewer(fakeSupabase(ADMIN, { [ADMIN]: adminProfile, [OTHER]: otherProfile }))
     expect(v).toMatchObject({ actualUserId: ADMIN, userId: OTHER, name: 'Atefeh', role: 'Comms', isPreviewing: true })
@@ -58,6 +61,12 @@ describe('resolveEffectiveViewer', () => {
     viewAsUserCookie = OTHER
     const v = await resolveEffectiveViewer(fakeSupabase(NONADMIN, { [NONADMIN]: nonAdminProfile, [OTHER]: otherProfile }))
     expect(v).toMatchObject({ userId: NONADMIN, isPreviewing: false })
+  })
+
+  it('ignores the preview cookie for a plain PlatformAdmin (view-as is Superadmin-only)', async () => {
+    viewAsUserCookie = OTHER
+    const v = await resolveEffectiveViewer(fakeSupabase(PLAIN_ADMIN, { [PLAIN_ADMIN]: plainAdminProfile, [OTHER]: otherProfile }))
+    expect(v).toMatchObject({ userId: PLAIN_ADMIN, isPreviewing: false })
   })
 
   it('does not "preview" yourself', async () => {

@@ -15,7 +15,7 @@ import { campusWindowIso, countCampusIncoming } from '@/lib/campus-metrics'
 import { ResizableSplit } from '@/components/ui/resizable-split'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import type { CampusBriefing } from '@/lib/ai/campus-briefing'
-import { normalizeRole } from '@/lib/role-access'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 
 function monthBounds(year: string, month: string) {
@@ -186,7 +186,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
   let isAdmin = false
   if (user) {
     const { data: profileRow } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    isAdmin = normalizeRole(profileRow?.role) === 'PlatformAdmin'
+    isAdmin = isPlatformAdmin(profileRow?.role)
   }
 
   const decisionCount = (transcript?.summary?.decisions.length ?? 0) + (transcript?.followUpProposals.length ?? 0)

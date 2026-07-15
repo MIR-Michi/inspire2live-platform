@@ -7,7 +7,7 @@ import { useRoleLayers } from '@/components/roles/role-layers-context'
 
 const ALL_PERSPECTIVE_ROLES = Object.entries(ROLE_LABELS).map(([value, label]) => ({
   value,
-  label: value === 'PlatformAdmin' ? `${label} (default)` : label,
+  label: value === 'Superadmin' ? `${label} (default)` : label,
 }))
 
 type PreviewUser = {
@@ -38,7 +38,7 @@ export function PreviewPanel({
   const ref = useRef<HTMLDivElement>(null)
   const { platformRole, congressRoles } = useRoleLayers()
 
-  const previewingRole = Boolean(viewAsRole && viewAsRole !== 'PlatformAdmin')
+  const previewingRole = Boolean(viewAsRole && viewAsRole !== 'Superadmin')
   const previewingUser = Boolean(viewAsUser)
   const previewing = previewingRole || previewingUser
   const buttonLabel = previewingUser
@@ -83,7 +83,7 @@ export function PreviewPanel({
 
   const applyRole = (val: string) => {
     document.cookie = 'i2l-view-as-user=; path=/; max-age=0'
-    if (val === 'PlatformAdmin') {
+    if (val === 'Superadmin') {
       document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
     } else {
       document.cookie = `i2l-view-as-role=${val}; path=/; max-age=86400; SameSite=Lax`
@@ -161,7 +161,7 @@ export function PreviewPanel({
             Preview as role
           </label>
           <select
-            value={viewAsRole ?? 'PlatformAdmin'}
+            value={viewAsRole ?? 'Superadmin'}
             onChange={(e) => applyRole(e.target.value)}
             disabled={previewingUser}
             className="mt-1.5 w-full cursor-pointer rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm font-medium text-neutral-800 outline-none focus:ring-2 focus:ring-orange-300 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"

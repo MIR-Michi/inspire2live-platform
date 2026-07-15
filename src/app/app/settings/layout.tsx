@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 import { SettingsShell } from '@/components/layouts/settings-shell'
 
@@ -15,7 +16,7 @@ export default async function SettingsLayout({ children }: { children: React.Rea
 
   const { data: profile } = await supabase
     .from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') redirect('/app/dashboard')
+  if (!isPlatformAdmin(profile?.role)) redirect('/app/dashboard')
 
   return <SettingsShell>{children}</SettingsShell>
 }

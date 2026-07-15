@@ -222,6 +222,24 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
     profile:       'manage',
     admin:         'manage',
   },
+  // Superadmin shares every permission with PlatformAdmin (manage everywhere).
+  // The only difference — the ability to view-as another role/user — is an
+  // app-layer capability gated by isSuperadmin(), not a space in this matrix.
+  Superadmin: {
+    dashboard:     'manage',
+    comms:         'manage',
+    initiatives:   'manage',
+    tasks:         'manage',
+    congress:      'manage',
+    resources:     'manage',
+    partners:      'manage',
+    network:       'manage',
+    board:         'manage',
+    bureau:        'manage',
+    notifications: 'manage',
+    profile:       'manage',
+    admin:         'manage',
+  },
 }
 
 // ─── Sync resolver (pure, no DB) ──────────────────────────────────────────────
@@ -237,7 +255,7 @@ export function resolveAccessFromRole(
 ): AccessLevel {
   const normalized = normalizeRole(role)
   // PlatformAdmin is always manage — no override can reduce this
-  if (normalized === 'PlatformAdmin') return 'manage'
+  if (normalized === 'PlatformAdmin' || normalized === 'Superadmin') return 'manage'
   return ROLE_SPACE_DEFAULTS[normalized][space] ?? 'invisible'
 }
 
@@ -270,7 +288,7 @@ export async function resolveAccess(
   const normalized = normalizeRole(role)
 
   // PlatformAdmin always has full manage — skip DB lookup
-  if (normalized === 'PlatformAdmin') return 'manage'
+  if (normalized === 'PlatformAdmin' || normalized === 'Superadmin') return 'manage'
 
   // Look up overrides: fetch global + scoped in one query
   const { data: overrides } = await supabase
@@ -309,7 +327,7 @@ export async function resolveAllSpaces(
   const normalized = normalizeRole(role)
 
   // PlatformAdmin: everything is manage
-  if (normalized === 'PlatformAdmin') {
+  if (normalized === 'PlatformAdmin' || normalized === 'Superadmin') {
     return Object.fromEntries(
       PLATFORM_SPACES.map((s) => [s, 'manage' as AccessLevel])
     ) as Record<PlatformSpace, AccessLevel>

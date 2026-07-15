@@ -33,9 +33,11 @@ import { ROLE_LABELS } from '@/lib/role-access'
 import { CrmImportDialog } from '@/components/comms/crm-import-dialog'
 import { NavSelect } from '@/components/comms/nav-select'
 
-const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
-  ([value, label]) => ({ value, label })
-)
+// Superadmin is intentionally excluded — it is not an assignable role in the CRM
+// context (granting it is a restricted, Superadmin-only action).
+const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][])
+  .filter(([value]) => value !== 'Superadmin')
+  .map(([value, label]) => ({ value, label }))
 
 type CrmFilter = 'follow_up' | 'privacy_review' | 'campus' | null
 

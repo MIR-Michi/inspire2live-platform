@@ -1,6 +1,7 @@
 'use server'
 
 import { after } from 'next/server'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
@@ -25,7 +26,7 @@ export async function startOrgNewsfeedRun(): Promise<StartRunResult> {
   if (!user) return { ok: false, status: 'idle', message: 'Not authenticated.' }
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') return { ok: false, status: 'idle', message: 'Only a Platform Admin can run the feed.' }
+  if (!isPlatformAdmin(profile?.role)) return { ok: false, status: 'idle', message: 'Only a Platform Admin can run the feed.' }
   if (!isAiEnabled()) return { ok: false, status: 'idle', message: 'AI features are disabled for this environment.' }
 
   const claim = await markRunStarted()

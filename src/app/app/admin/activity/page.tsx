@@ -1,7 +1,7 @@
 import Link from 'next/link'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
+import { getRoleLabel, getRoleBadgeColor , isPlatformAdmin} from '@/lib/role-access'
 import { loadUserActivityMetrics, type UserActivity } from '@/lib/user-activity'
 
 export const dynamic = 'force-dynamic'
@@ -61,7 +61,7 @@ export default async function AdminActivityPage({
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') {
+  if (!isPlatformAdmin(profile?.role)) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="text-center">

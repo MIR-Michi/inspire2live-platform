@@ -1,7 +1,7 @@
 import { CommsCrmWorkspace } from '@/components/comms/comms-crm-workspace'
 import { matchesCrmQuery, normalizeCrmPersonType, type CrmContactKind } from '@/lib/comms-crm'
 import { loadCrmDirectory } from '@/lib/comms-crm-data'
-import { normalizeRole } from '@/lib/role-access'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 
 const VALID_KINDS = new Set(['all', 'internal_user', 'internal_contact', 'external'])
@@ -29,7 +29,7 @@ export default async function CommsCrmPeoplePage({
   let isAdmin = false
   if (user) {
     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-    isAdmin = normalizeRole(profile?.role) === 'PlatformAdmin'
+    isAdmin = isPlatformAdmin(profile?.role)
   }
 
   const visibleRecords = records.filter((record) => {

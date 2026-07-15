@@ -10,6 +10,7 @@
  */
 
 import { revalidatePath } from 'next/cache'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 import { persistPanelValues } from '@/kernel/settings'
 import type { PersistResult } from '@/kernel/settings'
@@ -31,7 +32,7 @@ export async function saveSettingsPanel(
 
   const { data: profile } = await supabase
     .from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') return { ok: false, error: 'PlatformAdmin required' }
+  if (!isPlatformAdmin(profile?.role)) return { ok: false, error: 'PlatformAdmin required' }
 
   const result = await persistPanelValues(supabase, panel, values, user.id)
   if (!result.ok) return result

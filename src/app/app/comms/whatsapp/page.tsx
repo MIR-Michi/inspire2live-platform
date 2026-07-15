@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
@@ -32,7 +33,7 @@ export default async function CommsWhatsAppPage() {
   if (!canAccessCommsWorkspace(profile?.role)) redirect('/app/comms')
 
   const aiEnabled = isAiEnabled()
-  const canDelete = profile?.role === 'PlatformAdmin'
+  const canDelete = isPlatformAdmin(profile?.role)
   const teamMembers = await loadCommsTeamMembers(supabase)
 
   // Default window from the two most recent campus meetings; fall back to ~5 weeks.

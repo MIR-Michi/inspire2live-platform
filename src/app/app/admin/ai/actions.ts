@@ -1,6 +1,7 @@
 'use server'
 
 import { redirect } from 'next/navigation'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { revalidatePath } from 'next/cache'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
@@ -21,7 +22,7 @@ async function requirePlatformAdmin(): Promise<{ id: string } | null> {
   if (!user) return null
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') return null
+  if (!isPlatformAdmin(profile?.role)) return null
 
   return { id: user.id }
 }

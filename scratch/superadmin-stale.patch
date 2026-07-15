@@ -1,0 +1,1110 @@
+diff --git a/src/app/api/congress-guest/submit/route.ts b/src/app/api/congress-guest/submit/route.ts
+index 3c16e08..5d62f61 100644
+--- a/src/app/api/congress-guest/submit/route.ts
++++ b/src/app/api/congress-guest/submit/route.ts
+@@ -100,7 +100,7 @@ async function sendSubmissionNotification(params: {
+     const { data: commsProfiles } = await admin
+       .from('profiles')
+       .select('email')
+-      .in('role', ['Comms', 'PlatformAdmin'])
++      .in('role', ['Comms', 'PlatformAdmin', 'Superadmin'])
+       .not('email', 'is', null)
+       .limit(20)
+ 
+diff --git a/src/app/app/admin/activity/page.tsx b/src/app/app/admin/activity/page.tsx
+index 416a793..5e2a177 100644
+--- a/src/app/app/admin/activity/page.tsx
++++ b/src/app/app/admin/activity/page.tsx
+@@ -1,7 +1,7 @@
+ import Link from 'next/link'
+ import { redirect } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/server'
+-import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
++import { getRoleLabel, getRoleBadgeColor , isPlatformAdmin} from '@/lib/role-access'
+ import { loadUserActivityMetrics, type UserActivity } from '@/lib/user-activity'
+ 
+ export const dynamic = 'force-dynamic'
+@@ -61,7 +61,7 @@ export default async function AdminActivityPage({
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') {
++  if (!isPlatformAdmin(profile?.role)) {
+     return (
+       <div className="flex h-64 items-center justify-center">
+         <div className="text-center">
+diff --git a/src/app/app/admin/ai/actions.ts b/src/app/app/admin/ai/actions.ts
+index 9e99c6e..6d665f0 100644
+--- a/src/app/app/admin/ai/actions.ts
++++ b/src/app/app/admin/ai/actions.ts
+@@ -1,6 +1,7 @@
+ 'use server'
+ 
+ import { redirect } from 'next/navigation'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { revalidatePath } from 'next/cache'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { createClient } from '@/lib/supabase/server'
+@@ -21,7 +22,7 @@ async function requirePlatformAdmin(): Promise<{ id: string } | null> {
+   if (!user) return null
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') return null
++  if (!isPlatformAdmin(profile?.role)) return null
+ 
+   return { id: user.id }
+ }
+diff --git a/src/app/app/admin/ai/page.tsx b/src/app/app/admin/ai/page.tsx
+index 4936d2d..e365d7a 100644
+--- a/src/app/app/admin/ai/page.tsx
++++ b/src/app/app/admin/ai/page.tsx
+@@ -1,4 +1,5 @@
+ import { redirect } from 'next/navigation'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { createClient } from '@/lib/supabase/server'
+ import { isAiEnabled } from '@/lib/ai/feature-flag'
+@@ -47,7 +48,7 @@ export default async function AdminAiSettingsPage({
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') redirect('/app/dashboard')
++  if (!isPlatformAdmin(profile?.role)) redirect('/app/dashboard')
+ 
+   const db = createAdminClient() as unknown as {
+     from: (table: string) => {
+diff --git a/src/app/app/admin/feedback/actions.ts b/src/app/app/admin/feedback/actions.ts
+index e215c21..0ae7ff8 100644
+--- a/src/app/app/admin/feedback/actions.ts
++++ b/src/app/app/admin/feedback/actions.ts
+@@ -1,6 +1,7 @@
+ 'use server'
+ 
+ import { revalidatePath } from 'next/cache'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { createClient } from '@/lib/supabase/server'
+ import type { FeedbackStatus } from '@/lib/feedback'
+@@ -10,7 +11,7 @@ async function requireAdmin() {
+   const { data: { user } } = await supabase.auth.getUser()
+   if (!user) return null
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') return null
++  if (!isPlatformAdmin(profile?.role)) return null
+   return user
+ }
+ 
+diff --git a/src/app/app/admin/feedback/export/route.ts b/src/app/app/admin/feedback/export/route.ts
+index 4f6167b..edd481a 100644
+--- a/src/app/app/admin/feedback/export/route.ts
++++ b/src/app/app/admin/feedback/export/route.ts
+@@ -1,4 +1,5 @@
+ import { NextRequest, NextResponse } from 'next/server'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { shortUrl, type FeedbackItem, type FeedbackStatus } from '@/lib/feedback'
+@@ -11,7 +12,7 @@ export async function GET(request: NextRequest) {
+   if (!user) return new NextResponse('Unauthorized', { status: 401 })
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') return new NextResponse('Forbidden', { status: 403 })
++  if (!isPlatformAdmin(profile?.role)) return new NextResponse('Forbidden', { status: 403 })
+ 
+   const { searchParams } = new URL(request.url)
+   const statusParam = searchParams.get('status') ?? 'all'
+diff --git a/src/app/app/admin/feedback/page.tsx b/src/app/app/admin/feedback/page.tsx
+index 1c39823..a5fd082 100644
+--- a/src/app/app/admin/feedback/page.tsx
++++ b/src/app/app/admin/feedback/page.tsx
+@@ -1,4 +1,5 @@
+ import { redirect } from 'next/navigation'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import {
+@@ -20,7 +21,7 @@ export default async function AdminFeedbackPage({
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') redirect('/app/dashboard')
++  if (!isPlatformAdmin(profile?.role)) redirect('/app/dashboard')
+ 
+   const params = await searchParams
+   const statusFilter = (params.status as FeedbackStatus | 'all') ?? 'all'
+diff --git a/src/app/app/admin/org-feed/actions.ts b/src/app/app/admin/org-feed/actions.ts
+index adab74a..b4b88eb 100644
+--- a/src/app/app/admin/org-feed/actions.ts
++++ b/src/app/app/admin/org-feed/actions.ts
+@@ -1,6 +1,7 @@
+ 'use server'
+ 
+ import { revalidatePath } from 'next/cache'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { createClient } from '@/lib/supabase/server'
+ import { validateOrgFeedConfig } from '@/lib/ai/org-feed-config'
+@@ -30,7 +31,7 @@ async function requirePlatformAdmin(): Promise<{ id: string } | null> {
+   const { data: { user } } = await supabase.auth.getUser()
+   if (!user) return null
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') return null
++  if (!isPlatformAdmin(profile?.role)) return null
+   return { id: user.id }
+ }
+ 
+diff --git a/src/app/app/admin/org-feed/page.tsx b/src/app/app/admin/org-feed/page.tsx
+index a333742..703dd9b 100644
+--- a/src/app/app/admin/org-feed/page.tsx
++++ b/src/app/app/admin/org-feed/page.tsx
+@@ -1,4 +1,5 @@
+ import { redirect } from 'next/navigation'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { createClient } from '@/lib/supabase/server'
+ import { isAiEnabled } from '@/lib/ai/feature-flag'
+@@ -32,7 +33,7 @@ export default async function AdminOrgFeedPage() {
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') redirect('/app/dashboard')
++  if (!isPlatformAdmin(profile?.role)) redirect('/app/dashboard')
+ 
+   const admin = createAdminClient() as unknown as {
+     from: (table: string) => {
+diff --git a/src/app/app/admin/org-feed/run-actions.ts b/src/app/app/admin/org-feed/run-actions.ts
+index 5fbab75..47bb3e6 100644
+--- a/src/app/app/admin/org-feed/run-actions.ts
++++ b/src/app/app/admin/org-feed/run-actions.ts
+@@ -1,6 +1,7 @@
+ 'use server'
+ 
+ import { after } from 'next/server'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+@@ -25,7 +26,7 @@ export async function startOrgNewsfeedRun(): Promise<StartRunResult> {
+   if (!user) return { ok: false, status: 'idle', message: 'Not authenticated.' }
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') return { ok: false, status: 'idle', message: 'Only a Platform Admin can run the feed.' }
++  if (!isPlatformAdmin(profile?.role)) return { ok: false, status: 'idle', message: 'Only a Platform Admin can run the feed.' }
+   if (!isAiEnabled()) return { ok: false, status: 'idle', message: 'AI features are disabled for this environment.' }
+ 
+   const claim = await markRunStarted()
+diff --git a/src/app/app/admin/permissions/actions.ts b/src/app/app/admin/permissions/actions.ts
+index 1ff794d..cb74f3c 100644
+--- a/src/app/app/admin/permissions/actions.ts
++++ b/src/app/app/admin/permissions/actions.ts
+@@ -2,7 +2,7 @@
+ 
+ import { revalidatePath } from 'next/cache'
+ import { createClient } from '@/lib/supabase/server'
+-import { normalizeRole } from '@/lib/role-access'
++import { normalizeRole , isPlatformAdmin} from '@/lib/role-access'
+ import { PLATFORM_SPACES } from '@/lib/permissions'
+ import type { AccessLevel, PlatformSpace, ScopeType } from '@/lib/permissions'
+ import type { PlatformRole } from '@/lib/platform-roles'
+@@ -37,6 +37,7 @@ const VALID_ROLES = new Set<PlatformRole>([
+   'IndustryPartner',
+   'BoardMember',
+   'PlatformAdmin',
++  'Superadmin',
+ ])
+ 
+ function validateScope(scopeType: ScopeType, scopeId?: string) {
+@@ -73,7 +74,7 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>)
+     .single()
+ 
+   const normalized = normalizeRole(profile?.role)
+-  if (normalized !== 'PlatformAdmin') {
++  if (!isPlatformAdmin(normalized)) {
+     return { error: 'Forbidden: PlatformAdmin only', adminId: null }
+   }
+ 
+diff --git a/src/app/app/admin/permissions/page.tsx b/src/app/app/admin/permissions/page.tsx
+index fd0ab54..8553c37 100644
+--- a/src/app/app/admin/permissions/page.tsx
++++ b/src/app/app/admin/permissions/page.tsx
+@@ -1,6 +1,6 @@
+ import { redirect } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/server'
+-import { normalizeRole } from '@/lib/role-access'
++import { normalizeRole , isPlatformAdmin} from '@/lib/role-access'
+ import { loadAdminPermissionsData } from '@/lib/admin-permissions-data'
+ import { loadAdminRoleDefaultsData } from '@/lib/admin-role-defaults-data'
+ import { PermissionsWorkspaceShell } from '@/components/admin/permissions-workspace-shell'
+@@ -70,7 +70,7 @@ export default async function AdminPermissionsPage() {
+   }
+ 
+   // redirect() OUTSIDE try/catch — Next.js requirement
+-  if (myRole !== 'PlatformAdmin') redirect('/app/dashboard')
++  if (!isPlatformAdmin(myRole)) redirect('/app/dashboard')
+ 
+   /* ── Data loading ─────────────────────────────────────────────────────────── */
+   let users: Awaited<ReturnType<typeof loadAdminPermissionsData>>['users'] = []
+diff --git a/src/app/app/admin/users/actions.ts b/src/app/app/admin/users/actions.ts
+index 4bda69a..62b01d7 100644
+--- a/src/app/app/admin/users/actions.ts
++++ b/src/app/app/admin/users/actions.ts
+@@ -3,7 +3,7 @@
+ import { revalidatePath } from 'next/cache'
+ import { createClient } from '@/lib/supabase/server'
+ import { createAdminClient } from '@/lib/supabase/admin'
+-import { normalizeRole, ROLE_LABELS } from '@/lib/role-access'
++import { normalizeRole, ROLE_LABELS , isPlatformAdmin} from '@/lib/role-access'
+ import { getAuthBaseUrl } from '@/lib/auth-redirect-url'
+ import { DEMO_EMAILS } from './constants'
+ 
+@@ -26,7 +26,7 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>)
+     .single()
+ 
+   const normalized = normalizeRole(profile?.role)
+-  if (normalized !== 'PlatformAdmin') {
++  if (!isPlatformAdmin(normalized)) {
+     return { error: 'Forbidden: PlatformAdmin only', adminId: null }
+   }
+ 
+diff --git a/src/app/app/admin/users/page.tsx b/src/app/app/admin/users/page.tsx
+index 0c13278..8b5009b 100644
+--- a/src/app/app/admin/users/page.tsx
++++ b/src/app/app/admin/users/page.tsx
+@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/server'
+ import { EditRoleButton, InviteUserButton, UserStatusButton, DeleteUserButton, PurgeDemoUsersButton, ResendInviteButton } from '@/components/ui/client-buttons'
+ import { DEMO_EMAILS } from '@/app/app/admin/users/constants'
+-import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
++import { getRoleLabel, getRoleBadgeColor, isPlatformAdmin, isSuperadmin } from '@/lib/role-access'
+ 
+ export default async function AdminUsersPage() {
+   const supabase = await createClient()
+@@ -10,7 +10,7 @@ export default async function AdminUsersPage() {
+   if (!user) redirect('/login')
+ 
+   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-  if (profile?.role !== 'PlatformAdmin') {
++  if (!isPlatformAdmin(profile?.role)) {
+     return (
+       <div className="flex h-64 items-center justify-center">
+         <div className="text-center">
+@@ -137,7 +137,7 @@ export default async function AdminUsersPage() {
+                 </td>
+                 <td className="px-4 py-3 text-right">
+                   <div className="flex flex-wrap items-center justify-end gap-2">
+-                    <EditRoleButton userName={u.name} userId={u.id} currentRole={u.role} />
++                    <EditRoleButton userName={u.name} userId={u.id} currentRole={u.role} canAssignSuperadmin={isSuperadmin(profile?.role)} />
+                     {!u.onboarding_completed && (
+                       <ResendInviteButton userId={u.id} userName={u.name} email={u.email} />
+                     )}
+diff --git a/src/app/app/comms/calendar/page.tsx b/src/app/app/comms/calendar/page.tsx
+index 2961d2c..66d3e6b 100644
+--- a/src/app/app/comms/calendar/page.tsx
++++ b/src/app/app/comms/calendar/page.tsx
+@@ -1,4 +1,5 @@
+ import { createClient } from '@/lib/supabase/server'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { ContentCalendarShell } from '@/components/comms/content-calendar-shell'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+ import { getIntegrationStubFlags } from '@/lib/comms-integrations'
+@@ -75,7 +76,7 @@ export default async function CommsCalendarPage({
+       view={view}
+       statusFilter={statusFilter}
+       currentUserId={user?.id ?? null}
+-      canUseWordpressStub={currentProfile?.role === 'PlatformAdmin'}
++      canUseWordpressStub={isPlatformAdmin(currentProfile?.role)}
+       stubFlags={getIntegrationStubFlags()}
+     />
+   )
+diff --git a/src/app/app/comms/campus-log/actions.ts b/src/app/app/comms/campus-log/actions.ts
+index 651ee0b..df2b727 100644
+--- a/src/app/app/comms/campus-log/actions.ts
++++ b/src/app/app/comms/campus-log/actions.ts
+@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
+ import { redirect } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/server'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+-import { normalizeRole } from '@/lib/role-access'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import {
+   CAMPUS_MEETING_TASK_TEMPLATE,
+   CAMPUS_MEETING_DEFAULT_OWNERS,
+@@ -423,7 +423,7 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
+     }
+ 
+     // Regenerating an existing (persisted) briefing is admin-only.
+-    if (hasExistingBriefing && normalizeRole(role) !== 'PlatformAdmin') {
++    if (hasExistingBriefing && !isPlatformAdmin(role)) {
+       return { ok: false, message: 'Only admins can regenerate an existing briefing.' }
+     }
+ 
+diff --git a/src/app/app/comms/campus/[year]/[month]/page.tsx b/src/app/app/comms/campus/[year]/[month]/page.tsx
+index a264092..506c5fa 100644
+--- a/src/app/app/comms/campus/[year]/[month]/page.tsx
++++ b/src/app/app/comms/campus/[year]/[month]/page.tsx
+@@ -11,7 +11,7 @@ import { loadCampusMeetingTasks, loadCommsTeamMembers } from '@/lib/comms-dashbo
+ import { loadCampusSessionTranscript } from '@/lib/comms-meeting-transcripts'
+ import { isAiEnabled } from '@/lib/ai/feature-flag'
+ import type { CampusBriefing } from '@/lib/ai/campus-briefing'
+-import { normalizeRole } from '@/lib/role-access'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ 
+ async function markReviewedAction(formData: FormData) {
+@@ -199,7 +199,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
+   let isAdmin = false
+   if (user) {
+     const { data: profileRow } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-    isAdmin = normalizeRole(profileRow?.role) === 'PlatformAdmin'
++    isAdmin = isPlatformAdmin(profileRow?.role)
+   }
+ 
+   const decisionCount = (transcript?.summary?.decisions.length ?? 0) + (transcript?.followUpProposals.length ?? 0)
+diff --git a/src/app/app/comms/conferences/page.tsx b/src/app/app/comms/conferences/page.tsx
+index c559826..1028032 100644
+--- a/src/app/app/comms/conferences/page.tsx
++++ b/src/app/app/comms/conferences/page.tsx
+@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
+ import { isAiEnabled } from '@/lib/ai/feature-flag'
+ import { loadConferencesData } from '@/lib/comms-conferences'
+ import { getConferenceRunStatus, type ConferenceRunStatus } from '@/lib/ai/conference-run'
+-import { normalizeRole } from '@/lib/platform-roles'
++import { isPlatformAdmin } from '@/lib/platform-roles'
+ import { ConferencesShell } from '@/components/comms/conferences/conferences-shell'
+ 
+ // This page depends on the current Supabase session and shared run status.
+@@ -34,7 +34,7 @@ export default async function ConferencesPage() {
+     console.error('[conferences page] run status load failed', error)
+   }
+ 
+-  const canRefreshCache = normalizeRole(profileResult?.role) === 'PlatformAdmin'
++  const canRefreshCache = isPlatformAdmin(profileResult?.role)
+ 
+   return <ConferencesShell data={data} initialStatus={status} aiEnabled={isAiEnabled()} canRefreshCache={canRefreshCache} />
+ }
+diff --git a/src/app/app/comms/crm/actions.ts b/src/app/app/comms/crm/actions.ts
+index 7a063cc..22c4b2b 100644
+--- a/src/app/app/comms/crm/actions.ts
++++ b/src/app/app/comms/crm/actions.ts
+@@ -3,7 +3,7 @@
+ import { revalidatePath } from 'next/cache'
+ import { createClient } from '@/lib/supabase/server'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+-import { normalizeRole } from '@/lib/role-access'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { inviteUserAccount } from '@/app/app/admin/users/actions'
+ import {
+   isInternalEmail,
+@@ -372,7 +372,7 @@ export async function deleteCrmContact(formData: FormData) {
+     .eq('id', user.id)
+     .maybeSingle()
+   if (profileError) throw new Error(profileError.message)
+-  if (normalizeRole(profile?.role) !== 'PlatformAdmin') {
++  if (!isPlatformAdmin(profile?.role)) {
+     throw new Error('Only platform admins can delete contacts.')
+   }
+ 
+@@ -488,7 +488,7 @@ export async function inviteContactToPlatform(formData: FormData) {
+     .eq('id', user.id)
+     .maybeSingle()
+   if (profileError) throw new Error(profileError.message)
+-  if (normalizeRole(profile?.role) !== 'PlatformAdmin') {
++  if (!isPlatformAdmin(profile?.role)) {
+     throw new Error('Only platform admins can invite contacts to the platform.')
+   }
+ 
+diff --git a/src/app/app/comms/crm/people/page.tsx b/src/app/app/comms/crm/people/page.tsx
+index 4435ea9..481c31f 100644
+--- a/src/app/app/comms/crm/people/page.tsx
++++ b/src/app/app/comms/crm/people/page.tsx
+@@ -1,7 +1,7 @@
+ import { CommsCrmWorkspace } from '@/components/comms/comms-crm-workspace'
+ import { matchesCrmQuery, normalizeCrmPersonType, type CrmContactKind } from '@/lib/comms-crm'
+ import { loadCrmDirectory } from '@/lib/comms-crm-data'
+-import { normalizeRole } from '@/lib/role-access'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ 
+ const VALID_KINDS = new Set(['all', 'internal_user', 'internal_contact', 'external'])
+@@ -29,7 +29,7 @@ export default async function CommsCrmPeoplePage({
+   let isAdmin = false
+   if (user) {
+     const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
+-    isAdmin = normalizeRole(profile?.role) === 'PlatformAdmin'
++    isAdmin = isPlatformAdmin(profile?.role)
+   }
+ 
+   const visibleRecords = records.filter((record) => {
+diff --git a/src/app/app/comms/dashboard/page.tsx b/src/app/app/comms/dashboard/page.tsx
+index e3deb74..b6fd9a6 100644
+--- a/src/app/app/comms/dashboard/page.tsx
++++ b/src/app/app/comms/dashboard/page.tsx
+@@ -1,4 +1,5 @@
+ import { redirect } from 'next/navigation'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+ import { CommsDashboardToggle } from '@/components/comms/comms-dashboard-toggle'
+@@ -65,7 +66,7 @@ export default async function CommsDashboardPage({
+       ) : (
+         <TeamDashboard
+           data={await loadCommsTeamDashboardData(supabase, { viewerId: user.id })}
+-          canApprove={profile?.role === 'PlatformAdmin'}
++          canApprove={isPlatformAdmin(profile?.role)}
+           newsfeedRunStatus={await loadNewsfeedRunStatus()}
+         />
+       )}
+diff --git a/src/app/app/comms/integration-actions.ts b/src/app/app/comms/integration-actions.ts
+index d14e8c8..8aa19f6 100644
+--- a/src/app/app/comms/integration-actions.ts
++++ b/src/app/app/comms/integration-actions.ts
+@@ -1,6 +1,7 @@
+ 'use server'
+ 
+ import { revalidatePath } from 'next/cache'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+ import { getIntegrationStubFlags, type IntegrationTarget } from '@/lib/comms-integrations'
+@@ -59,7 +60,7 @@ async function triggerStub(
+     }
+ 
+     const { supabase, userId, role } = await requireCommsOperator()
+-    if (params.adminOnly && role !== 'PlatformAdmin') {
++    if (params.adminOnly && !isPlatformAdmin(role)) {
+       return { ok: false, error: 'This stub is available to PlatformAdmin only.' }
+     }
+ 
+diff --git a/src/app/app/comms/planner/page.tsx b/src/app/app/comms/planner/page.tsx
+index 564ee83..8d6ebeb 100644
+--- a/src/app/app/comms/planner/page.tsx
++++ b/src/app/app/comms/planner/page.tsx
+@@ -1,4 +1,5 @@
+ import { createClient } from '@/lib/supabase/server'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { ContentCalendarShell } from '@/components/comms/content-calendar-shell'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+ import { getIntegrationStubFlags } from '@/lib/comms-integrations'
+@@ -76,7 +77,7 @@ export default async function CommsPlannerPage({
+       statusFilter={statusFilter}
+       currentUserId={user?.id ?? null}
+       basePath="/app/comms/planner"
+-      canUseWordpressStub={currentProfile?.role === 'PlatformAdmin'}
++      canUseWordpressStub={isPlatformAdmin(currentProfile?.role)}
+       stubFlags={getIntegrationStubFlags()}
+     />
+   )
+diff --git a/src/app/app/comms/whatsapp/actions.ts b/src/app/app/comms/whatsapp/actions.ts
+index 7060819..a71d231 100644
+--- a/src/app/app/comms/whatsapp/actions.ts
++++ b/src/app/app/comms/whatsapp/actions.ts
+@@ -1,6 +1,7 @@
+ 'use server'
+ 
+ import { revalidatePath } from 'next/cache'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+@@ -58,7 +59,7 @@ async function requireCommsOperator() {
+ 
+ async function requirePlatformAdmin() {
+   const context = await requireCommsOperator()
+-  if (context.profile.role !== 'PlatformAdmin') {
++  if (!isPlatformAdmin(context.profile.role)) {
+     throw new Error('Only PlatformAdmin users can delete WhatsApp messages.')
+   }
+   return context
+diff --git a/src/app/app/comms/whatsapp/page.tsx b/src/app/app/comms/whatsapp/page.tsx
+index 9b470b6..12e973d 100644
+--- a/src/app/app/comms/whatsapp/page.tsx
++++ b/src/app/app/comms/whatsapp/page.tsx
+@@ -1,4 +1,5 @@
+ import { redirect } from 'next/navigation'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { createClient } from '@/lib/supabase/server'
+ import { createAdminClient } from '@/lib/supabase/admin'
+ import { canAccessCommsWorkspace } from '@/lib/comms-access'
+@@ -154,5 +155,5 @@ export default async function CommsWhatsAppPage() {
+     (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+   )
+ 
+-  return <WhatsAppInboxShell feed={feed} canDeleteMessages={profile.role === 'PlatformAdmin'} />
++  return <WhatsAppInboxShell feed={feed} canDeleteMessages={isPlatformAdmin(profile.role)} />
+ }
+diff --git a/src/app/app/dashboard/page.tsx b/src/app/app/dashboard/page.tsx
+index 4df05f3..bb9b457 100644
+--- a/src/app/app/dashboard/page.tsx
++++ b/src/app/app/dashboard/page.tsx
+@@ -1,4 +1,5 @@
+ import { redirect } from 'next/navigation'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import Link from 'next/link'
+ import { createClient } from '@/lib/supabase/server'
+ import type { Tables } from '@/types/database'
+@@ -380,7 +381,7 @@ export default async function DashboardPage() {
+   if (profile && !profile.onboarding_completed) redirect('/onboarding')
+ 
+   const actualRole = profile?.role ?? 'PatientAdvocate'
+-  const isAdmin = actualRole === 'PlatformAdmin'
++  const isAdmin = isPlatformAdmin(actualRole)
+   const viewAsRole = isAdmin ? await getViewAsRole() : null
+   const role = viewAsRole ?? actualRole
+ 
+@@ -393,7 +394,7 @@ export default async function DashboardPage() {
+   // initiative-centric coordinator variant. Short-circuits before the
+   // initiative-health queries so the admin view stays light. During view-as the
+   // effective role is the previewed user's, so the admin sees *their* dashboard.
+-  if (role === 'PlatformAdmin') {
++  if (isPlatformAdmin(role)) {
+     const adminData = await loadAdminDashboardData(supabase)
+     const greeting = buildDashboardGreeting(profile?.name)
+     return (
+diff --git a/src/app/app/initiatives/[id]/layout.tsx b/src/app/app/initiatives/[id]/layout.tsx
+index 73cc768..2de2f89 100644
+--- a/src/app/app/initiatives/[id]/layout.tsx
++++ b/src/app/app/initiatives/[id]/layout.tsx
+@@ -1,4 +1,5 @@
+ import Link from 'next/link'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { redirect } from 'next/navigation'
+ import type { ReactNode } from 'react'
+ import { createClient } from '@/lib/supabase/server'
+@@ -48,7 +49,7 @@ export default async function InitiativeLayout({
+     .eq('user_id', user.id)
+     .maybeSingle()
+ 
+-  const isCoordinator = profile?.role === 'HubCoordinator' || profile?.role === 'PlatformAdmin'
++  const isCoordinator = profile?.role === 'HubCoordinator' || isPlatformAdmin(profile?.role)
+   if (!membership && !isCoordinator) redirect('/app/initiatives')
+ 
+   const canManage = canManageInitiativeWorkspace(profile?.role, membership?.role)
+diff --git a/src/app/app/initiatives/page.tsx b/src/app/app/initiatives/page.tsx
+index 2cf1f82..a33007c 100644
+--- a/src/app/app/initiatives/page.tsx
++++ b/src/app/app/initiatives/page.tsx
+@@ -1,4 +1,5 @@
+ import Link from 'next/link'
++import { isPlatformAdmin } from '@/lib/role-access'
+ import { redirect } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/server'
+ import { CreateInitiativeButton } from '@/components/ui/client-buttons'
+@@ -17,7 +18,7 @@ export default async function InitiativesIndexPage() {
+   if (profile && !profile.onboarding_completed) redirect('/onboarding')
+ 
+   const role = profile?.role ?? 'PatientAdvocate'
+-  const isCoordinator = role === 'HubCoordinator' || role === 'PlatformAdmin'
++  const isCoordinator = role === 'HubCoordinator' || isPlatformAdmin(role)
+ 
+   const { data: all } = await supabase
+     .from('initiative_health')
+diff --git a/src/app/app/layout.tsx b/src/app/app/layout.tsx
+index 6473a94..cea2d86 100644
+--- a/src/app/app/layout.tsx
++++ b/src/app/app/layout.tsx
+@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/server'
+ import { TopNav, type PreviewUserOption } from '@/components/layouts/top-nav'
+ import { SideNav } from '@/components/layouts/side-nav'
+-import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access'
++import { canAccessAppPath, normalizeRole, getRoleLabel, isPlatformAdmin, isSuperadmin } from '@/lib/role-access'
+ import { canAccess, resolveAllSpaces } from '@/lib/permissions'
+ import { getViewAsRole, getViewAsUserId } from '@/lib/view-as'
+ import { RoleLayersProvider } from '@/components/roles/role-layers-context'
+@@ -51,16 +51,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
+   // Role is a DB-managed attribute (profiles.role) and must be updated only via
+   // explicit admin actions / migrations.
+ 
+-  const isAdmin = actualRole === 'PlatformAdmin'
++  // Two admin tiers: both have full rights (isAdmin), but only Superadmin may
++  // take other perspectives — the view-as / preview capability (canPreview).
++  const isAdmin = isPlatformAdmin(actualRole)
++  const canPreview = isSuperadmin(actualRole)
+ 
+-  const [viewAsRoleCookie, viewAsUserId] = isAdmin
++  const [viewAsRoleCookie, viewAsUserId] = canPreview
+     ? await Promise.all([getViewAsRole(), getViewAsUserId()])
+     : [null, null]
+ 
+   let viewAsUser: ProfileShell | null = null
+   let previewUsers: PreviewUserOption[] = []
+ 
+-  if (isAdmin) {
++  if (canPreview) {
+     const [viewAsUserResult, previewUsersResult] = await Promise.all([
+       viewAsUserId
+         ? supabase
+@@ -135,6 +138,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
+             userAvatarUrl={effectiveProfile?.avatar_url ?? null}
+             unreadCount={unread ?? 0}
+             isAdmin={isAdmin}
++            canPreview={canPreview}
+             viewAsRole={viewAsRole}
+             viewAsUser={viewAsUser ? {
+               id: viewAsUser.id,
+diff --git a/src/app/app/profile/actions.ts b/src/app/app/profile/actions.ts
+index c105f67..9f63444 100644
+--- a/src/app/app/profile/actions.ts
++++ b/src/app/app/profile/actions.ts
+@@ -5,6 +5,38 @@ import { redirect } from 'next/navigation'
+ import { createClient } from '@/lib/supabase/server'
+ import { NOTIFICATION_EVENT_META, type NotificationEvent } from '@/lib/notify'
+ 
++const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
++
++export type UpdateEmailResult =
++  | { ok: true; message: string }
++  | { ok: false; error: string }
++
++/**
++ * Starts an email-address change for the current user. Supabase sends a
++ * confirmation link to the new address; the login email (and the mirrored
++ * profiles.email — reconciled on next load) only change once the user confirms.
++ */
++export async function updateEmailAddress(formData: FormData): Promise<UpdateEmailResult> {
++  const supabase = await createClient()
++  const { data: { user } } = await supabase.auth.getUser()
++  if (!user) return { ok: false, error: 'Not authenticated' }
++
++  const newEmail = String(formData.get('email') ?? '').trim().toLowerCase()
++  if (!EMAIL_RE.test(newEmail)) return { ok: false, error: 'Enter a valid email address.' }
++  if (newEmail === (user.email ?? '').toLowerCase()) {
++    return { ok: false, error: 'That is already your current email address.' }
++  }
++
++  const { error } = await supabase.auth.updateUser({ email: newEmail })
++  if (error) return { ok: false, error: error.message }
++
++  revalidatePath('/app/profile')
++  return {
++    ok: true,
++    message: `Confirmation link sent to ${newEmail}. Your email changes once you confirm it.`,
++  }
++}
++
+ export async function saveNotificationPrefs(formData: FormData): Promise<void> {
+   const supabase = await createClient()
+   const {
+diff --git a/src/app/app/profile/page.tsx b/src/app/app/profile/page.tsx
+index e7a8d74..8f08d27 100644
+--- a/src/app/app/profile/page.tsx
++++ b/src/app/app/profile/page.tsx
+@@ -3,6 +3,7 @@ import Link from 'next/link'
+ import { createClient } from '@/lib/supabase/server'
+ import { ProfileEditor } from '@/components/profile/profile-editor'
+ import { NotificationPrefsPanel } from '@/components/profile/notification-prefs-panel'
++import { EmailSettings } from '@/components/profile/email-settings'
+ import {
+   formatMemberSince,
+   getProfileInitials,
+@@ -26,6 +27,14 @@ export default async function ProfilePage() {
+ 
+   if (!profile) redirect('/onboarding')
+ 
++  // Reconcile the mirrored profiles.email with the authoritative auth email
++  // after a confirmed email change (Supabase updates auth.users.email only on
++  // confirmation). Cheap and idempotent; keeps display/notifications in sync.
++  if (user.email && profile.email !== user.email) {
++    await supabase.from('profiles').update({ email: user.email }).eq('id', user.id)
++    profile.email = user.email
++  }
++
+   /* Initiative memberships */
+   const { data: memberships } = await supabase
+     .from('initiative_members')
+@@ -129,6 +138,8 @@ export default async function ProfilePage() {
+         }}
+       />
+ 
++      <EmailSettings currentEmail={profile.email} />
++
+       <NotificationPrefsPanel notificationPrefs={profile.notification_prefs} />
+ 
+       {/* Expertise tags */}
+diff --git a/src/components/comms/comms-crm-workspace.tsx b/src/components/comms/comms-crm-workspace.tsx
+index 085e4f8..886e117 100644
+--- a/src/components/comms/comms-crm-workspace.tsx
++++ b/src/components/comms/comms-crm-workspace.tsx
+@@ -33,9 +33,11 @@ import { ROLE_LABELS } from '@/lib/role-access'
+ import { CrmImportDialog } from '@/components/comms/crm-import-dialog'
+ import { NavSelect } from '@/components/comms/nav-select'
+ 
+-const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
+-  ([value, label]) => ({ value, label })
+-)
++// Superadmin is intentionally excluded — it is not an assignable role in the CRM
++// context (granting it is a restricted, Superadmin-only action).
++const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][])
++  .filter(([value]) => value !== 'Superadmin')
++  .map(([value, label]) => ({ value, label }))
+ 
+ type CrmFilter = 'follow_up' | 'privacy_review' | 'campus' | null
+ 
+diff --git a/src/components/layouts/preview-panel.tsx b/src/components/layouts/preview-panel.tsx
+index 7475ee7..74b910a 100644
+--- a/src/components/layouts/preview-panel.tsx
++++ b/src/components/layouts/preview-panel.tsx
+@@ -5,9 +5,12 @@ import { useRouter } from 'next/navigation'
+ import { ROLE_LABELS } from '@/lib/role-access'
+ import { useRoleLayers } from '@/components/roles/role-layers-context'
+ 
++// The viewer of this panel is always a Superadmin, so their own role is the
++// default/"no preview" perspective. Every other role — including the normal
++// Platform Admin — is a real perspective they can step into.
+ const ALL_PERSPECTIVE_ROLES = Object.entries(ROLE_LABELS).map(([value, label]) => ({
+   value,
+-  label: value === 'PlatformAdmin' ? `${label} (default)` : label,
++  label: value === 'Superadmin' ? `${label} (default)` : label,
+ }))
+ 
+ type PreviewUser = {
+@@ -38,7 +41,7 @@ export function PreviewPanel({
+   const ref = useRef<HTMLDivElement>(null)
+   const { platformRole, congressRoles } = useRoleLayers()
+ 
+-  const previewingRole = Boolean(viewAsRole && viewAsRole !== 'PlatformAdmin')
++  const previewingRole = Boolean(viewAsRole && viewAsRole !== 'Superadmin')
+   const previewingUser = Boolean(viewAsUser)
+   const previewing = previewingRole || previewingUser
+   const buttonLabel = previewingUser
+@@ -83,7 +86,7 @@ export function PreviewPanel({
+ 
+   const applyRole = (val: string) => {
+     document.cookie = 'i2l-view-as-user=; path=/; max-age=0'
+-    if (val === 'PlatformAdmin') {
++    if (val === 'Superadmin') {
+       document.cookie = 'i2l-view-as-role=; path=/; max-age=0'
+     } else {
+       document.cookie = `i2l-view-as-role=${val}; path=/; max-age=86400; SameSite=Lax`
+@@ -161,7 +164,7 @@ export function PreviewPanel({
+             Preview as role
+           </label>
+           <select
+-            value={viewAsRole ?? 'PlatformAdmin'}
++            value={viewAsRole ?? 'Superadmin'}
+             onChange={(e) => applyRole(e.target.value)}
+             disabled={previewingUser}
+             className="mt-1.5 w-full cursor-pointer rounded-md border border-neutral-300 bg-white px-2 py-1.5 text-sm font-medium text-neutral-800 outline-none focus:ring-2 focus:ring-orange-300 disabled:cursor-not-allowed disabled:bg-neutral-50 disabled:text-neutral-400"
+diff --git a/src/components/layouts/top-nav.tsx b/src/components/layouts/top-nav.tsx
+index ef06432..e8d3fef 100644
+--- a/src/components/layouts/top-nav.tsx
++++ b/src/components/layouts/top-nav.tsx
+@@ -25,6 +25,8 @@ interface TopNavProps {
+   userAvatarUrl?: string | null
+   unreadCount?: number
+   isAdmin?: boolean
++  /** Superadmin-only: may open the view-as / preview control. */
++  canPreview?: boolean
+   viewAsRole?: string | null
+   viewAsUser?: PreviewUserOption | null
+   previewUsers?: PreviewUserOption[]
+@@ -39,6 +41,7 @@ export function TopNav({
+   userAvatarUrl,
+   unreadCount = 0,
+   isAdmin = false,
++  canPreview = false,
+   viewAsRole,
+   viewAsUser,
+   previewUsers = [],
+@@ -132,7 +135,7 @@ export function TopNav({
+ 
+         {/* Right: preview (admin) + notifications + profile */}
+         <div className="flex items-center gap-2">
+-          {isAdmin && (
++          {canPreview && (
+             <PreviewPanel
+               viewAsRole={viewAsRole}
+               viewAsUser={viewAsUser}
+diff --git a/src/components/ui/client-buttons.tsx b/src/components/ui/client-buttons.tsx
+index b60a936..632ff07 100644
+--- a/src/components/ui/client-buttons.tsx
++++ b/src/components/ui/client-buttons.tsx
+@@ -6,10 +6,15 @@ import { createClient } from '@/lib/supabase/client'
+ import { ROLE_LABELS } from '@/lib/role-access'
+ import { setUserStatus, deleteUser, purgeDemo, inviteUserAccount, resendInvitation, type AccountStatus, type PurgeDemoResult } from '@/app/app/admin/users/actions'
+ 
+-/** Derived from the canonical ROLE_LABELS so labels never diverge from the source of truth. */
+-const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
+-  ([value, label]) => ({ value, label })
+-)
++/**
++ * Derived from the canonical ROLE_LABELS so labels never diverge from the source
++ * of truth. Superadmin is excluded from the generic list — granting it is a
++ * restricted action only a Superadmin may perform (enforced by a DB trigger),
++ * surfaced explicitly via the `canAssignSuperadmin` path below.
++ */
++const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][])
++  .filter(([value]) => value !== 'Superadmin')
++  .map(([value, label]) => ({ value, label }))
+ 
+ /* ─── Generic placeholder button (replaces alert-only buttons) ─────────── */
+ export function PlaceholderButton({
+@@ -77,15 +82,23 @@ export function InviteIcon() {
+ }
+ 
+ /* ─── Edit Role button (admin users page) ──────────────────────────────── */
+-export function EditRoleButton({ userName, userId, currentRole }: { userName: string; userId: string; currentRole: string }) {
++export function EditRoleButton({ userName, userId, currentRole, canAssignSuperadmin = false }: { userName: string; userId: string; currentRole: string; canAssignSuperadmin?: boolean }) {
+   const [open, setOpen] = useState(false)
+   const [role, setRole] = useState(currentRole)
+   const [saving, setSaving] = useState(false)
+   const [saved, setSaved] = useState(false)
++  const [error, setError] = useState<string | null>(null)
+   const router = useRouter()
+ 
++  // Superadmin is offered only to a Superadmin caller. It is always shown when
++  // the target already holds it, so the select value stays valid.
++  const roleOptions = (canAssignSuperadmin || currentRole === 'Superadmin')
++    ? [...PLATFORM_ROLE_OPTIONS, { value: 'Superadmin', label: ROLE_LABELS.Superadmin }]
++    : PLATFORM_ROLE_OPTIONS
++
+   const handleSave = async () => {
+     setSaving(true)
++    setError(null)
+     const supabase = createClient()
+     const { error } = await supabase
+       .from('profiles')
+@@ -99,6 +112,10 @@ export function EditRoleButton({ userName, userId, currentRole }: { userName: st
+         setSaved(false)
+         router.refresh()
+       }, 1000)
++    } else {
++      // Surfaces the DB escalation-guard message when a non-Superadmin tries to
++      // grant/revoke Superadmin.
++      setError(error.message)
+     }
+   }
+ 
+@@ -119,10 +136,11 @@ export function EditRoleButton({ userName, userId, currentRole }: { userName: st
+               onChange={(e) => setRole(e.target.value)}
+               className="mt-3 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
+             >
+-              {PLATFORM_ROLE_OPTIONS.map((r) => (
++              {roleOptions.map((r) => (
+                 <option key={r.value} value={r.value}>{r.label}</option>
+               ))}
+             </select>
++            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
+             <div className="mt-4 flex gap-2 justify-end">
+               <button onClick={() => setOpen(false)} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50">Cancel</button>
+               <button onClick={handleSave} disabled={saving || saved} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50">
+diff --git a/src/lib/comms-access.ts b/src/lib/comms-access.ts
+index 8889bd3..daf6ecc 100644
+--- a/src/lib/comms-access.ts
++++ b/src/lib/comms-access.ts
+@@ -2,7 +2,7 @@ import { normalizeRole } from './platform-roles'
+ 
+ export function canAccessCommsWorkspace(role: string | null | undefined): boolean {
+   const normalized = normalizeRole(role)
+-  return normalized === 'PlatformAdmin' || normalized === 'Comms'
++  return normalized === 'PlatformAdmin' || normalized === 'Superadmin' || normalized === 'Comms'
+ }
+ 
+ export function getPostLoginLandingPath(_role: string | null | undefined): string {
+diff --git a/src/lib/dashboard-view.ts b/src/lib/dashboard-view.ts
+index 6b4bb3f..414da6c 100644
+--- a/src/lib/dashboard-view.ts
++++ b/src/lib/dashboard-view.ts
+@@ -4,7 +4,7 @@ export type DashboardVariant = 'coordinator' | 'board' | 'advocate'
+ 
+ export function resolveDashboardVariant(role?: string | null): DashboardVariant {
+   const normalized = normalizeRole(role)
+-  if (normalized === 'HubCoordinator' || normalized === 'PlatformAdmin') return 'coordinator'
++  if (normalized === 'HubCoordinator' || normalized === 'PlatformAdmin' || normalized === 'Superadmin') return 'coordinator'
+   if (normalized === 'BoardMember') return 'board'
+   return 'advocate'
+ }
+diff --git a/src/lib/initiative-workspace.ts b/src/lib/initiative-workspace.ts
+index 28c2125..6d8ea9a 100644
+--- a/src/lib/initiative-workspace.ts
++++ b/src/lib/initiative-workspace.ts
+@@ -35,6 +35,7 @@ export function canManageInitiativeWorkspace(
+   return (
+     platformRole === 'HubCoordinator' ||
+     platformRole === 'PlatformAdmin' ||
++    platformRole === 'Superadmin' ||
+     memberRole === 'lead'
+   )
+ }
+diff --git a/src/lib/invitations.ts b/src/lib/invitations.ts
+index 289a188..1d30668 100644
+--- a/src/lib/invitations.ts
++++ b/src/lib/invitations.ts
+@@ -95,7 +95,7 @@ export async function canInvite(
+     .maybeSingle()
+ 
+   const role = (data?.role as string | null) ?? ''
+-  return role === 'PlatformAdmin' || role === 'HubCoordinator'
++  return role === 'PlatformAdmin' || role === 'Superadmin' || role === 'HubCoordinator'
+ }
+ 
+ // ─── Autocomplete search ──────────────────────────────────────────────────────
+diff --git a/src/lib/permissions.ts b/src/lib/permissions.ts
+index 3145a92..f1fd50d 100644
+--- a/src/lib/permissions.ts
++++ b/src/lib/permissions.ts
+@@ -233,6 +233,25 @@ export const ROLE_SPACE_DEFAULTS: Record<PlatformRole, SpaceDefaults> = {
+     profile:       'manage',
+     admin:         'manage',
+   },
++  // Superadmin shares every permission with PlatformAdmin (manage everywhere).
++  // The only difference — the ability to view-as another role/user — is an
++  // app-layer capability gated by isSuperadmin(), not a space in this matrix.
++  Superadmin: {
++    dashboard:     'manage',
++    comms:         'manage',
++    initiatives:   'manage',
++    tasks:         'manage',
++    congress:      'manage',
++    stories:       'manage',
++    resources:     'manage',
++    partners:      'manage',
++    network:       'manage',
++    board:         'manage',
++    bureau:        'manage',
++    notifications: 'manage',
++    profile:       'manage',
++    admin:         'manage',
++  },
+ }
+ 
+ // ─── Sync resolver (pure, no DB) ──────────────────────────────────────────────
+@@ -248,7 +267,7 @@ export function resolveAccessFromRole(
+ ): AccessLevel {
+   const normalized = normalizeRole(role)
+   // PlatformAdmin is always manage — no override can reduce this
+-  if (normalized === 'PlatformAdmin') return 'manage'
++  if (normalized === 'PlatformAdmin' || normalized === 'Superadmin') return 'manage'
+   return ROLE_SPACE_DEFAULTS[normalized][space] ?? 'invisible'
+ }
+ 
+@@ -281,7 +300,7 @@ export async function resolveAccess(
+   const normalized = normalizeRole(role)
+ 
+   // PlatformAdmin always has full manage — skip DB lookup
+-  if (normalized === 'PlatformAdmin') return 'manage'
++  if (normalized === 'PlatformAdmin' || normalized === 'Superadmin') return 'manage'
+ 
+   // Look up overrides: fetch global + scoped in one query
+   const { data: overrides } = await supabase
+@@ -320,7 +339,7 @@ export async function resolveAllSpaces(
+   const normalized = normalizeRole(role)
+ 
+   // PlatformAdmin: everything is manage
+-  if (normalized === 'PlatformAdmin') {
++  if (normalized === 'PlatformAdmin' || normalized === 'Superadmin') {
+     return Object.fromEntries(
+       PLATFORM_SPACES.map((s) => [s, 'manage' as AccessLevel])
+     ) as Record<PlatformSpace, AccessLevel>
+diff --git a/src/lib/platform-roles.ts b/src/lib/platform-roles.ts
+index 8551b40..04e99ac 100644
+--- a/src/lib/platform-roles.ts
++++ b/src/lib/platform-roles.ts
+@@ -8,6 +8,7 @@ export type PlatformRole =
+   | 'IndustryPartner'
+   | 'BoardMember'
+   | 'PlatformAdmin'
++  | 'Superadmin'
+ 
+ const DEFAULT_ROLE: PlatformRole = 'PatientAdvocate'
+ 
+@@ -24,6 +25,9 @@ const LEGACY_ROLE_MAP: Record<string, PlatformRole> = {
+   admin:            'PlatformAdmin',
+   platform_admin:   'PlatformAdmin',
+   'platform admin': 'PlatformAdmin',
++  superadmin:       'Superadmin',
++  super_admin:      'Superadmin',
++  'super admin':    'Superadmin',
+   hub_coordinator:  'HubCoordinator',
+   board_member:     'BoardMember',
+   industry_partner: 'IndustryPartner',
+@@ -39,6 +43,7 @@ const KNOWN_ROLES: Record<PlatformRole, true> = {
+   IndustryPartner: true,
+   BoardMember: true,
+   PlatformAdmin: true,
++  Superadmin: true,
+ }
+ 
+ export function normalizeRole(role?: string | null): PlatformRole {
+@@ -50,3 +55,24 @@ export function normalizeRole(role?: string | null): PlatformRole {
+ 
+   return DEFAULT_ROLE
+ }
++
++/**
++ * Two admin tiers share every permission; they differ only in the ability to
++ * "view as" another role/user (ADR: Superadmin vs Platform Admin).
++ *
++ * - `isPlatformAdmin` — has full admin *rights* (both PlatformAdmin and
++ *   Superadmin). Use this for every access/permission gate. It is the app-layer
++ *   mirror of the DB `current_user_role()` which collapses Superadmin →
++ *   PlatformAdmin, so RLS treats both identically.
++ * - `isSuperadmin` — the elevated tier that additionally may take other
++ *   perspectives (view-as). Use this ONLY to gate the preview/impersonation
++ *   feature and the granting of the Superadmin role itself.
++ */
++export function isPlatformAdmin(role?: string | null): boolean {
++  const normalized = normalizeRole(role)
++  return normalized === 'PlatformAdmin' || normalized === 'Superadmin'
++}
++
++export function isSuperadmin(role?: string | null): boolean {
++  return normalizeRole(role) === 'Superadmin'
++}
+diff --git a/src/lib/role-access.ts b/src/lib/role-access.ts
+index c0fb4f2..2501403 100644
+--- a/src/lib/role-access.ts
++++ b/src/lib/role-access.ts
+@@ -2,7 +2,7 @@ import type { AccessLevel, PlatformSpace } from './permissions'
+ import { canAccess, resolveAccessFromRole } from './permissions'
+ import { normalizeRole } from './platform-roles'
+ import type { PlatformRole } from './platform-roles'
+-export { normalizeRole } from './platform-roles'
++export { normalizeRole, isPlatformAdmin, isSuperadmin } from './platform-roles'
+ export type { PlatformRole } from './platform-roles'
+ 
+ /**
+@@ -20,6 +20,7 @@ export const ROLE_LABELS: Record<PlatformRole, string> = {
+   IndustryPartner: 'Industry Partner',
+   BoardMember:     'Board Member',
+   PlatformAdmin:   'Platform Admin',
++  Superadmin:      'Superadmin',
+ }
+ 
+ /**
+@@ -27,6 +28,7 @@ export const ROLE_LABELS: Record<PlatformRole, string> = {
+  * Always use this instead of inline maps in pages/components.
+  */
+ export const ROLE_BADGE_COLORS: Record<PlatformRole, string> = {
++  Superadmin:      'bg-red-200 text-red-900',
+   PlatformAdmin:   'bg-red-100 text-red-700',
+   BoardMember:     'bg-purple-100 text-purple-700',
+   HubCoordinator:  'bg-orange-100 text-orange-700',
+diff --git a/src/lib/view-as.ts b/src/lib/view-as.ts
+index 6173768..8704c56 100644
+--- a/src/lib/view-as.ts
++++ b/src/lib/view-as.ts
+@@ -14,6 +14,7 @@ const VALID_ROLES: PlatformRole[] = [
+   'IndustryPartner',
+   'BoardMember',
+   'PlatformAdmin',
++  'Superadmin',
+ ]
+ 
+ /**
+diff --git a/src/test/unit/permissions.test.ts b/src/test/unit/permissions.test.ts
+index 69df17d..bce9a4a 100644
+--- a/src/test/unit/permissions.test.ts
++++ b/src/test/unit/permissions.test.ts
+@@ -184,9 +184,9 @@ describe('ROLE_SPACE_DEFAULTS matrix completeness', () => {
+     }
+   })
+ 
+-  it('no role has admin access except PlatformAdmin', () => {
++  it('no role has admin access except the admin tiers (PlatformAdmin, Superadmin)', () => {
+     for (const role of roles) {
+-      if (role === 'PlatformAdmin') continue
++      if (role === 'PlatformAdmin' || role === 'Superadmin') continue
+       expect(
+         ROLE_SPACE_DEFAULTS[role].admin,
+         `${role} should NOT have admin access`

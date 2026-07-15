@@ -95,7 +95,7 @@ export async function canInvite(
     .maybeSingle()
 
   const role = (data?.role as string | null) ?? ''
-  return role === 'PlatformAdmin' || role === 'HubCoordinator'
+  return role === 'PlatformAdmin' || role === 'Superadmin' || role === 'HubCoordinator'
 }
 
 // ─── Autocomplete search ──────────────────────────────────────────────────────

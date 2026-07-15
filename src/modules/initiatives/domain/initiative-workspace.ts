@@ -35,6 +35,7 @@ export function canManageInitiativeWorkspace(
   return (
     platformRole === 'HubCoordinator' ||
     platformRole === 'PlatformAdmin' ||
+    platformRole === 'Superadmin' ||
     memberRole === 'lead'
   )
 }

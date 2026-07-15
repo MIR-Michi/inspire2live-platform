@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { normalizeRole, ROLE_LABELS } from '@/lib/role-access'
+import { normalizeRole, ROLE_LABELS , isPlatformAdmin} from '@/lib/role-access'
 import { getAuthBaseUrl } from '@/lib/auth-redirect-url'
 import { DEMO_EMAILS } from './constants'
 
@@ -26,7 +26,7 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
     .single()
 
   const normalized = normalizeRole(profile?.role)
-  if (normalized !== 'PlatformAdmin') {
+  if (!isPlatformAdmin(normalized)) {
     return { error: 'Forbidden: PlatformAdmin only', adminId: null }
   }
 

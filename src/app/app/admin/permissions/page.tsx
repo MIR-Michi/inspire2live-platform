@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
-import { normalizeRole } from '@/lib/role-access'
+import { normalizeRole , isPlatformAdmin} from '@/lib/role-access'
 import { loadAdminPermissionsData } from '@/lib/admin-permissions-data'
 import { loadAdminRoleDefaultsData } from '@/lib/admin-role-defaults-data'
 import { PermissionsWorkspaceShell } from '@/components/admin/permissions-workspace-shell'
@@ -70,7 +70,7 @@ export default async function AdminPermissionsPage() {
   }
 
   // redirect() OUTSIDE try/catch — Next.js requirement
-  if (myRole !== 'PlatformAdmin') redirect('/app/dashboard')
+  if (!isPlatformAdmin(myRole)) redirect('/app/dashboard')
 
   /* ── Data loading ─────────────────────────────────────────────────────────── */
   let users: Awaited<ReturnType<typeof loadAdminPermissionsData>>['users'] = []

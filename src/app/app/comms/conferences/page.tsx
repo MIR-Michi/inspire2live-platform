@@ -3,7 +3,7 @@ import { createAdminClient } from '@/lib/supabase/admin'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { loadConferencesData } from '@/lib/comms-conferences'
 import { getConferenceRunStatus, type ConferenceRunStatus } from '@/lib/ai/conference-run'
-import { normalizeRole } from '@/lib/platform-roles'
+import { isPlatformAdmin } from '@/lib/platform-roles'
 import { ConferencesShell } from '@/components/comms/conferences/conferences-shell'
 
 // This page depends on the current Supabase session and shared run status.
@@ -34,7 +34,7 @@ export default async function ConferencesPage() {
     console.error('[conferences page] run status load failed', error)
   }
 
-  const canRefreshCache = normalizeRole(profileResult?.role) === 'PlatformAdmin'
+  const canRefreshCache = isPlatformAdmin(profileResult?.role)
 
   return <ConferencesShell data={data} initialStatus={status} aiEnabled={isAiEnabled()} canRefreshCache={canRefreshCache} />
 }
