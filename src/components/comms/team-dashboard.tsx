@@ -7,6 +7,7 @@ import { TeamFeed } from '@/components/comms/team-feed'
 import { WeeklyAgenda } from '@/components/comms/weekly-agenda'
 import { TaskCreateForm } from '@/components/comms/task-create-form'
 import { NewMembersSection } from '@/components/comms/new-members-section'
+import { TeamTaskBoard } from '@/components/comms/team-task-board'
 import { OrgNewsfeedCard } from '@/components/comms/org-newsfeed-card'
 import { UnifiedTaskList } from '@/components/tasks/unified-task-list'
 import type { OrgNewsfeedRunStatus } from '@/lib/ai/org-feed-config'
@@ -17,7 +18,7 @@ function formatShortDate(value: string | null) {
 }
 
 export function TeamDashboard({ data, canApprove = false, newsfeedRunStatus = null }: { data: TeamDashboardData; canApprove?: boolean; newsfeedRunStatus?: OrgNewsfeedRunStatus | null }) {
-  const { channels, events, agendaGroups, agendaItems, teamMembers, myTasks, newMembers, feed, owners, transcriptsByDate, transcriptOwners, aiEnabled, newsfeed } = data
+  const { channels, events, agendaGroups, agendaItems, teamMembers, myTasks, teamTasks, newMembers, feed, owners, transcriptsByDate, transcriptOwners, aiEnabled, newsfeed } = data
 
   return (
     <div className="space-y-4">
@@ -33,6 +34,15 @@ export function TeamDashboard({ data, canApprove = false, newsfeedRunStatus = nu
           storageKey="comms-team-my-tasks"
         >
           <UnifiedTaskList tasks={myTasks} emptyLabel="No open tasks assigned to you right now." />
+        </CollapsibleCard>
+
+        {/* ── Team tasks — every owner's open tasks, filterable ── */}
+        <CollapsibleCard
+          key="comms-team-all-tasks"
+          title={`Team tasks${teamTasks.length ? ` (${teamTasks.length})` : ''}`}
+          storageKey="comms-team-all-tasks"
+        >
+          <TeamTaskBoard tasks={teamTasks} />
         </CollapsibleCard>
 
         {/* ── Bi-weekly meeting agenda ── */}

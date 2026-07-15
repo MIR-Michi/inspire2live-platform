@@ -2,6 +2,7 @@ import Link from 'next/link'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { TileGroup } from '@/components/ui/tile-group'
 import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
+import { UnifiedTaskList } from '@/components/tasks/unified-task-list'
 import type { AdminDashboardData, AttentionTone } from '@/lib/admin-dashboard-data'
 
 /* ─── Small presentational helpers ───────────────────────────────────────── */
@@ -49,7 +50,7 @@ function ViewAll({ href }: { href: string }) {
 /* ─── Dashboard ──────────────────────────────────────────────────────────── */
 
 export function AdminDashboard({ data }: { data: AdminDashboardData }) {
-  const { kpis, attention, roleDistribution, recentSignups, recentActivity, system } = data
+  const { kpis, attention, roleDistribution, recentSignups, recentActivity, system, myTasks } = data
   const money = (n: number) => `$${n.toFixed(n >= 100 ? 0 : 2)}`
 
   return (
@@ -79,10 +80,20 @@ export function AdminDashboard({ data }: { data: AdminDashboardData }) {
       </div>
 
       <TileGroup groupId="admin-dashboard" className="space-y-6">
-        {/* ── Needs attention — the triage card, open by default ── */}
+        {/* ── My tasks — the admin's own open tasks, across sources ── */}
+        <CollapsibleCard
+          key="admin-my-tasks"
+          storageKey="admin-my-tasks"
+          title={`My tasks${myTasks.length ? ` (${myTasks.length})` : ''}`}
+        >
+          <UnifiedTaskList tasks={myTasks} emptyLabel="No open tasks assigned to you right now." />
+        </CollapsibleCard>
+
+        {/* ── Needs attention — the triage card ── */}
         <CollapsibleCard
           key="admin-needs-attention"
           storageKey="admin-needs-attention"
+          defaultCollapsed
           title={
             <>
               Needs attention
