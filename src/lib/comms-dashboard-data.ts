@@ -19,7 +19,7 @@ import { groupAgendaByMeeting, type AgendaItemRecord, type AgendaMeetingGroup } 
 import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
 import { loadNewMembers, type NewMemberRecord } from '@/lib/member-onboarding'
 import { loadMeetingTranscriptsByDate, type MeetingTranscriptView } from '@/lib/comms-meeting-transcripts'
-import { loadTasksForUser, loadTeamTasks } from '@/lib/tasks/repository'
+import { loadTeamTasks } from '@/lib/tasks/repository'
 import type { UnifiedTask } from '@/lib/tasks/types'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 
@@ -85,11 +85,9 @@ export type TeamDashboardData = {
   agendaGroups: AgendaMeetingGroup[]
   agendaItems: AgendaItemOption[]
   tasks: CommsTaskRecord[]
-  // The viewing user's own open tasks (assigned to them across sources), so the
-  // team dashboard surfaces "what's assigned to me" without switching views.
-  myTasks: UnifiedTask[]
   // Every open task the viewer can read across all owners — the filterable team
-  // task board (by person, type, and date).
+  // task board (by person, type, and date). Personal "My tasks" belongs on the
+  // My dashboard view, not here.
   teamTasks: UnifiedTask[]
   teamMembers: TeamMemberOption[]
   newMembers: NewMemberRecord[]
@@ -119,7 +117,7 @@ function resolveChannel(value: string | null | undefined): ChannelKey {
 
 export async function loadCommsTeamDashboardData(
   supabase: SupabaseClient,
-  { scopeFilter = 'all', viewerId }: { scopeFilter?: EventScopeFilter; viewerId?: string } = {}
+  { scopeFilter = 'all' }: { scopeFilter?: EventScopeFilter } = {}
 ): Promise<TeamDashboardData> {
   // Loosely-typed handle for tables not yet in the generated Database types.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -419,8 +417,6 @@ export async function loadCommsTeamDashboardData(
 
   // The viewer's own open tasks (comms + onboarding + initiative), so assigned
   // work surfaces in a "My tasks" card on the team dashboard they land on.
-  const myTasks = viewerId ? await loadTasksForUser(supabase, viewerId, { openOnly: true }) : []
-
   // All open tasks across the team (owner labels resolved), for the filterable board.
   const teamTasks = await loadTeamTasks(supabase, { openOnly: true })
 
@@ -454,7 +450,6 @@ export async function loadCommsTeamDashboardData(
     agendaGroups,
     agendaItems: agendaOptions,
     tasks,
-    myTasks,
     teamTasks,
     teamMembers,
     newMembers,
