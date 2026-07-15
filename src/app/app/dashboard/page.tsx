@@ -10,6 +10,7 @@ import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-data'
 import { AdminDashboard } from '@/components/admin/admin-dashboard'
+import { AdminDashboardToggle } from '@/components/admin/admin-dashboard-toggle'
 import { loadAdminDashboardData } from '@/lib/admin-dashboard-data'
 
 type InitiativeHealth = Tables<'initiative_health'>
@@ -400,15 +401,18 @@ export default async function DashboardPage() {
   // initiative-health queries so the admin view stays light. During view-as the
   // effective role is the previewed user's, so the admin sees *their* dashboard.
   if (isPlatformAdmin(role)) {
-    const adminData = await loadAdminDashboardData(supabase)
+    const adminData = await loadAdminDashboardData(supabase, user.id)
     const greeting = buildDashboardGreeting(profile?.name)
     return (
       <div className="mx-auto max-w-5xl space-y-6">
-        <div>
-          <h1 className="text-2xl font-bold text-neutral-900">Admin dashboard</h1>
-          <p className="mt-1 text-sm text-neutral-500">
-            {greeting} Platform health and what needs your attention.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h1 className="text-2xl font-bold text-neutral-900">Admin dashboard</h1>
+            <p className="mt-1 text-sm text-neutral-500">
+              {greeting} Platform health and what needs your attention.
+            </p>
+          </div>
+          <AdminDashboardToggle active="admin" />
         </div>
         <AdminDashboard data={adminData} />
       </div>

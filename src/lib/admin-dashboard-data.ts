@@ -13,6 +13,8 @@
  */
 
 import type { SupabaseClient } from '@supabase/supabase-js'
+import { loadTasksForUser } from '@/lib/tasks/repository'
+import type { UnifiedTask } from '@/lib/tasks/types'
 
 const DAY_MS = 86_400_000
 const sevenDaysAgo = () => new Date(Date.now() - 7 * DAY_MS).toISOString()
@@ -68,6 +70,8 @@ export type AdminDashboardData = {
   recentSignups: RecentSignup[]
   recentActivity: RecentActivity[]
   system: AdminSystemHealth
+  /** The admin's own open tasks across sources (empty when no userId given). */
+  myTasks: UnifiedTask[]
 }
 
 /**
@@ -109,8 +113,14 @@ async function safe<T>(fn: () => Promise<T>, fallback: T): Promise<T> {
 
 export async function loadAdminDashboardData(
   supabase: SupabaseClient,
+  userId?: string,
 ): Promise<AdminDashboardData> {
   const since = sevenDaysAgo()
+
+  // ── The admin's own open tasks (across sources) ──
+  const myTasks = userId
+    ? await safe(() => loadTasksForUser(supabase, userId, { openOnly: true }), [] as UnifiedTask[])
+    : []
 
   // ── Profiles: the base for several KPIs + the activity name map ──
   const profiles = await safe(async () => {
@@ -250,5 +260,6 @@ export async function loadAdminDashboardData(
       emailFailures7d,
       permissionOverrides,
     },
+    myTasks,
   }
 }

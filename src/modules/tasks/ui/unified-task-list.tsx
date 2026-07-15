@@ -65,9 +65,12 @@ function RestoreTaskButton({ task }: { task: UnifiedTask }) {
 export function UnifiedTaskList({
   tasks,
   emptyLabel = 'No open tasks assigned to you right now.',
+  showOwner = false,
 }: {
   tasks: UnifiedTask[]
   emptyLabel?: string
+  /** Show each task's owner (used on team-wide boards, not personal lists). */
+  showOwner?: boolean
 }) {
   const todayKey = new Date().toISOString().slice(0, 10)
   const [showFinished, setShowFinished] = useState(false)
@@ -135,6 +138,11 @@ export function UnifiedTaskList({
                     <span className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${CONTEXT_CHIP[task.context.kind]}`}>
                       {contextLabel}
                     </span>
+                    {showOwner && task.ownerLabel && (
+                      <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
+                        {task.ownerLabel}
+                      </span>
+                    )}
                     {overdue && (
                       <span className="rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-red-700">
                         Overdue

@@ -19,7 +19,7 @@ import { groupAgendaByMeeting, type AgendaItemRecord, type AgendaMeetingGroup } 
 import { normalizeCommsTaskStatus, type CommsTaskRecord } from '@/lib/comms-tasks'
 import { loadNewMembers, type NewMemberRecord } from '@/lib/member-onboarding'
 import { loadMeetingTranscriptsByDate, type MeetingTranscriptView } from '@/lib/comms-meeting-transcripts'
-import { loadTasksForUser } from '@/lib/tasks/repository'
+import { loadTasksForUser, loadTeamTasks } from '@/lib/tasks/repository'
 import type { UnifiedTask } from '@/lib/tasks/types'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 
@@ -88,6 +88,9 @@ export type TeamDashboardData = {
   // The viewing user's own open tasks (assigned to them across sources), so the
   // team dashboard surfaces "what's assigned to me" without switching views.
   myTasks: UnifiedTask[]
+  // Every open task the viewer can read across all owners — the filterable team
+  // task board (by person, type, and date).
+  teamTasks: UnifiedTask[]
   teamMembers: TeamMemberOption[]
   newMembers: NewMemberRecord[]
   feed: FeedEntry[]
@@ -418,6 +421,9 @@ export async function loadCommsTeamDashboardData(
   // work surfaces in a "My tasks" card on the team dashboard they land on.
   const myTasks = viewerId ? await loadTasksForUser(supabase, viewerId, { openOnly: true }) : []
 
+  // All open tasks across the team (owner labels resolved), for the filterable board.
+  const teamTasks = await loadTeamTasks(supabase, { openOnly: true })
+
   // ── In-meeting transcripts + org news feed ─────────────────────────
   const [transcriptsMap, newsData] = await Promise.all([
     loadMeetingTranscriptsByDate(supabase, agendaGroups.map((g) => g.meetingDate)),
@@ -449,6 +455,7 @@ export async function loadCommsTeamDashboardData(
     agendaItems: agendaOptions,
     tasks,
     myTasks,
+    teamTasks,
     teamMembers,
     newMembers,
     feed,
