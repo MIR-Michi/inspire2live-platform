@@ -1,4 +1,5 @@
 import { createClient } from '@/lib/supabase/server'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { ContentCalendarShell } from '@/components/comms/content-calendar-shell'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { getIntegrationStubFlags } from '@/lib/comms-integrations'
@@ -76,7 +77,7 @@ export default async function CommsPlannerPage({
       statusFilter={statusFilter}
       currentUserId={user?.id ?? null}
       basePath="/app/comms/planner"
-      canUseWordpressStub={currentProfile?.role === 'PlatformAdmin'}
+      canUseWordpressStub={isPlatformAdmin(currentProfile?.role)}
       stubFlags={getIntegrationStubFlags()}
     />
   )

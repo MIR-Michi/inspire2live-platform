@@ -182,9 +182,9 @@ describe('ROLE_SPACE_DEFAULTS matrix completeness', () => {
     }
   })
 
-  it('no role has admin access except PlatformAdmin', () => {
+  it('no role has admin access except the admin tiers (PlatformAdmin, Superadmin)', () => {
     for (const role of roles) {
-      if (role === 'PlatformAdmin') continue
+      if (role === 'PlatformAdmin' || role === 'Superadmin') continue
       expect(
         ROLE_SPACE_DEFAULTS[role].admin,
         `${role} should NOT have admin access`

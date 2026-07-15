@@ -4,7 +4,7 @@ export type DashboardVariant = 'coordinator' | 'board' | 'advocate'
 
 export function resolveDashboardVariant(role?: string | null): DashboardVariant {
   const normalized = normalizeRole(role)
-  if (normalized === 'HubCoordinator' || normalized === 'PlatformAdmin') return 'coordinator'
+  if (normalized === 'HubCoordinator' || normalized === 'PlatformAdmin' || normalized === 'Superadmin') return 'coordinator'
   if (normalized === 'BoardMember') return 'board'
   return 'advocate'
 }

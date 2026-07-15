@@ -1,7 +1,7 @@
 import { cookies } from 'next/headers'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { PlatformRole } from './role-access'
-import { normalizeRole } from './role-access'
+import { isSuperadmin } from './role-access'
 
 const ROLE_COOKIE_NAME = 'i2l-view-as-role'
 const USER_COOKIE_NAME = 'i2l-view-as-user'
@@ -16,6 +16,7 @@ const VALID_ROLES: PlatformRole[] = [
   'IndustryPartner',
   'BoardMember',
   'PlatformAdmin',
+  'Superadmin',
 ]
 
 /**
@@ -85,7 +86,7 @@ export async function resolveEffectiveViewer(
   let effective = actualProfile
   let isPreviewing = false
 
-  if (normalizeRole(actualProfile.role) === 'PlatformAdmin') {
+  if (isSuperadmin(actualProfile.role)) {
     const viewAsUserId = await getViewAsUserId()
     if (viewAsUserId && viewAsUserId !== user.id) {
       const { data: previewed } = await supabase

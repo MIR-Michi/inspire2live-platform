@@ -7,6 +7,7 @@
  */
 
 import type { User } from '@supabase/supabase-js'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/kernel/data/server'
 import { createAdminClient } from '@/kernel/data/admin'
 import type { FeedbackItem, FeedbackStatus } from '@/modules/feedback/domain/types'
@@ -26,7 +27,7 @@ export async function requireFeedbackAdmin(): Promise<FeedbackAdminGate> {
   } = await supabase.auth.getUser()
   if (!user) return { user: null, reason: 'unauthenticated' }
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') return { user: null, reason: 'forbidden' }
+  if (!isPlatformAdmin(profile?.role)) return { user: null, reason: 'forbidden' }
   return { user, reason: null }
 }
 

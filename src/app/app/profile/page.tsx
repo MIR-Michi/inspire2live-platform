@@ -3,6 +3,7 @@ import Link from 'next/link'
 import { createClient } from '@/lib/supabase/server'
 import { ProfileEditor } from '@/components/profile/profile-editor'
 import { NotificationPrefsPanel } from '@/components/profile/notification-prefs-panel'
+import { EmailSettings } from '@/components/profile/email-settings'
 import {
   formatMemberSince,
   getProfileInitials,
@@ -25,6 +26,14 @@ export default async function ProfilePage() {
     .maybeSingle()
 
   if (!profile) redirect('/onboarding')
+
+  // Reconcile the mirrored profiles.email with the authoritative auth email
+  // after a confirmed email change (Supabase updates auth.users.email only on
+  // confirmation). Cheap and idempotent; keeps display/notifications in sync.
+  if (user.email && profile.email !== user.email) {
+    await supabase.from('profiles').update({ email: user.email }).eq('id', user.id)
+    profile.email = user.email
+  }
 
   /* Initiative memberships */
   const { data: memberships } = await supabase
@@ -128,6 +137,8 @@ export default async function ProfilePage() {
           expertise_tags: profile.expertise_tags,
         }}
       />
+
+      <EmailSettings currentEmail={profile.email} />
 
       <NotificationPrefsPanel notificationPrefs={profile.notification_prefs} />
 

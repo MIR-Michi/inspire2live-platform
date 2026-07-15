@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { createClient } from '@/lib/supabase/server'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
@@ -32,7 +33,7 @@ export default async function AdminOrgFeedPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') redirect('/app/dashboard')
+  if (!isPlatformAdmin(profile?.role)) redirect('/app/dashboard')
 
   const admin = createAdminClient() as unknown as {
     from: (table: string) => {

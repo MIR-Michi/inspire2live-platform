@@ -2,7 +2,7 @@ import type { AccessLevel, PlatformSpace } from './permissions'
 import { canAccess, resolveAccessFromRole } from './permissions'
 import { normalizeRole } from './platform-roles'
 import type { PlatformRole } from './platform-roles'
-export { normalizeRole } from './platform-roles'
+export { normalizeRole, isPlatformAdmin, isSuperadmin } from './platform-roles'
 export type { PlatformRole } from './platform-roles'
 
 /**
@@ -20,6 +20,7 @@ export const ROLE_LABELS: Record<PlatformRole, string> = {
   IndustryPartner: 'Industry Partner',
   BoardMember:     'Board Member',
   PlatformAdmin:   'Platform Admin',
+  Superadmin:      'Superadmin',
 }
 
 /**
@@ -27,6 +28,7 @@ export const ROLE_LABELS: Record<PlatformRole, string> = {
  * Always use this instead of inline maps in pages/components.
  */
 export const ROLE_BADGE_COLORS: Record<PlatformRole, string> = {
+  Superadmin:      'bg-red-200 text-red-900',
   PlatformAdmin:   'bg-red-100 text-red-700',
   BoardMember:     'bg-purple-100 text-purple-700',
   HubCoordinator:  'bg-orange-100 text-orange-700',

@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { resolveEffectiveViewer } from '@/lib/view-as'
-import { normalizeRole } from '@/lib/role-access'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { CommsDashboardToggle } from '@/components/comms/comms-dashboard-toggle'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
 import { TeamDashboard } from '@/components/comms/team-dashboard'
@@ -63,7 +63,7 @@ export default async function CommsDashboardPage({
       ) : (
         <TeamDashboard
           data={await loadCommsTeamDashboardData(supabase, { viewerId: viewer.userId })}
-          canApprove={normalizeRole(viewer.role) === 'PlatformAdmin'}
+          canApprove={isPlatformAdmin(viewer.role)}
           newsfeedRunStatus={await loadNewsfeedRunStatus()}
         />
       )}

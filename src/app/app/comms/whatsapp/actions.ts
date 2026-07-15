@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
@@ -58,7 +59,7 @@ async function requireCommsOperator() {
 
 async function requirePlatformAdmin() {
   const context = await requireCommsOperator()
-  if (context.profile.role !== 'PlatformAdmin') {
+  if (!isPlatformAdmin(context.profile.role)) {
     throw new Error('Only PlatformAdmin users can delete WhatsApp messages.')
   }
   return context

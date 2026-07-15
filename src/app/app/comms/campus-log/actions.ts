@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { normalizeRole } from '@/lib/role-access'
+import { isPlatformAdmin } from '@/lib/role-access'
 import {
   CAMPUS_MEETING_TASK_TEMPLATE,
   CAMPUS_MEETING_DEFAULT_OWNERS,
@@ -423,7 +423,7 @@ export async function generateCampusBriefingAction(formData: FormData): Promise<
     }
 
     // Regenerating an existing (persisted) briefing is admin-only.
-    if (hasExistingBriefing && normalizeRole(role) !== 'PlatformAdmin') {
+    if (hasExistingBriefing && !isPlatformAdmin(role)) {
       return { ok: false, message: 'Only admins can regenerate an existing briefing.' }
     }
 

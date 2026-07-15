@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { CreateInitiativeButton } from '@/components/ui/client-buttons'
@@ -17,7 +18,7 @@ export default async function InitiativesIndexPage() {
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
   const role = profile?.role ?? 'PatientAdvocate'
-  const isCoordinator = role === 'HubCoordinator' || role === 'PlatformAdmin'
+  const isCoordinator = role === 'HubCoordinator' || isPlatformAdmin(role)
 
   const { data: all } = await supabase
     .from('initiative_health')

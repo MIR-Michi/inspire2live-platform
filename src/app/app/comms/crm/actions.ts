@@ -3,7 +3,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
-import { normalizeRole } from '@/lib/role-access'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { inviteUserAccount } from '@/app/app/admin/users/actions'
 import {
   isInternalEmail,
@@ -372,7 +372,7 @@ export async function deleteCrmContact(formData: FormData) {
     .eq('id', user.id)
     .maybeSingle()
   if (profileError) throw new Error(profileError.message)
-  if (normalizeRole(profile?.role) !== 'PlatformAdmin') {
+  if (!isPlatformAdmin(profile?.role)) {
     throw new Error('Only platform admins can delete contacts.')
   }
 
@@ -488,7 +488,7 @@ export async function inviteContactToPlatform(formData: FormData) {
     .eq('id', user.id)
     .maybeSingle()
   if (profileError) throw new Error(profileError.message)
-  if (normalizeRole(profile?.role) !== 'PlatformAdmin') {
+  if (!isPlatformAdmin(profile?.role)) {
     throw new Error('Only platform admins can invite contacts to the platform.')
   }
 

@@ -7,9 +7,14 @@ import { ROLE_LABELS } from '@/lib/role-access'
 import { setUserStatus, deleteUser, purgeDemo, inviteUserAccount, resendInvitation, type AccountStatus, type PurgeDemoResult } from '@/app/app/admin/users/actions'
 
 /** Derived from the canonical ROLE_LABELS so labels never diverge from the source of truth. */
-const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][]).map(
-  ([value, label]) => ({ value, label })
-)
+/**
+ * Superadmin is excluded from the generic list — granting it is a restricted
+ * action only a Superadmin may perform (enforced by a DB trigger), surfaced
+ * explicitly via the `canAssignSuperadmin` path in EditRoleButton.
+ */
+const PLATFORM_ROLE_OPTIONS = (Object.entries(ROLE_LABELS) as [string, string][])
+  .filter(([value]) => value !== 'Superadmin')
+  .map(([value, label]) => ({ value, label }))
 
 /* ─── Generic placeholder button (replaces alert-only buttons) ─────────── */
 export function PlaceholderButton({
@@ -77,15 +82,23 @@ export function InviteIcon() {
 }
 
 /* ─── Edit Role button (admin users page) ──────────────────────────────── */
-export function EditRoleButton({ userName, userId, currentRole }: { userName: string; userId: string; currentRole: string }) {
+export function EditRoleButton({ userName, userId, currentRole, canAssignSuperadmin = false }: { userName: string; userId: string; currentRole: string; canAssignSuperadmin?: boolean }) {
   const [open, setOpen] = useState(false)
   const [role, setRole] = useState(currentRole)
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
+  const [error, setError] = useState<string | null>(null)
   const router = useRouter()
+
+  // Superadmin is offered only to a Superadmin caller. It is always shown when
+  // the target already holds it, so the select value stays valid.
+  const roleOptions = (canAssignSuperadmin || currentRole === 'Superadmin')
+    ? [...PLATFORM_ROLE_OPTIONS, { value: 'Superadmin', label: ROLE_LABELS.Superadmin }]
+    : PLATFORM_ROLE_OPTIONS
 
   const handleSave = async () => {
     setSaving(true)
+    setError(null)
     const supabase = createClient()
     const { error } = await supabase
       .from('profiles')
@@ -99,6 +112,10 @@ export function EditRoleButton({ userName, userId, currentRole }: { userName: st
         setSaved(false)
         router.refresh()
       }, 1000)
+    } else {
+      // Surfaces the DB escalation-guard message when a non-Superadmin tries to
+      // grant/revoke Superadmin.
+      setError(error.message)
     }
   }
 
@@ -119,10 +136,11 @@ export function EditRoleButton({ userName, userId, currentRole }: { userName: st
               onChange={(e) => setRole(e.target.value)}
               className="mt-3 w-full rounded-lg border border-neutral-300 px-3 py-2 text-sm"
             >
-              {PLATFORM_ROLE_OPTIONS.map((r) => (
+              {roleOptions.map((r) => (
                 <option key={r.value} value={r.value}>{r.label}</option>
               ))}
             </select>
+            {error && <p className="mt-2 text-xs text-red-600">{error}</p>}
             <div className="mt-4 flex gap-2 justify-end">
               <button onClick={() => setOpen(false)} className="rounded-lg border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50">Cancel</button>
               <button onClick={handleSave} disabled={saving || saved} className="rounded-lg bg-orange-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-orange-700 disabled:opacity-50">

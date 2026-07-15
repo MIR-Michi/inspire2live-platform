@@ -1,4 +1,5 @@
 import Link from 'next/link'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { redirect } from 'next/navigation'
 import type { ReactNode } from 'react'
 import { createClient } from '@/lib/supabase/server'
@@ -48,7 +49,7 @@ export default async function InitiativeLayout({
     .eq('user_id', user.id)
     .maybeSingle()
 
-  const isCoordinator = profile?.role === 'HubCoordinator' || profile?.role === 'PlatformAdmin'
+  const isCoordinator = profile?.role === 'HubCoordinator' || isPlatformAdmin(profile?.role)
   if (!membership && !isCoordinator) redirect('/app/initiatives')
 
   const canManage = canManageInitiativeWorkspace(profile?.role, membership?.role)

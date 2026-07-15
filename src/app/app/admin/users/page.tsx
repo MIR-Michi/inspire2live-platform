@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { EditRoleButton, InviteUserButton, UserStatusButton, DeleteUserButton, PurgeDemoUsersButton, ResendInviteButton } from '@/components/ui/client-buttons'
 import { DEMO_EMAILS } from '@/app/app/admin/users/constants'
-import { getRoleLabel, getRoleBadgeColor } from '@/lib/role-access'
+import { getRoleLabel, getRoleBadgeColor, isPlatformAdmin, isSuperadmin } from '@/lib/role-access'
 
 export default async function AdminUsersPage() {
   const supabase = await createClient()
@@ -10,7 +10,7 @@ export default async function AdminUsersPage() {
   if (!user) redirect('/login')
 
   const { data: profile } = await supabase.from('profiles').select('role').eq('id', user.id).maybeSingle()
-  if (profile?.role !== 'PlatformAdmin') {
+  if (!isPlatformAdmin(profile?.role)) {
     return (
       <div className="flex h-64 items-center justify-center">
         <div className="text-center">
@@ -119,7 +119,7 @@ export default async function AdminUsersPage() {
                 </td>
                 <td className="px-4 py-3 text-right">
                   <div className="flex flex-wrap items-center justify-end gap-2">
-                    <EditRoleButton userName={u.name} userId={u.id} currentRole={u.role} />
+                    <EditRoleButton userName={u.name} userId={u.id} currentRole={u.role} canAssignSuperadmin={isSuperadmin(profile?.role)} />
                     {!u.onboarding_completed && (
                       <ResendInviteButton userId={u.id} userName={u.name} email={u.email} />
                     )}

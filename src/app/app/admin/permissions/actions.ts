@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
-import { normalizeRole } from '@/lib/role-access'
+import { normalizeRole , isPlatformAdmin} from '@/lib/role-access'
 import { PLATFORM_SPACES } from '@/lib/permissions'
 import type { AccessLevel, PlatformSpace, ScopeType } from '@/lib/permissions'
 import type { PlatformRole } from '@/lib/platform-roles'
@@ -37,6 +37,7 @@ const VALID_ROLES = new Set<PlatformRole>([
   'IndustryPartner',
   'BoardMember',
   'PlatformAdmin',
+  'Superadmin',
 ])
 
 function validateScope(scopeType: ScopeType, scopeId?: string) {
@@ -73,7 +74,7 @@ async function requireAdmin(supabase: Awaited<ReturnType<typeof createClient>>) 
     .single()
 
   const normalized = normalizeRole(profile?.role)
-  if (normalized !== 'PlatformAdmin') {
+  if (!isPlatformAdmin(normalized)) {
     return { error: 'Forbidden: PlatformAdmin only', adminId: null }
   }
 

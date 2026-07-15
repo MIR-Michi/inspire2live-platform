@@ -1,6 +1,7 @@
 'use server'
 
 import { revalidatePath } from 'next/cache'
+import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { getIntegrationStubFlags, type IntegrationTarget } from '@/lib/comms-integrations'
@@ -59,7 +60,7 @@ async function triggerStub(
     }
 
     const { supabase, userId, role } = await requireCommsOperator()
-    if (params.adminOnly && role !== 'PlatformAdmin') {
+    if (params.adminOnly && !isPlatformAdmin(role)) {
       return { ok: false, error: 'This stub is available to PlatformAdmin only.' }
     }
 

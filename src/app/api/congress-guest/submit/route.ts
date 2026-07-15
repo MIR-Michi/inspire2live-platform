@@ -100,7 +100,7 @@ async function sendSubmissionNotification(params: {
     const { data: commsProfiles } = await admin
       .from('profiles')
       .select('email')
-      .in('role', ['Comms', 'PlatformAdmin'])
+      .in('role', ['Comms', 'PlatformAdmin', 'Superadmin'])
       .not('email', 'is', null)
       .limit(20)
 

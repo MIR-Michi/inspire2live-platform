@@ -5,7 +5,7 @@ import type { Tables } from '@/types/database'
 import { getDashboardConfig } from '@/lib/dashboard-config'
 import { buildDashboardGreeting, resolveDashboardVariant } from '@/lib/dashboard-view'
 import { getViewAsRole, resolveEffectiveViewer } from '@/lib/view-as'
-import { normalizeRole } from '@/lib/role-access'
+import { normalizeRole, isPlatformAdmin, isSuperadmin } from '@/lib/role-access'
 import { CommsDashboardPanel } from '@/components/comms/comms-personal-dashboard'
 import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-data'
@@ -381,12 +381,11 @@ export default async function DashboardPage() {
   if (profile && !profile.onboarding_completed) redirect('/onboarding')
 
   const actualRole = profile?.role ?? 'PatientAdvocate'
-  const isAdmin = normalizeRole(actualRole) === 'PlatformAdmin'
 
   // Preview-aware: an admin viewing-as another user sees that user's dashboard.
   // User preview wins over role-only preview (mirrors the app layout).
   const viewer = await resolveEffectiveViewer(supabase)
-  const roleOnlyPreview = isAdmin && !viewer?.isPreviewing ? await getViewAsRole() : null
+  const roleOnlyPreview = isSuperadmin(actualRole) && !viewer?.isPreviewing ? await getViewAsRole() : null
   const role = viewer?.isPreviewing ? normalizeRole(viewer.role) : roleOnlyPreview ?? actualRole
   const effectiveUserId = viewer?.userId ?? user.id
   const effectiveName = viewer?.name ?? profile?.name
@@ -400,7 +399,7 @@ export default async function DashboardPage() {
   // initiative-centric coordinator variant. Short-circuits before the
   // initiative-health queries so the admin view stays light. During view-as the
   // effective role is the previewed user's, so the admin sees *their* dashboard.
-  if (role === 'PlatformAdmin') {
+  if (isPlatformAdmin(role)) {
     const adminData = await loadAdminDashboardData(supabase)
     const greeting = buildDashboardGreeting(profile?.name)
     return (

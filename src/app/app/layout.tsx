@@ -2,7 +2,7 @@ import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { TopNav, type PreviewUserOption } from '@/components/layouts/top-nav'
 import { SideNav } from '@/components/layouts/side-nav'
-import { canAccessAppPath, normalizeRole, getRoleLabel } from '@/lib/role-access'
+import { canAccessAppPath, normalizeRole, getRoleLabel, isPlatformAdmin, isSuperadmin } from '@/lib/role-access'
 import { canAccess, resolveAllSpaces } from '@/lib/permissions'
 import { countCurrentCampusIncoming } from '@/lib/campus-metrics'
 import { getViewAsRole, getViewAsUserId } from '@/lib/view-as'
@@ -51,16 +51,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Role is a DB-managed attribute (profiles.role) and must be updated only via
   // explicit admin actions / migrations.
 
-  const isAdmin = actualRole === 'PlatformAdmin'
+  // Two admin tiers: both have full rights (isAdmin); only Superadmin may take
+  // other perspectives — the view-as / preview capability (canPreview).
+  const isAdmin = isPlatformAdmin(actualRole)
+  const canPreview = isSuperadmin(actualRole)
 
-  const [viewAsRoleCookie, viewAsUserId] = isAdmin
+  const [viewAsRoleCookie, viewAsUserId] = canPreview
     ? await Promise.all([getViewAsRole(), getViewAsUserId()])
     : [null, null]
 
   let viewAsUser: ProfileShell | null = null
   let previewUsers: PreviewUserOption[] = []
 
-  if (isAdmin) {
+  if (canPreview) {
     const [viewAsUserResult, previewUsersResult] = await Promise.all([
       viewAsUserId
         ? supabase
@@ -128,6 +131,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
             userAvatarUrl={effectiveProfile?.avatar_url ?? null}
             unreadCount={unread ?? 0}
             isAdmin={isAdmin}
+            canPreview={canPreview}
             viewAsRole={viewAsRole}
             viewAsUser={viewAsUser ? {
               id: viewAsUser.id,
