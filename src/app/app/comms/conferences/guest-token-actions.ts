@@ -1,17 +1,25 @@
 'use server'
 
+import { after } from 'next/server'
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { createGuestToken, sendGuestTokenLink } from '@/lib/congress-guest-tokens'
 import { resolveOrCreateCrmContact } from '@/lib/comms-conference-contacts'
+import {
+  logConferenceInvite,
+  updateConferenceInviteResult,
+  type ConferenceInviteChannel,
+  type InviteSendOutcome,
+} from '@/lib/comms-conference-invites'
 
 export type GenerateTokenState = {
   ok: boolean
   url?: string
   error?: string
-  sends?: Array<{ channel: string; ok: boolean; error?: string }>
+  /** Channels the invite is being delivered on (delivery happens in the background). */
+  queued?: ConferenceInviteChannel[]
 }
 
 export type GenericGuestInviteResult = {
@@ -250,19 +258,48 @@ export async function generateGuestToken(
     return { ok: false, error: result.error }
   }
 
-  const sends = await sendGuestTokenLink({
-    url: result.url,
-    conferenceName,
-    contactName,
-    contactPhone: contactPhone ?? null,
-    contactEmail: contactEmail ?? null,
-    channels: { whatsapp: sendWhatsapp, email: sendEmail },
+  // Log the invite up front (status 'queued') and deliver in the background so
+  // the coordinator gets the link instantly instead of waiting on WhatsApp/email.
+  const channels: ConferenceInviteChannel[] = [
+    ...(sendEmail ? (['email'] as const) : []),
+    ...(sendWhatsapp ? (['whatsapp'] as const) : []),
+  ]
+  const admin = createAdminClient()
+  const inviteId = await logConferenceInvite(admin, {
+    conferenceId: conferenceId ?? null,
+    contactId: resolvedContactId ?? null,
+    recipientName: contactName,
+    recipientEmail: contactEmail ?? null,
+    recipientPhone: contactPhone ?? null,
+    channels,
+    invitedBy: auth.userId,
+  })
+
+  after(async () => {
+    const sends = await sendGuestTokenLink({
+      url: result.url,
+      conferenceName,
+      contactName,
+      contactPhone: contactPhone ?? null,
+      contactEmail: contactEmail ?? null,
+      channels: { whatsapp: sendWhatsapp, email: sendEmail },
+    })
+    if (!inviteId) return
+    const email = sends.find((s) => s.channel === 'email')
+    const whatsapp = sends.find((s) => s.channel === 'whatsapp')
+    const outcome: InviteSendOutcome = {
+      emailStatus: email ? (email.ok ? 'sent' : 'failed') : null,
+      whatsappStatus: whatsapp ? (whatsapp.ok ? 'sent' : 'failed') : null,
+      detail: sends.filter((s) => !s.ok).map((s) => `${s.channel}: ${s.error ?? 'send failed'}`).join('; ') || null,
+    }
+    await updateConferenceInviteResult(admin, inviteId, outcome)
   })
 
   revalidatePath('/app/comms/conferences/submissions')
   revalidatePath('/app/admin/guest-submissions')
+  if (conferenceId) revalidatePath(`/app/comms/conferences/${conferenceId}`)
 
-  return { ok: true, url: result.url, sends }
+  return { ok: true, url: result.url, queued: channels }
 }
 
 export type ReviewSubmissionState = { ok: boolean; error?: string }

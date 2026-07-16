@@ -18,7 +18,7 @@ export const manifest = defineManifest({
   surface: "internal",
   data: {
     schema: "events",
-    tables: ["events", "conferences", "conference_contact_assignments", "conference_discovery_status", "conference_prep", "conference_tracking", "conference_guest_tokens", "conference_guest_access_requests", "conference_guest_files", "conference_guest_notes", "conference_guest_submissions", "campus_sessions", "session_attendees", "world_campus_sessions", "hubs", "comms_weekly_agenda_items", "congress_events", "congress_assignments", "congress_members", "congress_activity_log"],
+    tables: ["events", "conferences", "conference_contact_assignments", "conference_discovery_status", "conference_prep", "conference_tracking", "conference_guest_tokens", "conference_guest_access_requests", "conference_guest_files", "conference_guest_notes", "conference_guest_submissions", "conference_guest_invites", "campus_sessions", "session_attendees", "world_campus_sessions", "hubs", "comms_weekly_agenda_items", "congress_events", "congress_assignments", "congress_members", "congress_activity_log"],
   },
   provides: {
     api: ["loadEventPipeline", "loadConference"],
