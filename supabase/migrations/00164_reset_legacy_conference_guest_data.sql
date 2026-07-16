@@ -14,15 +14,16 @@
 --   - conference catalogue rows
 --   - conference tracking stages
 --   - shared conference_prep operating records
+--   - the congress-guest-uploads storage bucket
 --
 -- Those records may contain legitimate non-guest work and cannot be identified
--- safely as legacy-only. The guest tables and upload bucket are retained empty
--- for the redesigned workflow.
+-- safely as legacy-only. The guest tables are retained empty for the redesigned
+-- workflow. Guest file database records are removed here; the managed Supabase
+-- storage schema is not modified directly from SQL migrations.
 -- ============================================================
 
 do $$
 declare
-  v_storage_objects integer := 0;
   v_invites integer := 0;
   v_access_requests integer := 0;
   v_files integer := 0;
@@ -30,12 +31,6 @@ declare
   v_submissions integer := 0;
   v_tokens integer := 0;
 begin
-  -- Storage objects are not linked by a database foreign key, so clear their
-  -- metadata explicitly before deleting the corresponding guest-file rows.
-  delete from storage.objects
-  where bucket_id = 'congress-guest-uploads';
-  get diagnostics v_storage_objects = row_count;
-
   -- Invite logs use ON DELETE SET NULL for token_id so the audit row normally
   -- survives token cleanup. Delete them explicitly for the requested reset.
   delete from public.conference_guest_invites;
@@ -59,8 +54,7 @@ begin
   delete from public.conference_guest_tokens;
   get diagnostics v_tokens = row_count;
 
-  raise notice 'Conference guest reset complete: % storage objects, % invite logs, % access requests, % files, % notes, % submissions, % tokens removed.',
-    v_storage_objects,
+  raise notice 'Conference guest reset complete: % invite logs, % access requests, % files, % notes, % submissions, % tokens removed.',
     v_invites,
     v_access_requests,
     v_files,
