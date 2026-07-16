@@ -6,6 +6,15 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll('&', '&amp;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;')
+    .replaceAll('"', '&quot;')
+    .replaceAll("'", '&#39;')
+}
+
 export async function POST(request: Request) {
   let body: Record<string, unknown>
   try {
@@ -16,7 +25,7 @@ export async function POST(request: Request) {
 
   const token = typeof body.token === 'string' ? body.token.trim() : ''
   const submissionId = typeof body.submissionId === 'string' ? body.submissionId.trim() : ''
-  const message = typeof body.message === 'string' ? body.message.trim() : ''
+  const message = typeof body.message === 'string' ? body.message.trim().slice(0, 2000) : ''
 
   if (!token || !submissionId) {
     return NextResponse.json({ error: 'Missing fields' }, { status: 400 })
@@ -41,13 +50,50 @@ export async function POST(request: Request) {
     if (error.message?.includes('invalid_token')) {
       return NextResponse.json({ error: 'Invalid link.' }, { status: 403 })
     }
+    if (error.message?.includes('already_has_access')) {
+      return NextResponse.json({
+        error: 'This email already has access to the Inspire2Live platform.',
+        code: 'already_has_access',
+      }, { status: 409 })
+    }
     return NextResponse.json({ error: 'Could not record request.' }, { status: 500 })
   }
 
-  // Notify via email (best-effort).
+  // Resolve the newly-created request so the notification says who requested
+  // access and for which conference, instead of sending an anonymous alert.
   const resendKey = process.env.RESEND_API_KEY
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY
-  if (resendKey && serviceKey && typeof creatorEmail === 'string' && creatorEmail) {
+  let requesterName = 'Conference guest'
+  let requesterEmail = ''
+  let conferenceName = 'a conference'
+
+  if (serviceKey) {
+    const admin = createClient(supabaseUrl, serviceKey, {
+      auth: { persistSession: false, autoRefreshToken: false },
+    })
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: accessRequest } = await (admin as any)
+      .from('conference_guest_access_requests')
+      .select('contact_name, contact_email, conference_guest_submissions(conference_name)')
+      .eq('submission_id', submissionId)
+      .eq('status', 'pending')
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle()
+
+    if (accessRequest) {
+      requesterName = String(accessRequest.contact_name ?? requesterName)
+      requesterEmail = String(accessRequest.contact_email ?? '')
+      const submission = Array.isArray(accessRequest.conference_guest_submissions)
+        ? accessRequest.conference_guest_submissions[0]
+        : accessRequest.conference_guest_submissions
+      conferenceName = String(submission?.conference_name ?? conferenceName)
+    }
+  }
+
+  // Notify the original inviter. The actionable queue itself lives on the
+  // conference attendance reports page and can be resolved by a PlatformAdmin.
+  if (resendKey && typeof creatorEmail === 'string' && creatorEmail) {
     const base = process.env.NEXT_PUBLIC_APP_URL ?? 'https://i2l.austriq.com'
     void fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -58,8 +104,14 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         from: process.env.EMAIL_FROM ?? 'Inspire2Live <no-reply@inspire2live.org>',
         to: [creatorEmail],
-        subject: 'Platform access request from a conference guest',
-        html: buildAccessRequestHtml({ message, base }),
+        subject: `Platform access request from ${requesterName}`,
+        html: buildAccessRequestHtml({
+          requesterName,
+          requesterEmail,
+          conferenceName,
+          message,
+          reviewUrl: `${base}/app/comms/conferences/submissions#access-requests`,
+        }),
       }),
     }).catch(() => {/* best-effort */})
   }
@@ -67,7 +119,13 @@ export async function POST(request: Request) {
   return NextResponse.json({ ok: true })
 }
 
-function buildAccessRequestHtml(p: { message: string; base: string }) {
+function buildAccessRequestHtml(p: {
+  requesterName: string
+  requesterEmail: string
+  conferenceName: string
+  message: string
+  reviewUrl: string
+}) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"/></head>
@@ -80,14 +138,14 @@ function buildAccessRequestHtml(p: { message: string; base: string }) {
         </td></tr>
         <tr><td style="padding:28px 32px;">
           <h2 style="margin:0 0 12px;color:#111827;font-size:17px;">Platform access request</h2>
-          <p style="margin:0 0 16px;color:#374151;font-size:15px;">
-            A conference guest you invited has requested full platform access.
+          <p style="margin:0 0 8px;color:#374151;font-size:15px;">
+            <strong>${escapeHtml(p.requesterName)}</strong>${p.requesterEmail ? ` (${escapeHtml(p.requesterEmail)})` : ''} requested platform access after responding for ${escapeHtml(p.conferenceName)}.
           </p>
-          ${p.message ? `<div style="margin:0 0 20px;padding:14px;background:#fff7ed;border-left:4px solid #ea580c;border-radius:4px;">
-            <p style="margin:0;color:#9a3412;font-size:14px;font-style:italic;">"${p.message}"</p>
+          ${p.message ? `<div style="margin:16px 0 20px;padding:14px;background:#fff7ed;border-left:4px solid #ea580c;border-radius:4px;">
+            <p style="margin:0;color:#9a3412;font-size:14px;font-style:italic;">${escapeHtml(p.message)}</p>
           </div>` : ''}
-          <a href="${p.base}/app/admin/users" style="display:inline-block;padding:10px 22px;background:#ea580c;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
-            Manage users →
+          <a href="${escapeHtml(p.reviewUrl)}" style="display:inline-block;padding:10px 22px;background:#ea580c;color:#fff;text-decoration:none;border-radius:8px;font-size:14px;font-weight:600;">
+            Review request →
           </a>
         </td></tr>
         <tr><td style="background:#f9fafb;padding:12px 32px;border-top:1px solid #e5e7eb;">
