@@ -1,8 +1,9 @@
 # Sprint 18 — Conference Operations Redesign
 
-> **Status:** In progress — operating-page redesign, requirement model, guest overview, and
-> instant/logged invites implemented (T01–T06, T09, T11–T13). Guest single-record storage merge
-> (T07, T08, T10) and E2E smoke (T14) remain. See `tasks.md` for per-task status.
+> **Status:** In progress — operating-page redesign, requirement model, traffic-light status,
+> guest overview, instant/logged invites, and the guest↔team single-record merge implemented
+> (T01–T06, T08–T13). Direct internal upload (T07) is deferred to backlog BL-04; E2E + live-DB
+> smoke (T14) remain. See `tasks.md` for per-task status.
 > **Theme:** Make the per-conference **operating page** the single, honest, time-and-role-aware
 > surface for both the team and invited guests — and make invites instant and logged.
 > **Depends on:** Sprint 16 modular foundation (`src/modules/events`), the existing

@@ -21,6 +21,27 @@ function materialStatus(provided: boolean, dueFrom: ConferencePhase, phase: Conf
   return PHASE_ORDER.indexOf(phase) >= PHASE_ORDER.indexOf(dueFrom) ? 'due' : 'upcoming'
 }
 
+/**
+ * Co-write a guest contribution into the shared operating record
+ * (`conference_prep`) so the team and the guest edit one record. Best-effort:
+ * the guest's per-submission files/notes remain the primary store, so a failure
+ * here is silently ignored.
+ */
+async function contributeToPrep(
+  token: string,
+  conferenceId: string | null,
+  payload: { takeaways?: string; photoUrl?: string; deckUrl?: string; hasPresentation?: boolean }
+): Promise<void> {
+  if (!conferenceId) return
+  await fetch('/api/congress-guest/contribute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, conferenceId, ...payload }),
+  }).catch(() => {
+    /* best-effort mirror into the shared record */
+  })
+}
+
 function StatusPill({ status }: { status: RequirementStatus }) {
   if (status === 'na') return null
   const tone = statusTone(status)
@@ -407,6 +428,8 @@ function SummarySection({
       if (data.ok) {
         setSaved(true)
         onNoteUpdated({ id: data.noteId ?? existing?.id ?? '', noteType: 'summary', content: text, createdAt: new Date().toISOString() })
+        // Mirror the summary into the shared operating record as takeaways.
+        void contributeToPrep(token, submission.conferenceId, { takeaways: text })
         if (timer.current) clearTimeout(timer.current)
         timer.current = setTimeout(() => setSaved(false), 2000)
       }
@@ -514,6 +537,14 @@ function UploadSection({
             publicUrl: data.publicUrl ?? null,
             uploadedAt: new Date().toISOString(),
           })
+          // Mirror the upload into the shared operating record.
+          if (data.publicUrl) {
+            if (fileType === 'photo') {
+              void contributeToPrep(token, submission.conferenceId, { photoUrl: data.publicUrl })
+            } else if (fileType === 'presentation') {
+              void contributeToPrep(token, submission.conferenceId, { deckUrl: data.publicUrl, hasPresentation: true })
+            }
+          }
         }
       } catch {
         setError('Upload failed — check your connection.')

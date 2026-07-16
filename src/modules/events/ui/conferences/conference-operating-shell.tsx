@@ -15,9 +15,9 @@ import {
   type ConferenceView,
 } from '@/lib/comms-conferences'
 import { ConferenceGuestLink } from '@/components/comms/conferences/conference-guest-link'
-import { ConferenceGuestReports } from '@/components/comms/conferences/conference-guest-reports'
 import type { ConferenceGuestReport } from '@/lib/comms-conference-guest-reports'
 import type { ConferenceInvite } from '@/lib/comms-conference-invites'
+import { buildOperatingView, type OperatingView } from '@/modules/events/domain/conference-operating-view'
 import {
   type ConferenceKeyPerson,
   type ConferencePrep,
@@ -110,14 +110,18 @@ function nameInitials(name: string): string {
     .join('')
 }
 
-/** Material presence flags the requirement model reads, derived from the prep row. */
-function prepToInputs(prep: ConferencePrep): RequirementInputs {
+/**
+ * Material presence flags the requirement model reads — merged across the team
+ * prep row and guest contributions, so a guest-supplied photo/summary turns the
+ * matching tile green for the team too.
+ */
+function prepToInputs(prep: ConferencePrep, view: OperatingView): RequirementInputs {
   return {
     hasAbstract: Boolean(prep.abstract),
     hasDeck: Boolean(prep.deckUrl),
     delivered: prep.delivered,
-    hasPhotos: prep.photoUrls.length > 0,
-    hasTakeaways: Boolean(prep.takeaways),
+    hasPhotos: prep.photoUrls.length > 0 || view.hasGuestPhotos,
+    hasTakeaways: Boolean(prep.takeaways) || view.hasGuestSummary,
     reportDone:
       prep.outputReport || prep.outputLinkedin || prep.outputWebsite || prep.outputWhatsapp || prep.outputNewsletter,
   }
@@ -157,7 +161,8 @@ export function ConferenceOperatingShell({
     () => deriveConferencePhase(conference.startDate, conference.endDate, realStage),
     [conference.startDate, conference.endDate, realStage]
   )
-  const inputs = useMemo(() => prepToInputs(prep), [prep])
+  const operatingView = useMemo(() => buildOperatingView(prep.photoUrls, guestReports), [prep.photoUrls, guestReports])
+  const inputs = useMemo(() => prepToInputs(prep, operatingView), [prep, operatingView])
   const ctx: RequirementContext = { phase, attendingType: attending }
 
   const tracked = realStage !== null
@@ -244,7 +249,7 @@ export function ConferenceOperatingShell({
       <PeopleTile conference={conference} prep={prep} />
 
       <RequirementTile tile="onsite" title="On-site & photos" ctx={ctx} inputs={inputs} conferenceId={conference.id}>
-        <OnsiteFields conference={conference} prep={prep} />
+        <OnsiteFields conference={conference} prep={prep} view={operatingView} />
       </RequirementTile>
 
       <RequirementTile tile="amplify" title="Amplify & follow-up" ctx={ctx} inputs={inputs} conferenceId={conference.id}>
@@ -277,12 +282,6 @@ export function ConferenceOperatingShell({
       {tracked && (
         <CollapsibleCard title="Tasks" storageKey={`conf-${conference.id}-tasks`}>
           <ConferenceTasks conferenceId={conference.id} initialTasks={initialTasks} profiles={profiles} attendees={assignedContacts} />
-        </CollapsibleCard>
-      )}
-
-      {guestReports.length > 0 && (
-        <CollapsibleCard title={`Guest reports (${guestReports.length})`} storageKey={`conf-${conference.id}-guest-reports`} defaultCollapsed>
-          <ConferenceGuestReports reports={guestReports} />
         </CollapsibleCard>
       )}
     </div>
@@ -714,23 +713,77 @@ function KeyPeopleEditor({ initial }: { initial: ConferenceKeyPerson[] }) {
 
 // ─── On-site fields ─────────────────────────────────────────────────────────────
 
-function OnsiteFields({ conference, prep }: { conference: ConferenceView; prep: ConferencePrep }) {
+function OnsiteFields({ conference, prep, view }: { conference: ConferenceView; prep: ConferencePrep; view: OperatingView }) {
+  const guestPhotos = view.photos.filter((p) => p.source === 'guest')
   return (
-    <form action={savePrepAction} className="space-y-4">
-      <input type="hidden" name="conference_id" value={conference.id} />
-      <input type="hidden" name="section" value="onsite" />
-      <label className={LABEL_CLS}>
-        <span className={LABEL_TEXT_CLS}>Photos (one link per line)</span>
-        <textarea name="photo_urls" defaultValue={prep.photoUrls.join('\n')} rows={3} className={FIELD_CLS} placeholder="Links to photos from the event" />
-      </label>
-      <label className={LABEL_CLS}>
-        <span className={LABEL_TEXT_CLS}>Takeaways & quotes</span>
-        <textarea name="takeaways" defaultValue={prep.takeaways ?? ''} rows={4} className={FIELD_CLS} placeholder="Key moments captured on-site — feeds the report and any podcast/campus idea." />
-      </label>
-      <div className="flex justify-end">
-        <SubmitButton />
-      </div>
-    </form>
+    <div className="space-y-4">
+      <form action={savePrepAction} className="space-y-4">
+        <input type="hidden" name="conference_id" value={conference.id} />
+        <input type="hidden" name="section" value="onsite" />
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Photos (one link per line)</span>
+          <textarea name="photo_urls" defaultValue={prep.photoUrls.join('\n')} rows={3} className={FIELD_CLS} placeholder="Links to photos from the event" />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Takeaways & quotes</span>
+          <textarea name="takeaways" defaultValue={prep.takeaways ?? ''} rows={4} className={FIELD_CLS} placeholder="Key moments captured on-site — feeds the report and any podcast/campus idea." />
+        </label>
+        <div className="flex justify-end">
+          <SubmitButton />
+        </div>
+      </form>
+
+      {/* Guest contributions folded into the operating page (no separate block) */}
+      {guestPhotos.length > 0 && (
+        <div>
+          <p className={`mb-1.5 ${LABEL_TEXT_CLS}`}>Photos from guests</p>
+          <ul className="flex flex-wrap gap-2">
+            {guestPhotos.map((p) => (
+              <li key={p.url}>
+                <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50">
+                  📷 {p.label ?? 'Guest'} <span className="text-neutral-400">↗</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {view.guestPresentations.length > 0 && (
+        <div>
+          <p className={`mb-1.5 ${LABEL_TEXT_CLS}`}>Slides from guests</p>
+          <ul className="space-y-1.5">
+            {view.guestPresentations.map((d) => (
+              <li key={d.id}>
+                {d.url ? (
+                  <a href={d.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:underline">
+                    📎 {d.fileName} <span className="text-neutral-400">· {d.author}</span>
+                  </a>
+                ) : (
+                  <span className="text-sm text-neutral-600">📎 {d.fileName} · {d.author}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+
+      {(view.guestSummaries.length > 0 || view.guestComments.length > 0) && (
+        <div className="space-y-2 rounded-lg border border-neutral-100 bg-neutral-50/60 p-3">
+          <p className={LABEL_TEXT_CLS}>From guests</p>
+          {view.guestSummaries.map((s) => (
+            <div key={s.id} className="text-sm">
+              <span className="font-semibold text-neutral-700">{s.author}:</span> <span className="text-neutral-600">{s.content}</span>
+            </div>
+          ))}
+          {view.guestComments.map((c) => (
+            <div key={c.id} className="text-xs text-neutral-500">
+              💬 <span className="font-semibold text-neutral-600">{c.author}:</span> {c.content}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   )
 }
 
