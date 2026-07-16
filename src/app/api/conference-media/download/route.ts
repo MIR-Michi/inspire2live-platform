@@ -66,7 +66,7 @@ export async function GET(request: Request) {
   const fileName = safeFileName(searchParams.get('name'))
   const encoded = encodeURIComponent(fileName)
 
-  return new NextResponse(bytes, {
+  return new NextResponse(new Uint8Array(bytes), {
     headers: {
       'Content-Type': contentType,
       'Content-Length': String(bytes.byteLength),
