@@ -3,6 +3,7 @@ import { createClient } from '@/lib/supabase/server'
 import { loadConference, loadConferenceTracking, loadConferenceAssignedContacts } from '@/lib/comms-conferences'
 import { loadConferencePrep } from '@/lib/comms-conference-prep'
 import { loadConferenceGuestReports } from '@/lib/comms-conference-guest-reports'
+import { loadConferenceInvites } from '@/lib/comms-conference-invites'
 import { loadConferenceTasks } from '@/app/app/comms/conferences/actions'
 import { ConferenceOperatingShell } from '@/components/comms/conferences/conference-operating-shell'
 
@@ -13,7 +14,7 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
   const { id } = await params
   const supabase = await createClient()
 
-  const [conference, tracking, prep, { data: profiles }, { data: podcastEvents }, { data: campusSessions }, assignedContacts, tasks, guestReports] =
+  const [conference, tracking, prep, { data: profiles }, { data: podcastEvents }, { data: campusSessions }, assignedContacts, tasks, guestReports, invites] =
     await Promise.all([
       loadConference(supabase, id),
       loadConferenceTracking(supabase, id),
@@ -24,6 +25,7 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
       loadConferenceAssignedContacts(supabase, id),
       loadConferenceTasks(id),
       loadConferenceGuestReports(supabase, id),
+      loadConferenceInvites(supabase, id),
     ])
 
   if (!conference) notFound()
@@ -56,6 +58,7 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
       assignedContacts={assignedContacts}
       initialTasks={tasks}
       guestReports={guestReports}
+      invites={invites}
     />
   )
 }

@@ -420,6 +420,7 @@ export async function saveConferencePrep(formData: FormData): Promise<ActionResu
   const payload: Record<string, unknown> = { conference_id: conferenceId, updated_at: new Date().toISOString() }
 
   if (section === 'registered') {
+    // Back-compat: the pre-Sprint-18 combined "Registered" form.
     payload.has_presentation = parsePresentation(str(formData, 'has_presentation'))
     payload.presentation_title = str(formData, 'presentation_title').slice(0, 300) || null
     payload.abstract = str(formData, 'abstract').slice(0, 6000) || null
@@ -428,10 +429,24 @@ export async function saveConferencePrep(formData: FormData): Promise<ActionResu
     payload.key_people = parseKeyPeopleJson(str(formData, 'key_people'))
     payload.comms_owner_id = nullableId(formData, 'comms_owner_id')
     payload.comms_contributor_id = nullableId(formData, 'comms_contributor_id')
-  } else if (section === 'ongoing') {
+  } else if (section === 'attendance') {
+    // Sprint 18: the attending-type selector owns has_presentation only, so it
+    // never clobbers presentation details when the type is set/changed.
+    payload.has_presentation = parsePresentation(str(formData, 'has_presentation'))
+  } else if (section === 'presentation') {
+    payload.presentation_title = str(formData, 'presentation_title').slice(0, 300) || null
+    payload.abstract = str(formData, 'abstract').slice(0, 6000) || null
+    payload.deck_url = str(formData, 'deck_url') || null
+    payload.asset_urls = parseDelimitedList(str(formData, 'asset_urls'))
+  } else if (section === 'people') {
+    payload.key_people = parseKeyPeopleJson(str(formData, 'key_people'))
+  } else if (section === 'comms') {
+    payload.comms_owner_id = nullableId(formData, 'comms_owner_id')
+    payload.comms_contributor_id = nullableId(formData, 'comms_contributor_id')
+  } else if (section === 'ongoing' || section === 'onsite') {
     payload.photo_urls = parseDelimitedList(str(formData, 'photo_urls'))
     payload.takeaways = str(formData, 'takeaways').slice(0, 6000) || null
-  } else if (section === 'follow_up') {
+  } else if (section === 'follow_up' || section === 'amplify') {
     payload.followup_notes = str(formData, 'followup_notes').slice(0, 6000) || null
     payload.podcast_event_id = nullableId(formData, 'podcast_event_id')
     payload.campus_session_id = nullableId(formData, 'campus_session_id')

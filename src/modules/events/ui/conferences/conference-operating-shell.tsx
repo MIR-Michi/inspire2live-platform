@@ -1,9 +1,9 @@
 'use client'
 
-import { useState, useTransition } from 'react'
-import { ResizableSplit } from '@/components/ui/resizable-split'
+import { useMemo, useState, useTransition } from 'react'
 import Link from 'next/link'
 import { useFormStatus } from 'react-dom'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
 import { OptionalField } from '@/components/comms/optional-field'
 import { ConfettiBurst } from '@/components/ui/confetti-burst'
@@ -15,16 +15,34 @@ import {
   type ConferenceView,
 } from '@/lib/comms-conferences'
 import { ConferenceGuestLink } from '@/components/comms/conferences/conference-guest-link'
-import { ConferenceGuestReports } from '@/components/comms/conferences/conference-guest-reports'
 import type { ConferenceGuestReport } from '@/lib/comms-conference-guest-reports'
+import type { ConferenceInvite } from '@/lib/comms-conference-invites'
+import { buildOperatingView, type OperatingView } from '@/modules/events/domain/conference-operating-view'
 import {
-  STAGE_CHECKLISTS,
-  showsPresentationBlocks,
-  stagePrepProgress,
   type ConferenceKeyPerson,
   type ConferencePrep,
   type ConferencePrepFlag,
 } from '@/lib/comms-conference-prep'
+import {
+  ATTENDING_TYPE_LABELS,
+  PHASE_LABELS,
+  deriveConferencePhase,
+  isPresenting,
+  phaseStatusLine,
+  rollUpTileStatus,
+  statusLabel,
+  statusTone,
+  tileProgress,
+  tileRequirementStatuses,
+  toAttendingType,
+  type AttendingType,
+  type ConferencePhase,
+  type RequirementContext,
+  type RequirementInputs,
+  type RequirementStatus,
+  type RequirementTile,
+  type TileStatus,
+} from '@/modules/events/domain/conference-requirements'
 import {
   addConferenceToShortlist,
   advanceConferenceStage,
@@ -75,8 +93,6 @@ function formatDateRange(start: string | null, end: string | null): string {
   return endFmt ? `${startFmt} – ${endFmt}` : startFmt
 }
 
-// ─── Page ─────────────────────────────────────────────────────────────────────
-
 const AVATAR_COLORS = [
   'bg-violet-100 text-violet-700',
   'bg-orange-100 text-orange-700',
@@ -94,6 +110,25 @@ function nameInitials(name: string): string {
     .join('')
 }
 
+/**
+ * Material presence flags the requirement model reads — merged across the team
+ * prep row and guest contributions, so a guest-supplied photo/summary turns the
+ * matching tile green for the team too.
+ */
+function prepToInputs(prep: ConferencePrep, view: OperatingView): RequirementInputs {
+  return {
+    hasAbstract: Boolean(prep.abstract),
+    hasDeck: Boolean(prep.deckUrl),
+    delivered: prep.delivered,
+    hasPhotos: prep.photoUrls.length > 0 || view.hasGuestPhotos,
+    hasTakeaways: Boolean(prep.takeaways) || view.hasGuestSummary,
+    reportDone:
+      prep.outputReport || prep.outputLinkedin || prep.outputWebsite || prep.outputWhatsapp || prep.outputNewsletter,
+  }
+}
+
+// ─── Page ─────────────────────────────────────────────────────────────────────
+
 export function ConferenceOperatingShell({
   conference,
   stage,
@@ -105,6 +140,7 @@ export function ConferenceOperatingShell({
   assignedContacts = [],
   initialTasks = [],
   guestReports = [],
+  invites = [],
 }: {
   conference: ConferenceView
   stage: ConferenceStage | null
@@ -116,18 +152,24 @@ export function ConferenceOperatingShell({
   assignedContacts?: ConferenceAssignedContact[]
   initialTasks?: ConferenceTask[]
   guestReports?: ConferenceGuestReport[]
+  invites?: ConferenceInvite[]
 }) {
   const [realStage, setRealStage] = useState<ConferenceStage | null>(stage)
-  const [activeStage, setActiveStage] = useState<ConferenceStage>(stage ?? 'intended')
+  const [attending, setAttending] = useState<AttendingType>(toAttendingType({ hasPresentation: prep.hasPresentation }))
 
-  const handleAdvanced = (to: ConferenceStage) => {
-    setRealStage(to)
-    setActiveStage(to)
-  }
+  const phase = useMemo(
+    () => deriveConferencePhase(conference.startDate, conference.endDate, realStage),
+    [conference.startDate, conference.endDate, realStage]
+  )
+  const operatingView = useMemo(() => buildOperatingView(prep.photoUrls, guestReports), [prep.photoUrls, guestReports])
+  const inputs = useMemo(() => prepToInputs(prep, operatingView), [prep, operatingView])
+  const ctx: RequirementContext = { phase, attendingType: attending }
 
+  const tracked = realStage !== null
   const location = conference.location
+
   return (
-    <div className="mx-auto max-w-5xl space-y-5 pb-16">
+    <div className="mx-auto max-w-3xl space-y-4 pb-16">
       <Link href="/app/comms/conferences" className="inline-flex items-center gap-1.5 text-sm font-semibold text-orange-700 hover:text-orange-800">
         ← Conferences
       </Link>
@@ -172,106 +214,236 @@ export function ConferenceOperatingShell({
         )}
       </div>
 
-      {realStage === null && (
+      {!tracked && (
         <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dashed border-orange-300 bg-orange-50/60 px-4 py-3">
           <p className="text-sm text-neutral-700">This conference isn’t in the pipeline yet. Add it to start preparing.</p>
-          <AddToPipelineButton conferenceId={conference.id} onAdded={() => handleAdvanced('intended')} />
+          <AddToPipelineButton conferenceId={conference.id} onAdded={() => setRealStage('intended')} />
         </div>
       )}
 
-      {/* Stage stepper — the pipeline itself */}
-      <StageRail realStage={realStage} activeStage={activeStage} prep={prep} onSelect={setActiveStage} />
-
-      {/* Active stage section + lean sidebar */}
-      <ResizableSplit
-        storageKey="conference-operating"
-        defaultRatio={0.72}
-        left={
-        <div>
-          {activeStage === 'intended' && (
-            <IntendedPanel conference={conference} notes={notes} tracked={realStage !== null} onAdvanced={handleAdvanced} />
-          )}
-          {activeStage === 'registered' && (
-            <RegisteredPanel conference={conference} prep={prep} profiles={profiles} onAdvanced={handleAdvanced} />
-          )}
-          {activeStage === 'ongoing' && <OngoingPanel conference={conference} prep={prep} onAdvanced={handleAdvanced} />}
-          {activeStage === 'follow_up' && (
-            <FollowUpPanel conference={conference} prep={prep} podcastEvents={podcastEvents} campusSessions={campusSessions} onAdvanced={handleAdvanced} />
-          )}
-          {activeStage === 'archived' && <ArchivedPanel conference={conference} prep={prep} profiles={profiles} />}
-
-          {realStage !== null && (
-            <div className="mt-6">
-              <ConferenceTasks
-                conferenceId={conference.id}
-                initialTasks={initialTasks}
-                profiles={profiles}
-                attendees={assignedContacts}
-              />
-            </div>
-          )}
-
-          {guestReports.length > 0 && (
-            <div className="mt-6">
-              <ConferenceGuestReports reports={guestReports} />
-            </div>
-          )}
-        </div>
-        }
-        right={<Sidebar conference={conference} prep={prep} profiles={profiles} assignedContacts={assignedContacts} />}
+      {/* Phase header — where we are in time, not a tab bar */}
+      <PhaseHeader
+        phase={phase}
+        startDate={conference.startDate}
+        endDate={conference.endDate}
+        realStage={realStage}
+        onStageChange={setRealStage}
+        conferenceId={conference.id}
       />
+
+      {/* Tiles */}
+      <AttendanceTile
+        conference={conference}
+        notes={notes}
+        attending={attending}
+        onAttendingChange={setAttending}
+        tracked={tracked}
+      />
+
+      {isPresenting(attending) && (
+        <RequirementTile tile="presentation" title="Presentation" ctx={ctx} inputs={inputs} conferenceId={conference.id}>
+          <PresentationFields conference={conference} prep={prep} />
+        </RequirementTile>
+      )}
+
+      <PeopleTile conference={conference} prep={prep} />
+
+      <RequirementTile tile="onsite" title="On-site & photos" ctx={ctx} inputs={inputs} conferenceId={conference.id}>
+        <OnsiteFields conference={conference} prep={prep} view={operatingView} />
+      </RequirementTile>
+
+      <RequirementTile tile="amplify" title="Amplify & follow-up" ctx={ctx} inputs={inputs} conferenceId={conference.id}>
+        <AmplifyFields conference={conference} prep={prep} podcastEvents={podcastEvents} campusSessions={campusSessions} />
+      </RequirementTile>
+
+      <DetailsTile conference={conference} prep={prep} profiles={profiles} />
+
+      <CollapsibleCard
+        title="Guest invites"
+        tone="orange"
+        storageKey={`conf-${conference.id}-invites`}
+        defaultCollapsed={invites.length === 0}
+      >
+        <div className="space-y-4">
+          <ConferenceGuestLink
+            conferenceId={conference.id}
+            conferenceName={conference.name}
+            contacts={assignedContacts.map((c) => ({
+              contactId: c.id,
+              contactName: c.fullName,
+              contactEmail: c.email,
+              contactPhone: c.whatsappId,
+            }))}
+          />
+          <InviteLog invites={invites} />
+        </div>
+      </CollapsibleCard>
+
+      {tracked && (
+        <CollapsibleCard title="Tasks" storageKey={`conf-${conference.id}-tasks`}>
+          <ConferenceTasks conferenceId={conference.id} initialTasks={initialTasks} profiles={profiles} attendees={assignedContacts} />
+        </CollapsibleCard>
+      )}
     </div>
   )
 }
 
-// ─── Stage rail ───────────────────────────────────────────────────────────────
+// ─── Phase header ───────────────────────────────────────────────────────────────
 
-function StageRail({
+function PhaseHeader({
+  phase,
+  startDate,
+  endDate,
   realStage,
-  activeStage,
-  prep,
-  onSelect,
+  onStageChange,
+  conferenceId,
 }: {
+  phase: ConferencePhase
+  startDate: string | null
+  endDate: string | null
   realStage: ConferenceStage | null
-  activeStage: ConferenceStage
-  prep: ConferencePrep
-  onSelect: (stage: ConferenceStage) => void
+  onStageChange: (s: ConferenceStage) => void
+  conferenceId: string
 }) {
-  const realIndex = realStage ? CONFERENCE_STAGES.indexOf(realStage) : -1
+  const [pending, start] = useTransition()
+  const phases: ConferencePhase[] = ['before', 'during', 'after']
+  const currentIndex = phases.indexOf(phase)
+
   return (
-    <nav className="flex items-center gap-1 overflow-x-auto rounded-xl border border-neutral-200 bg-white p-1">
-      {CONFERENCE_STAGES.map((stage, i) => {
-        const isViewing = stage === activeStage
-        const isDone = realIndex >= 0 && i < realIndex
-        const isCurrent = stage === realStage
-        const progress = stagePrepProgress(prep, stage)
-        const allDone = progress.total > 0 && progress.done === progress.total
-        return (
-          <button
-            key={stage}
-            type="button"
-            onClick={() => onSelect(stage)}
-            className={[
-              'relative flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg px-3 py-2 text-sm font-semibold transition',
-              isViewing ? 'bg-neutral-900 text-white' : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800',
-            ].join(' ')}
-          >
-            {(isDone || allDone) && !isViewing && <span className="text-emerald-500">✓</span>}
-            {isCurrent && <span className={isViewing ? 'text-white' : 'text-orange-500'}>●</span>}
-            {CONFERENCE_STAGE_LABELS[stage]}
-            {progress.total > 0 && !allDone && (
-              <span className={['rounded-full px-1.5 text-[11px] font-bold tabular-nums', isViewing ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-400'].join(' ')}>
-                {progress.done}/{progress.total}
-              </span>
-            )}
-          </button>
-        )
-      })}
-    </nav>
+    <div className="rounded-xl border border-neutral-200 bg-white p-3">
+      <div className="flex items-center gap-1">
+        {phases.map((p, i) => {
+          const active = p === phase
+          const done = i < currentIndex
+          return (
+            <div
+              key={p}
+              className={[
+                'flex flex-1 items-center justify-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold',
+                active ? 'bg-neutral-900 text-white' : done ? 'text-emerald-600' : 'text-neutral-400',
+              ].join(' ')}
+            >
+              {done && <span>✓</span>}
+              {PHASE_LABELS[p]}
+            </div>
+          )
+        })}
+      </div>
+      <div className="mt-2 flex flex-wrap items-center justify-between gap-2 px-1">
+        <p className="text-xs text-neutral-500">{phaseStatusLine(phase, startDate, endDate)}</p>
+        {realStage !== null && (
+          <label className="flex items-center gap-1.5 text-xs text-neutral-500">
+            <span className="uppercase tracking-wide">Stage</span>
+            <select
+              value={realStage}
+              disabled={pending}
+              onChange={(e) => {
+                const next = e.target.value as ConferenceStage
+                onStageChange(next)
+                start(async () => {
+                  await advanceConferenceStage(conferenceId, next)
+                })
+              }}
+              className="rounded-md border border-neutral-200 px-1.5 py-1 text-xs font-semibold text-neutral-700 focus:border-orange-400 focus:outline-none"
+            >
+              {CONFERENCE_STAGES.map((s) => (
+                <option key={s} value={s}>
+                  {CONFERENCE_STAGE_LABELS[s]}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
+      </div>
+    </div>
   )
 }
 
-// ─── Shared form/control pieces ────────────────────────────────────────────────
+// ─── Status chrome ──────────────────────────────────────────────────────────────
+
+function StatusDot({ status }: { status: RequirementStatus | TileStatus }) {
+  if (status === 'na' || status === 'empty') return null
+  const tone = statusTone(status)
+  const color = tone === 'green' ? 'bg-emerald-500' : tone === 'red' ? 'bg-red-500' : 'bg-neutral-300'
+  const icon = status === 'provided' ? '✓' : status === 'due' ? '!' : '·'
+  return (
+    <span
+      className={['flex h-4 w-4 shrink-0 items-center justify-center rounded-full text-[10px] font-bold text-white', color].join(' ')}
+      role="img"
+      aria-label={statusLabel(status)}
+      title={statusLabel(status)}
+    >
+      {icon}
+    </span>
+  )
+}
+
+/** A requirement tile: collapsible card with a rolled-up status dot + item list. */
+function RequirementTile({
+  tile,
+  title,
+  ctx,
+  inputs,
+  conferenceId,
+  children,
+}: {
+  tile: RequirementTile
+  title: string
+  ctx: RequirementContext
+  inputs: RequirementInputs
+  conferenceId: string
+  children: React.ReactNode
+}) {
+  const items = tileRequirementStatuses(tile, ctx, inputs)
+  const statuses = items.map((i) => i.status)
+  const rolled = rollUpTileStatus(statuses)
+  const progress = tileProgress(statuses)
+
+  return (
+    <CollapsibleCard
+      title={
+        <span className="flex items-center gap-2">
+          <StatusDot status={rolled} />
+          {title}
+        </span>
+      }
+      storageKey={`conf-${conferenceId}-${tile}`}
+      defaultCollapsed={rolled !== 'due'}
+      actions={
+        progress.total > 0 ? (
+          <span className="text-[11px] font-semibold tabular-nums text-neutral-400">
+            {progress.done}/{progress.total}
+          </span>
+        ) : undefined
+      }
+    >
+      <div className="space-y-4">
+        <RequirementList items={items} />
+        {children}
+      </div>
+    </CollapsibleCard>
+  )
+}
+
+function RequirementList({ items }: { items: Array<{ req: { key: string; label: string }; status: RequirementStatus }> }) {
+  const visible = items.filter((i) => i.status !== 'na')
+  if (visible.length === 0) return null
+  return (
+    <ul className="space-y-1.5 rounded-lg border border-neutral-100 bg-neutral-50/60 p-3">
+      {visible.map(({ req, status }) => (
+        <li key={req.key} className="flex items-center gap-2 text-sm">
+          <StatusDot status={status} />
+          <span className={status === 'provided' ? 'text-neutral-500 line-through' : status === 'due' ? 'font-medium text-neutral-800' : 'text-neutral-500'}>
+            {req.label}
+          </span>
+          {status === 'due' && <span className="text-[11px] font-semibold uppercase tracking-wide text-red-500">Needed now</span>}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+// ─── Shared form pieces ─────────────────────────────────────────────────────────
 
 function SubmitButton({ label = 'Save' }: { label?: string }) {
   const { pending } = useFormStatus()
@@ -282,20 +454,9 @@ function SubmitButton({ label = 'Save' }: { label?: string }) {
   )
 }
 
-function FlagToggle({
-  conferenceId,
-  flag,
-  label,
-  checked,
-}: {
-  conferenceId: string
-  flag: ConferencePrepFlag
-  label: string
-  checked: boolean
-}) {
+function FlagToggle({ conferenceId, flag, label, checked }: { conferenceId: string; flag: ConferencePrepFlag; label: string; checked: boolean }) {
   const [on, setOn] = useState(checked)
   const [pending, start] = useTransition()
-
   return (
     <button
       type="button"
@@ -314,393 +475,6 @@ function FlagToggle({
       </span>
       <span className={on ? 'line-through opacity-60' : ''}>{label}</span>
     </button>
-  )
-}
-
-function Checklist({ conferenceId, prep, stage }: { conferenceId: string; prep: ConferencePrep; stage: ConferenceStage }) {
-  const items = STAGE_CHECKLISTS[stage]
-  if (items.length === 0) return null
-  return (
-    <div>
-      <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Checklist</p>
-      <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
-        {items.map((item) => (
-          <FlagToggle key={`${item.field}-${Boolean(prep[item.field])}`} conferenceId={conferenceId} flag={item.field} label={item.label} checked={Boolean(prep[item.field])} />
-        ))}
-      </div>
-    </div>
-  )
-}
-
-function AdvanceButton({ conferenceId, to, onAdvanced }: { conferenceId: string; to: ConferenceStage; onAdvanced: (s: ConferenceStage) => void }) {
-  const [pending, start] = useTransition()
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() =>
-        start(async () => {
-          const res = await advanceConferenceStage(conferenceId, to)
-          if (res.ok) onAdvanced(to)
-        })
-      }
-      className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-300 px-4 py-2 text-sm font-semibold text-neutral-700 transition hover:border-neutral-400 hover:bg-neutral-50 disabled:opacity-60"
-    >
-      Move to {CONFERENCE_STAGE_LABELS[to]} →
-    </button>
-  )
-}
-
-function AddToPipelineButton({ conferenceId, onAdded }: { conferenceId: string; onAdded: () => void }) {
-  const [pending, start] = useTransition()
-  return (
-    <button
-      type="button"
-      disabled={pending}
-      onClick={() =>
-        start(async () => {
-          const res = await addConferenceToShortlist(conferenceId)
-          if (res.ok) onAdded()
-        })
-      }
-      className="inline-flex items-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
-    >
-      + Add to pipeline
-    </button>
-  )
-}
-
-function StageActions({ to, onAdvanced, conferenceId }: { to: ConferenceStage | null; onAdvanced: (s: ConferenceStage) => void; conferenceId: string }) {
-  if (!to) return null
-  return (
-    <div className="flex justify-end pt-1">
-      <AdvanceButton conferenceId={conferenceId} to={to} onAdvanced={onAdvanced} />
-    </div>
-  )
-}
-
-// ─── Intended ──────────────────────────────────────────────────────────────────
-
-function IntendedPanel({
-  conference,
-  notes,
-  tracked,
-  onAdvanced,
-}: {
-  conference: ConferenceView
-  notes: string | null
-  tracked: boolean
-  onAdvanced: (s: ConferenceStage) => void
-}) {
-  const [value, setValue] = useState(notes ?? '')
-  const [pending, start] = useTransition()
-
-  return (
-    <div className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
-      <div>
-        <p className={LABEL_TEXT_CLS}>Why attend</p>
-        <p className="mt-1 text-sm text-neutral-500">Capture the rationale, who should go, and rough cost/logistics before registering.</p>
-      </div>
-      {conference.summary && <p className="text-sm leading-relaxed text-neutral-700">{conference.summary}</p>}
-      <label className={LABEL_CLS}>
-        <span className={LABEL_TEXT_CLS}>Rationale & notes</span>
-        <textarea value={value} onChange={(e) => setValue(e.target.value)} rows={4} className={FIELD_CLS} placeholder="Why this conference matters, proposed attendees, budget…" />
-      </label>
-      <div className="flex items-center justify-between gap-3">
-        <button
-          type="button"
-          disabled={pending || !tracked}
-          onClick={() => start(async () => void (await setConferenceNotes(conference.id, value)))}
-          className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
-        >
-          {pending ? 'Saving…' : 'Save'}
-        </button>
-        <StageActions to={tracked ? 'registered' : null} onAdvanced={onAdvanced} conferenceId={conference.id} />
-      </div>
-      {!tracked && <p className="text-xs text-neutral-400">Add the conference to the pipeline above to start tracking.</p>}
-    </div>
-  )
-}
-
-// ─── Registered ─────────────────────────────────────────────────────────────────
-
-function RegisteredPanel({
-  conference,
-  prep,
-  profiles,
-  onAdvanced,
-}: {
-  conference: ConferenceView
-  prep: ConferencePrep
-  profiles: Profile[]
-  onAdvanced: (s: ConferenceStage) => void
-}) {
-  const [presentation, setPresentation] = useState<'yes' | 'no' | ''>(prep.hasPresentation === true ? 'yes' : prep.hasPresentation === false ? 'no' : '')
-  const showBlocks = presentation !== 'no'
-
-  return (
-    <div className="space-y-6">
-      <Checklist conferenceId={conference.id} prep={prep} stage="registered" />
-
-      <form action={savePrepAction} className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
-        <input type="hidden" name="conference_id" value={conference.id} />
-        <input type="hidden" name="section" value="registered" />
-
-        <label className={LABEL_CLS}>
-          <span className={LABEL_TEXT_CLS}>Is there a presentation?</span>
-          <select name="has_presentation" value={presentation} onChange={(e) => setPresentation(e.target.value as 'yes' | 'no' | '')} className={FIELD_CLS}>
-            <option value="">To be decided</option>
-            <option value="yes">Yes — I2L is presenting</option>
-            <option value="no">No — attending only</option>
-          </select>
-        </label>
-
-        {showBlocks && (
-          <div className="space-y-4 border-l-2 border-orange-100 pl-4">
-            <label className={LABEL_CLS}>
-              <span className={LABEL_TEXT_CLS}>Presentation title</span>
-              <input name="presentation_title" defaultValue={prep.presentationTitle ?? ''} className={FIELD_CLS} placeholder="Working title" />
-            </label>
-            <label className={LABEL_CLS}>
-              <span className={LABEL_TEXT_CLS}>Abstract</span>
-              <textarea name="abstract" defaultValue={prep.abstract ?? ''} rows={4} className={FIELD_CLS} placeholder="Abstract submitted to the conference" />
-            </label>
-            {prep.deckUrl ? (
-              <label className={LABEL_CLS}>
-                <span className={LABEL_TEXT_CLS}>Presentation deck (link)</span>
-                <input type="url" name="deck_url" defaultValue={prep.deckUrl} className={FIELD_CLS} />
-              </label>
-            ) : (
-              <>
-                <input type="hidden" name="deck_url" value="" />
-                <OptionalField label="Add deck link" hasValue={false}>
-                  <label className={LABEL_CLS}>
-                    <span className={LABEL_TEXT_CLS}>Presentation deck (link)</span>
-                    <input type="url" name="deck_url" defaultValue="" className={FIELD_CLS} placeholder="SharePoint / Drive URL — upload coming soon" />
-                  </label>
-                </OptionalField>
-              </>
-            )}
-          </div>
-        )}
-        {!showBlocks && (
-          <>
-            <input type="hidden" name="presentation_title" value="" />
-            <input type="hidden" name="abstract" value="" />
-            <input type="hidden" name="deck_url" value="" />
-          </>
-        )}
-
-        <hr className="border-neutral-100" />
-
-        {/* Comms involvement */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Comms owner</span>
-            <select name="comms_owner_id" defaultValue={prep.commsOwnerId ?? ''} className={FIELD_CLS}>
-              <option value="">Unassigned</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name ?? p.email}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Contributor</span>
-            <select name="comms_contributor_id" defaultValue={prep.commsContributorId ?? ''} className={FIELD_CLS}>
-              <option value="">None</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name ?? p.email}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        {/* Key people */}
-        <KeyPeopleEditor initial={prep.keyPeople} />
-
-        {/* Supporting assets */}
-        {prep.assetUrls.length > 0 ? (
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Supporting links (one per line)</span>
-            <textarea name="asset_urls" defaultValue={prep.assetUrls.join('\n')} rows={2} className={FIELD_CLS} />
-          </label>
-        ) : (
-          <>
-            <input type="hidden" name="asset_urls" value="" />
-            <OptionalField label="Add supporting links" hasValue={false}>
-              <label className={LABEL_CLS}>
-                <span className={LABEL_TEXT_CLS}>Supporting links (one per line)</span>
-                <textarea name="asset_urls" defaultValue="" rows={2} className={FIELD_CLS} placeholder="Runbook, handout, notes…" />
-              </label>
-            </OptionalField>
-          </>
-        )}
-
-        <div className="flex items-center justify-between gap-3">
-          <SubmitButton />
-          <StageActions to="ongoing" onAdvanced={onAdvanced} conferenceId={conference.id} />
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function KeyPeopleEditor({ initial }: { initial: ConferenceKeyPerson[] }) {
-  const [people, setPeople] = useState<ConferenceKeyPerson[]>(initial)
-
-  const update = (i: number, patch: Partial<ConferenceKeyPerson>) => setPeople((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
-  const remove = (i: number) => setPeople((prev) => prev.filter((_, idx) => idx !== i))
-  const add = () => setPeople((prev) => [...prev, { name: '', org: '', topic: '', connected: false }])
-
-  const body = (
-    <div className="space-y-2">
-      <input type="hidden" name="key_people" value={JSON.stringify(people.filter((p) => p.name.trim()))} />
-      {people.map((person, i) => (
-        <div key={i} className="grid grid-cols-1 gap-2 rounded-lg border border-neutral-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
-          <input value={person.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Name" className={FIELD_CLS} />
-          <input value={person.org} onChange={(e) => update(i, { org: e.target.value })} placeholder="Organisation" className={FIELD_CLS} />
-          <input value={person.topic} onChange={(e) => update(i, { topic: e.target.value })} placeholder="Topic / why" className={FIELD_CLS} />
-          <div className="flex items-center gap-2">
-            <label className="flex items-center gap-1 text-xs font-semibold text-neutral-500">
-              <input type="checkbox" checked={person.connected} onChange={(e) => update(i, { connected: e.target.checked })} className="h-4 w-4 rounded accent-emerald-600" />
-              Met
-            </label>
-            <button type="button" onClick={() => remove(i)} aria-label="Remove person" className="text-neutral-400 hover:text-red-600">
-              ×
-            </button>
-          </div>
-        </div>
-      ))}
-      <button type="button" onClick={add} className="text-sm font-medium text-neutral-400 transition hover:text-neutral-700">
-        + Add person
-      </button>
-    </div>
-  )
-
-  return (
-    <div>
-      <p className={`mb-1.5 ${LABEL_TEXT_CLS}`}>Key people to connect with</p>
-      {body}
-    </div>
-  )
-}
-
-// ─── Ongoing ────────────────────────────────────────────────────────────────────
-
-function OngoingPanel({ conference, prep, onAdvanced }: { conference: ConferenceView; prep: ConferencePrep; onAdvanced: (s: ConferenceStage) => void }) {
-  const showBlocks = showsPresentationBlocks(prep)
-  return (
-    <div className="space-y-6">
-      <Checklist conferenceId={conference.id} prep={prep} stage="ongoing" />
-
-      <form action={savePrepAction} className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
-        <input type="hidden" name="conference_id" value={conference.id} />
-        <input type="hidden" name="section" value="ongoing" />
-
-        {showBlocks ? (
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Photos (one link per line)</span>
-            <textarea name="photo_urls" defaultValue={prep.photoUrls.join('\n')} rows={3} className={FIELD_CLS} placeholder="Links to presentation photos — upload coming soon" />
-          </label>
-        ) : (
-          <input type="hidden" name="photo_urls" value={prep.photoUrls.join('\n')} />
-        )}
-
-        <label className={LABEL_CLS}>
-          <span className={LABEL_TEXT_CLS}>Takeaways & quotes</span>
-          <textarea name="takeaways" defaultValue={prep.takeaways ?? ''} rows={4} className={FIELD_CLS} placeholder="Key moments captured on-site — feeds the report and any podcast/campus idea." />
-        </label>
-
-        <div className="flex items-center justify-between gap-3">
-          <SubmitButton />
-          <StageActions to="follow_up" onAdvanced={onAdvanced} conferenceId={conference.id} />
-        </div>
-      </form>
-    </div>
-  )
-}
-
-// ─── Follow-up ──────────────────────────────────────────────────────────────────
-
-function FollowUpPanel({
-  conference,
-  prep,
-  podcastEvents,
-  campusSessions,
-  onAdvanced,
-}: {
-  conference: ConferenceView
-  prep: ConferencePrep
-  podcastEvents: Option[]
-  campusSessions: Option[]
-  onAdvanced: (s: ConferenceStage) => void
-}) {
-  return (
-    <div className="space-y-6">
-      <div>
-        <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Amplify</p>
-        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
-          <FlagToggle key={`report-${prep.outputReport}`} conferenceId={conference.id} flag="outputReport" label="Report drafted" checked={prep.outputReport} />
-          <FlagToggle key={`linkedin-${prep.outputLinkedin}`} conferenceId={conference.id} flag="outputLinkedin" label="LinkedIn post" checked={prep.outputLinkedin} />
-          <FlagToggle key={`website-${prep.outputWebsite}`} conferenceId={conference.id} flag="outputWebsite" label="Website mention" checked={prep.outputWebsite} />
-          <FlagToggle key={`whatsapp-${prep.outputWhatsapp}`} conferenceId={conference.id} flag="outputWhatsapp" label="WhatsApp share" checked={prep.outputWhatsapp} />
-          <FlagToggle key={`newsletter-${prep.outputNewsletter}`} conferenceId={conference.id} flag="outputNewsletter" label="Newsletter mention" checked={prep.outputNewsletter} />
-        </div>
-      </div>
-
-      {/* Repurpose ideas */}
-      <div className="space-y-3 rounded-xl border border-neutral-200 bg-white p-4">
-        <p className={LABEL_TEXT_CLS}>Repurpose</p>
-        <div className="flex flex-wrap gap-2">
-          <FlagPill key={`podcast-${prep.podcastIdea}`} conferenceId={conference.id} flag="podcastIdea" label="Interesting for a podcast?" checked={prep.podcastIdea} />
-          <FlagPill key={`campus-${prep.campusIdea}`} conferenceId={conference.id} flag="campusIdea" label="Present at World Campus?" checked={prep.campusIdea} />
-        </div>
-      </div>
-
-      <form action={savePrepAction} className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
-        <input type="hidden" name="conference_id" value={conference.id} />
-        <input type="hidden" name="section" value="follow_up" />
-
-        <label className={LABEL_CLS}>
-          <span className={LABEL_TEXT_CLS}>Follow-up notes</span>
-          <textarea name="followup_notes" defaultValue={prep.followupNotes ?? ''} rows={4} className={FIELD_CLS} />
-        </label>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Link podcast episode</span>
-            <select name="podcast_event_id" defaultValue={prep.podcastEventId ?? ''} className={FIELD_CLS}>
-              <option value="">Not linked</option>
-              {podcastEvents.map((e) => (
-                <option key={e.id} value={e.id}>
-                  {e.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Link campus session</span>
-            <select name="campus_session_id" defaultValue={prep.campusSessionId ?? ''} className={FIELD_CLS}>
-              <option value="">Not linked</option>
-              {campusSessions.map((s) => (
-                <option key={s.id} value={s.id}>
-                  {s.label}
-                </option>
-              ))}
-            </select>
-          </label>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <SubmitButton />
-          <StageActions to="archived" onAdvanced={onAdvanced} conferenceId={conference.id} />
-        </div>
-      </form>
-    </div>
   )
 }
 
@@ -724,91 +498,401 @@ function FlagPill({ conferenceId, flag, label, checked }: { conferenceId: string
   )
 }
 
-// ─── Archived (read-only recap) ─────────────────────────────────────────────────
+function AddToPipelineButton({ conferenceId, onAdded }: { conferenceId: string; onAdded: () => void }) {
+  const [pending, start] = useTransition()
+  return (
+    <button
+      type="button"
+      disabled={pending}
+      onClick={() =>
+        start(async () => {
+          const res = await addConferenceToShortlist(conferenceId)
+          if (res.ok) onAdded()
+        })
+      }
+      className="inline-flex items-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
+    >
+      + Add to pipeline
+    </button>
+  )
+}
 
-function ArchivedPanel({ conference, prep, profiles }: { conference: ConferenceView; prep: ConferencePrep; profiles: Profile[] }) {
-  const ownerName = prep.commsOwnerId ? profiles.find((p) => p.id === prep.commsOwnerId)?.name ?? null : null
-  const outputs = [
-    prep.outputReport && 'Report',
-    prep.outputLinkedin && 'LinkedIn',
-    prep.outputWebsite && 'Website',
-    prep.outputWhatsapp && 'WhatsApp',
-    prep.outputNewsletter && 'Newsletter',
-  ].filter(Boolean) as string[]
+// ─── Attendance tile ────────────────────────────────────────────────────────────
+
+function AttendanceTile({
+  conference,
+  notes,
+  attending,
+  onAttendingChange,
+  tracked,
+}: {
+  conference: ConferenceView
+  notes: string | null
+  attending: AttendingType
+  onAttendingChange: (t: AttendingType) => void
+  tracked: boolean
+}) {
+  const [value, setValue] = useState(notes ?? '')
+  const [pending, start] = useTransition()
+  const [savingType, startType] = useTransition()
+
+  const setType = (next: AttendingType) => {
+    onAttendingChange(next)
+    // Persist as the has_presentation boolean (attendance section owns it only).
+    const fd = new FormData()
+    fd.set('conference_id', conference.id)
+    fd.set('section', 'attendance')
+    fd.set('has_presentation', isPresenting(next) ? 'yes' : 'no')
+    startType(async () => {
+      await saveConferencePrep(fd)
+    })
+  }
 
   return (
-    <div className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 text-sm">
-      <p className={LABEL_TEXT_CLS}>Recap</p>
-      {prep.hasPresentation === false ? (
-        <p className="text-neutral-700">Attended without presenting.</p>
-      ) : prep.presentationTitle || prep.abstract ? (
-        <div className="space-y-1">
-          {prep.presentationTitle && <p className="font-semibold text-neutral-900">{prep.presentationTitle}</p>}
-          {prep.abstract && <p className="leading-relaxed text-neutral-600">{prep.abstract}</p>}
+    <CollapsibleCard title="Attendance & role" storageKey={`conf-${conference.id}-attendance`}>
+      <div className="space-y-5">
+        <div>
+          <p className={LABEL_TEXT_CLS}>How are we attending?</p>
+          <p className="mt-1 text-xs text-neutral-500">This decides what we ask for — presenters get presentation prompts; everyone gets photos during the event.</p>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(['attendee', 'presenter', 'organizer'] as AttendingType[]).map((t) => (
+              <button
+                key={t}
+                type="button"
+                disabled={savingType}
+                onClick={() => setType(t)}
+                className={[
+                  'rounded-full border px-3 py-1.5 text-xs font-semibold transition disabled:opacity-60',
+                  attending === t ? 'border-orange-300 bg-orange-100 text-orange-800' : 'border-neutral-200 bg-white text-neutral-600 hover:bg-neutral-50',
+                ].join(' ')}
+              >
+                {ATTENDING_TYPE_LABELS[t]}
+              </button>
+            ))}
+          </div>
         </div>
+
+        {conference.summary && <p className="text-sm leading-relaxed text-neutral-700">{conference.summary}</p>}
+
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Why attend — rationale & notes</span>
+          <textarea value={value} onChange={(e) => setValue(e.target.value)} rows={3} className={FIELD_CLS} placeholder="Why this conference matters, proposed attendees, budget…" />
+        </label>
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            disabled={pending || !tracked}
+            onClick={() => start(async () => void (await setConferenceNotes(conference.id, value)))}
+            className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
+          >
+            {pending ? 'Saving…' : 'Save notes'}
+          </button>
+          {!tracked && <p className="text-xs text-neutral-400">Add the conference to the pipeline above to start tracking.</p>}
+        </div>
+      </div>
+    </CollapsibleCard>
+  )
+}
+
+// ─── Presentation fields ─────────────────────────────────────────────────────────
+
+function PresentationFields({ conference, prep }: { conference: ConferenceView; prep: ConferencePrep }) {
+  return (
+    <form action={savePrepAction} className="space-y-4">
+      <input type="hidden" name="conference_id" value={conference.id} />
+      <input type="hidden" name="section" value="presentation" />
+
+      <div className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+        <FlagToggle conferenceId={conference.id} flag="abstractSubmitted" label="Abstract submitted" checked={prep.abstractSubmitted} />
+        <FlagToggle conferenceId={conference.id} flag="deckDrafted" label="Deck drafted" checked={prep.deckDrafted} />
+        <FlagToggle conferenceId={conference.id} flag="deckFinal" label="Deck final" checked={prep.deckFinal} />
+        <FlagToggle conferenceId={conference.id} flag="delivered" label="Presentation delivered" checked={prep.delivered} />
+      </div>
+
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>Presentation title</span>
+        <input name="presentation_title" defaultValue={prep.presentationTitle ?? ''} className={FIELD_CLS} placeholder="Working title" />
+      </label>
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>Abstract</span>
+        <textarea name="abstract" defaultValue={prep.abstract ?? ''} rows={4} className={FIELD_CLS} placeholder="Abstract submitted to the conference" />
+      </label>
+      {prep.deckUrl ? (
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Presentation deck (link)</span>
+          <input type="url" name="deck_url" defaultValue={prep.deckUrl} className={FIELD_CLS} />
+        </label>
       ) : (
-        <p className="text-neutral-400">No presentation details recorded.</p>
+        <>
+          <input type="hidden" name="deck_url" value="" />
+          <OptionalField label="Add deck link" hasValue={false}>
+            <label className={LABEL_CLS}>
+              <span className={LABEL_TEXT_CLS}>Presentation deck (link)</span>
+              <input type="url" name="deck_url" defaultValue="" className={FIELD_CLS} placeholder="SharePoint / Drive URL" />
+            </label>
+          </OptionalField>
+        </>
+      )}
+      {prep.assetUrls.length > 0 ? (
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Supporting links (one per line)</span>
+          <textarea name="asset_urls" defaultValue={prep.assetUrls.join('\n')} rows={2} className={FIELD_CLS} />
+        </label>
+      ) : (
+        <>
+          <input type="hidden" name="asset_urls" value="" />
+          <OptionalField label="Add supporting links" hasValue={false}>
+            <label className={LABEL_CLS}>
+              <span className={LABEL_TEXT_CLS}>Supporting links (one per line)</span>
+              <textarea name="asset_urls" defaultValue="" rows={2} className={FIELD_CLS} placeholder="Runbook, handout, notes…" />
+            </label>
+          </OptionalField>
+        </>
+      )}
+      <div className="flex justify-end">
+        <SubmitButton />
+      </div>
+    </form>
+  )
+}
+
+// ─── People tile ────────────────────────────────────────────────────────────────
+
+function PeopleTile({ conference, prep }: { conference: ConferenceView; prep: ConferencePrep }) {
+  const connected = prep.keyPeople.filter((p) => p.connected).length
+  return (
+    <CollapsibleCard
+      title="People to connect with"
+      storageKey={`conf-${conference.id}-people`}
+      defaultCollapsed={prep.keyPeople.length === 0}
+      actions={prep.keyPeople.length > 0 ? <span className="text-[11px] font-semibold tabular-nums text-neutral-400">{connected}/{prep.keyPeople.length} met</span> : undefined}
+    >
+      <form action={savePrepAction} className="space-y-4">
+        <input type="hidden" name="conference_id" value={conference.id} />
+        <input type="hidden" name="section" value="people" />
+        <KeyPeopleEditor initial={prep.keyPeople} />
+        <div className="flex justify-end">
+          <SubmitButton />
+        </div>
+      </form>
+    </CollapsibleCard>
+  )
+}
+
+function KeyPeopleEditor({ initial }: { initial: ConferenceKeyPerson[] }) {
+  const [people, setPeople] = useState<ConferenceKeyPerson[]>(initial)
+  const update = (i: number, patch: Partial<ConferenceKeyPerson>) => setPeople((prev) => prev.map((p, idx) => (idx === i ? { ...p, ...patch } : p)))
+  const remove = (i: number) => setPeople((prev) => prev.filter((_, idx) => idx !== i))
+  const add = () => setPeople((prev) => [...prev, { name: '', org: '', topic: '', connected: false }])
+
+  return (
+    <div className="space-y-2">
+      <input type="hidden" name="key_people" value={JSON.stringify(people.filter((p) => p.name.trim()))} />
+      {people.map((person, i) => (
+        <div key={i} className="grid grid-cols-1 gap-2 rounded-lg border border-neutral-200 p-3 sm:grid-cols-[1fr_1fr_1fr_auto]">
+          <input value={person.name} onChange={(e) => update(i, { name: e.target.value })} placeholder="Name" className={FIELD_CLS} />
+          <input value={person.org} onChange={(e) => update(i, { org: e.target.value })} placeholder="Organisation" className={FIELD_CLS} />
+          <input value={person.topic} onChange={(e) => update(i, { topic: e.target.value })} placeholder="Topic / why" className={FIELD_CLS} />
+          <div className="flex items-center gap-2">
+            <label className="flex items-center gap-1 text-xs font-semibold text-neutral-500">
+              <input type="checkbox" checked={person.connected} onChange={(e) => update(i, { connected: e.target.checked })} className="h-4 w-4 rounded accent-emerald-600" />
+              Met
+            </label>
+            <button type="button" onClick={() => remove(i)} aria-label="Remove person" className="text-neutral-400 hover:text-red-600">
+              ×
+            </button>
+          </div>
+        </div>
+      ))}
+      <button type="button" onClick={add} className="text-sm font-medium text-neutral-400 transition hover:text-neutral-700">
+        + Add person
+      </button>
+    </div>
+  )
+}
+
+// ─── On-site fields ─────────────────────────────────────────────────────────────
+
+function OnsiteFields({ conference, prep, view }: { conference: ConferenceView; prep: ConferencePrep; view: OperatingView }) {
+  const guestPhotos = view.photos.filter((p) => p.source === 'guest')
+  return (
+    <div className="space-y-4">
+      <form action={savePrepAction} className="space-y-4">
+        <input type="hidden" name="conference_id" value={conference.id} />
+        <input type="hidden" name="section" value="onsite" />
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Photos (one link per line)</span>
+          <textarea name="photo_urls" defaultValue={prep.photoUrls.join('\n')} rows={3} className={FIELD_CLS} placeholder="Links to photos from the event" />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Takeaways & quotes</span>
+          <textarea name="takeaways" defaultValue={prep.takeaways ?? ''} rows={4} className={FIELD_CLS} placeholder="Key moments captured on-site — feeds the report and any podcast/campus idea." />
+        </label>
+        <div className="flex justify-end">
+          <SubmitButton />
+        </div>
+      </form>
+
+      {/* Guest contributions folded into the operating page (no separate block) */}
+      {guestPhotos.length > 0 && (
+        <div>
+          <p className={`mb-1.5 ${LABEL_TEXT_CLS}`}>Photos from guests</p>
+          <ul className="flex flex-wrap gap-2">
+            {guestPhotos.map((p) => (
+              <li key={p.url}>
+                <a href={p.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50">
+                  📷 {p.label ?? 'Guest'} <span className="text-neutral-400">↗</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </div>
       )}
 
-      <dl className="grid grid-cols-2 gap-3">
-        <Recap label="Comms owner" value={ownerName ?? '—'} />
-        <Recap label="Photos" value={prep.photoUrls.length ? `${prep.photoUrls.length} linked` : '—'} />
-        <Recap label="People connected" value={`${prep.keyPeople.filter((p) => p.connected).length}/${prep.keyPeople.length}`} />
-        <Recap label="Amplified via" value={outputs.length ? outputs.join(', ') : '—'} />
-      </dl>
+      {view.guestPresentations.length > 0 && (
+        <div>
+          <p className={`mb-1.5 ${LABEL_TEXT_CLS}`}>Slides from guests</p>
+          <ul className="space-y-1.5">
+            {view.guestPresentations.map((d) => (
+              <li key={d.id}>
+                {d.url ? (
+                  <a href={d.url} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:underline">
+                    📎 {d.fileName} <span className="text-neutral-400">· {d.author}</span>
+                  </a>
+                ) : (
+                  <span className="text-sm text-neutral-600">📎 {d.fileName} · {d.author}</span>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
-      {prep.followupNotes && <p className="rounded-lg border border-neutral-100 bg-neutral-50 p-3 text-neutral-700">{prep.followupNotes}</p>}
-      <p className="text-xs text-neutral-400">{conference.name} is archived. Re-open an earlier stage from the rail to edit.</p>
+      {(view.guestSummaries.length > 0 || view.guestComments.length > 0) && (
+        <div className="space-y-2 rounded-lg border border-neutral-100 bg-neutral-50/60 p-3">
+          <p className={LABEL_TEXT_CLS}>From guests</p>
+          {view.guestSummaries.map((s) => (
+            <div key={s.id} className="text-sm">
+              <span className="font-semibold text-neutral-700">{s.author}:</span> <span className="text-neutral-600">{s.content}</span>
+            </div>
+          ))}
+          {view.guestComments.map((c) => (
+            <div key={c.id} className="text-xs text-neutral-500">
+              💬 <span className="font-semibold text-neutral-600">{c.author}:</span> {c.content}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }
 
-function Recap({ label, value }: { label: string; value: string }) {
-  return (
-    <div>
-      <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</dt>
-      <dd className="text-sm text-neutral-700">{value}</dd>
-    </div>
-  )
-}
+// ─── Amplify fields ─────────────────────────────────────────────────────────────
 
-// ─── Sidebar ────────────────────────────────────────────────────────────────────
-
-function Sidebar({
+function AmplifyFields({
   conference,
   prep,
-  profiles,
-  assignedContacts,
+  podcastEvents,
+  campusSessions,
 }: {
   conference: ConferenceView
   prep: ConferencePrep
-  profiles: Profile[]
-  assignedContacts: ConferenceAssignedContact[]
+  podcastEvents: Option[]
+  campusSessions: Option[]
 }) {
-  const ownerName = prep.commsOwnerId ? profiles.find((p) => p.id === prep.commsOwnerId)?.name ?? profiles.find((p) => p.id === prep.commsOwnerId)?.email ?? null : null
-  const guestContacts = assignedContacts.map((c) => ({
-    contactId: c.id,
-    contactName: c.fullName,
-    contactEmail: c.email,
-    contactPhone: c.whatsappId,
-  }))
-
   return (
     <div className="space-y-4">
-      <div className="rounded-xl border border-neutral-200 bg-white p-4">
-        <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Details</h3>
-        <dl className="space-y-2">
+      <div className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+        <FlagToggle conferenceId={conference.id} flag="outputReport" label="Report drafted" checked={prep.outputReport} />
+        <FlagToggle conferenceId={conference.id} flag="outputLinkedin" label="LinkedIn post" checked={prep.outputLinkedin} />
+        <FlagToggle conferenceId={conference.id} flag="outputWebsite" label="Website mention" checked={prep.outputWebsite} />
+        <FlagToggle conferenceId={conference.id} flag="outputWhatsapp" label="WhatsApp share" checked={prep.outputWhatsapp} />
+        <FlagToggle conferenceId={conference.id} flag="outputNewsletter" label="Newsletter mention" checked={prep.outputNewsletter} />
+      </div>
+
+      <div className="space-y-2">
+        <p className={LABEL_TEXT_CLS}>Repurpose</p>
+        <div className="flex flex-wrap gap-2">
+          <FlagPill conferenceId={conference.id} flag="podcastIdea" label="Interesting for a podcast?" checked={prep.podcastIdea} />
+          <FlagPill conferenceId={conference.id} flag="campusIdea" label="Present at World Campus?" checked={prep.campusIdea} />
+        </div>
+      </div>
+
+      <form action={savePrepAction} className="space-y-4">
+        <input type="hidden" name="conference_id" value={conference.id} />
+        <input type="hidden" name="section" value="amplify" />
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Follow-up notes</span>
+          <textarea name="followup_notes" defaultValue={prep.followupNotes ?? ''} rows={3} className={FIELD_CLS} />
+        </label>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <label className={LABEL_CLS}>
+            <span className={LABEL_TEXT_CLS}>Link podcast episode</span>
+            <select name="podcast_event_id" defaultValue={prep.podcastEventId ?? ''} className={FIELD_CLS}>
+              <option value="">Not linked</option>
+              {podcastEvents.map((e) => (
+                <option key={e.id} value={e.id}>{e.name}</option>
+              ))}
+            </select>
+          </label>
+          <label className={LABEL_CLS}>
+            <span className={LABEL_TEXT_CLS}>Link campus session</span>
+            <select name="campus_session_id" defaultValue={prep.campusSessionId ?? ''} className={FIELD_CLS}>
+              <option value="">Not linked</option>
+              {campusSessions.map((s) => (
+                <option key={s.id} value={s.id}>{s.label}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div className="flex justify-end">
+          <SubmitButton />
+        </div>
+      </form>
+    </div>
+  )
+}
+
+// ─── Details tile ───────────────────────────────────────────────────────────────
+
+function DetailsTile({ conference, prep, profiles }: { conference: ConferenceView; prep: ConferencePrep; profiles: Profile[] }) {
+  return (
+    <CollapsibleCard title="Details & links" storageKey={`conf-${conference.id}-details`} defaultCollapsed>
+      <div className="space-y-4">
+        <dl className="grid grid-cols-2 gap-3">
           <Recap label="Region" value={conference.regionLabel} />
           {conference.mainFocus && <Recap label="Focus" value={conference.mainFocus} />}
           <Recap label="Format" value={FORMAT_LABELS[conference.format] ?? conference.format} />
           {conference.location && <Recap label="Location" value={conference.location} />}
-          {ownerName && <Recap label="Comms owner" value={ownerName} />}
         </dl>
-      </div>
 
-      {(conference.websiteUrl || prep.deckUrl) && (
-        <div className="rounded-xl border border-neutral-200 bg-white p-4">
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Links</h3>
+        <form action={savePrepAction} className="grid gap-4 sm:grid-cols-2">
+          <input type="hidden" name="conference_id" value={conference.id} />
+          <input type="hidden" name="section" value="comms" />
+          <label className={LABEL_CLS}>
+            <span className={LABEL_TEXT_CLS}>Comms owner</span>
+            <select name="comms_owner_id" defaultValue={prep.commsOwnerId ?? ''} className={FIELD_CLS}>
+              <option value="">Unassigned</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+              ))}
+            </select>
+          </label>
+          <label className={LABEL_CLS}>
+            <span className={LABEL_TEXT_CLS}>Contributor</span>
+            <select name="comms_contributor_id" defaultValue={prep.commsContributorId ?? ''} className={FIELD_CLS}>
+              <option value="">None</option>
+              {profiles.map((p) => (
+                <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
+              ))}
+            </select>
+          </label>
+          <div className="sm:col-span-2 flex justify-end">
+            <SubmitButton label="Save owners" />
+          </div>
+        </form>
+
+        {(conference.websiteUrl || prep.deckUrl) && (
           <div className="space-y-1.5">
             {conference.websiteUrl && (
               <a href={conference.websiteUrl} target="_blank" rel="noreferrer" className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50">
@@ -821,14 +905,49 @@ function Sidebar({
               </a>
             )}
           </div>
-        </div>
-      )}
+        )}
+      </div>
+    </CollapsibleCard>
+  )
+}
 
-      <ConferenceGuestLink
-        conferenceId={conference.id}
-        conferenceName={conference.name}
-        contacts={guestContacts}
-      />
+function Recap({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">{label}</dt>
+      <dd className="text-sm text-neutral-700">{value}</dd>
+    </div>
+  )
+}
+
+// ─── Invite log ─────────────────────────────────────────────────────────────────
+
+function InviteLog({ invites }: { invites: ConferenceInvite[] }) {
+  if (invites.length === 0) {
+    return <p className="text-xs text-neutral-400">No invites sent yet.</p>
+  }
+  const toneFor = (s: ConferenceInvite['status']): StatusTone =>
+    s === 'sent' ? 'green' : s === 'failed' ? 'red' : s === 'partial' ? 'amber' : 'neutral'
+  const labelFor = (s: ConferenceInvite['status']): string =>
+    s === 'sent' ? 'Delivered' : s === 'failed' ? 'Failed' : s === 'partial' ? 'Partial' : 'Sending…'
+
+  return (
+    <div>
+      <p className="mb-1.5 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Invitations sent</p>
+      <ul className="divide-y divide-neutral-100 rounded-lg border border-neutral-200">
+        {invites.map((invite) => (
+          <li key={invite.id} className="flex items-center justify-between gap-2 px-3 py-2">
+            <div className="min-w-0">
+              <p className="truncate text-sm font-semibold text-neutral-800">{invite.recipientName ?? invite.recipientEmail ?? invite.recipientPhone ?? 'Guest'}</p>
+              <p className="truncate text-xs text-neutral-500">
+                {invite.channels.length > 0 ? invite.channels.join(' + ') : 'no channel'}
+                {invite.sentAt ? ` · ${new Date(invite.sentAt).toLocaleDateString('en-GB', { day: 'numeric', month: 'short' })}` : ''}
+              </p>
+            </div>
+            <StatusBadge label={labelFor(invite.status)} tone={toneFor(invite.status)} />
+          </li>
+        ))}
+      </ul>
     </div>
   )
 }
@@ -878,7 +997,6 @@ function ConferenceTasks({
     if (next === 'completed') {
       setPoppingId(task.id)
       window.setTimeout(() => setPoppingId((id) => (id === task.id ? null : id)), 450)
-      // Celebrate when this completion clears the last open task.
       if (tasks.every((t) => t.id === task.id || t.status === 'completed')) setFireKey((k) => k + 1)
     }
     setTasks((prev) => prev.map((t) => (t.id === task.id ? { ...t, status: next } : t)))
@@ -898,14 +1016,9 @@ function ConferenceTasks({
 
   return (
     <div>
-      <div className="mb-2 flex items-center justify-between px-1">
-        <p className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Tasks</p>
+      <div className="mb-2 flex items-center justify-end px-1">
         {!adding && (
-          <button
-            type="button"
-            onClick={() => { setAdding(true); setNewOwner(defaultOwner) }}
-            className="text-xs font-semibold text-neutral-400 hover:text-orange-700"
-          >
+          <button type="button" onClick={() => { setAdding(true); setNewOwner(defaultOwner) }} className="text-xs font-semibold text-neutral-400 hover:text-orange-700">
             + Add task
           </button>
         )}
@@ -915,11 +1028,7 @@ function ConferenceTasks({
         <div className="relative divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
           <ConfettiBurst fireKey={fireKey} />
           {tasks.map((task, index) => (
-            <div
-              key={task.id}
-              className="flex items-center gap-3 px-3 py-2.5 animate-fade-up"
-              style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}
-            >
+            <div key={task.id} className="flex items-center gap-3 px-3 py-2.5 animate-fade-up" style={{ animationDelay: `${Math.min(index, 12) * 35}ms` }}>
               <button
                 type="button"
                 disabled={pending}
@@ -929,9 +1038,7 @@ function ConferenceTasks({
                 ✓
               </button>
               <span className={['flex-1 text-sm transition-colors', task.status === 'completed' ? 'text-neutral-400' : 'text-neutral-700'].join(' ')}>
-                <span className="strike-sweep" data-struck={task.status === 'completed'}>
-                  {task.title}
-                </span>
+                <span className="strike-sweep" data-struck={task.status === 'completed'}>{task.title}</span>
               </span>
               <select
                 value={task.ownerId ?? ''}
@@ -944,13 +1051,7 @@ function ConferenceTasks({
                   <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
                 ))}
               </select>
-              <button
-                type="button"
-                onClick={() => handleDelete(task.id)}
-                disabled={pending}
-                className="text-neutral-300 hover:text-red-500 disabled:opacity-40"
-                aria-label="Delete task"
-              >
+              <button type="button" onClick={() => handleDelete(task.id)} disabled={pending} className="text-neutral-300 hover:text-red-500 disabled:opacity-40" aria-label="Delete task">
                 ×
               </button>
             </div>
@@ -969,22 +1070,13 @@ function ConferenceTasks({
             autoFocus
             className="flex-1 rounded-lg border border-neutral-200 px-3 py-1.5 text-sm focus:border-violet-400 focus:outline-none"
           />
-          <select
-            value={newOwner}
-            onChange={(e) => setNewOwner(e.target.value)}
-            className="rounded-lg border border-neutral-200 px-2 py-1.5 text-xs text-neutral-600 focus:border-violet-400 focus:outline-none"
-          >
+          <select value={newOwner} onChange={(e) => setNewOwner(e.target.value)} className="rounded-lg border border-neutral-200 px-2 py-1.5 text-xs text-neutral-600 focus:border-violet-400 focus:outline-none">
             <option value="">Unassigned</option>
             {profiles.map((p) => (
               <option key={p.id} value={p.id}>{p.name ?? p.email}</option>
             ))}
           </select>
-          <button
-            type="button"
-            onClick={handleAdd}
-            disabled={pending || !newTitle.trim()}
-            className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60"
-          >
+          <button type="button" onClick={handleAdd} disabled={pending || !newTitle.trim()} className="rounded-lg bg-violet-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-violet-700 disabled:opacity-60">
             Add
           </button>
           <button type="button" onClick={() => setAdding(false)} className="text-xs text-neutral-400 hover:text-neutral-700">
@@ -993,9 +1085,7 @@ function ConferenceTasks({
         </div>
       )}
 
-      {tasks.length === 0 && !adding && (
-        <p className="px-1 text-xs text-neutral-400">No tasks yet. Add one above.</p>
-      )}
+      {tasks.length === 0 && !adding && <p className="px-1 text-xs text-neutral-400">No tasks yet. Add one above.</p>}
     </div>
   )
 }

@@ -1,6 +1,91 @@
 'use client'
 
 import { useEffect, useRef, useState } from 'react'
+import {
+  PHASE_LABELS,
+  deriveConferencePhase,
+  phaseStatusLine,
+  statusLabel,
+  statusTone,
+  toAttendingType,
+  isPresenting,
+  type ConferencePhase,
+  type RequirementStatus,
+} from '@/modules/events/domain/conference-requirements'
+
+const PHASE_ORDER: ConferencePhase[] = ['before', 'during', 'after']
+
+/** Provided → green; else due (past its phase) → red; else upcoming → neutral. */
+function materialStatus(provided: boolean, dueFrom: ConferencePhase, phase: ConferencePhase): RequirementStatus {
+  if (provided) return 'provided'
+  return PHASE_ORDER.indexOf(phase) >= PHASE_ORDER.indexOf(dueFrom) ? 'due' : 'upcoming'
+}
+
+/**
+ * Co-write a guest contribution into the shared operating record
+ * (`conference_prep`) so the team and the guest edit one record. Best-effort:
+ * the guest's per-submission files/notes remain the primary store, so a failure
+ * here is silently ignored.
+ */
+async function contributeToPrep(
+  token: string,
+  conferenceId: string | null,
+  payload: { takeaways?: string; photoUrl?: string; deckUrl?: string; hasPresentation?: boolean }
+): Promise<void> {
+  if (!conferenceId) return
+  await fetch('/api/congress-guest/contribute', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ token, conferenceId, ...payload }),
+  }).catch(() => {
+    /* best-effort mirror into the shared record */
+  })
+}
+
+function StatusPill({ status }: { status: RequirementStatus }) {
+  if (status === 'na') return null
+  const tone = statusTone(status)
+  const cls =
+    tone === 'green'
+      ? 'bg-emerald-50 text-emerald-700 border-emerald-200'
+      : tone === 'red'
+        ? 'bg-red-50 text-red-700 border-red-200'
+        : 'bg-neutral-50 text-neutral-500 border-neutral-200'
+  const icon = status === 'provided' ? '✓' : status === 'due' ? '!' : '·'
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${cls}`}>
+      <span aria-hidden="true">{icon}</span>
+      {statusLabel(status)}
+    </span>
+  )
+}
+
+function GuestPhaseHeader({ phase, start }: { phase: ConferencePhase; start: string | null }) {
+  const currentIndex = PHASE_ORDER.indexOf(phase)
+  return (
+    <div className="rounded-2xl border border-neutral-200 bg-white p-3 shadow-sm">
+      <div className="flex items-center gap-1">
+        {PHASE_ORDER.map((p, i) => {
+          const active = p === phase
+          const done = i < currentIndex
+          return (
+            <div
+              key={p}
+              className={[
+                'flex flex-1 items-center justify-center gap-1 rounded-lg px-2 py-1.5 text-xs font-semibold',
+                active ? 'bg-neutral-900 text-white' : done ? 'text-emerald-600' : 'text-neutral-400',
+              ].join(' ')}
+            >
+              {done && <span aria-hidden="true">✓</span>}
+              {PHASE_LABELS[p]}
+            </div>
+          )
+        })}
+      </div>
+      <p className="mt-2 px-1 text-xs text-neutral-500">{phaseStatusLine(phase, start, start)}</p>
+    </div>
+  )
+}
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -81,6 +166,17 @@ export function GuestWorkspace({ token }: { token: string }) {
 
   const submission = data.submissions.find((s) => s.id === activeSubId) ?? data.submissions[0] ?? null
 
+  const phase: ConferencePhase = submission
+    ? deriveConferencePhase(submission.conferenceStart, submission.conferenceStart, null)
+    : 'before'
+  const attendingType = submission ? toAttendingType({ role: submission.role }) : 'attendee'
+  const photoStatus = submission
+    ? materialStatus(submission.files.some((f) => f.fileType === 'photo'), 'during', phase)
+    : 'upcoming'
+  const summaryStatus = submission
+    ? materialStatus(submission.guestNotes.some((n) => n.noteType === 'summary'), 'during', phase)
+    : 'upcoming'
+
   const handleRegisteredChange = async (checked: boolean) => {
     if (!submission) return
     // Optimistic — send the new value both ways (check and uncheck).
@@ -156,7 +252,7 @@ export function GuestWorkspace({ token }: { token: string }) {
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
         {/* Header */}
         <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-600">Your workspace</p>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-600">Your conferences</p>
           <h1 className="text-2xl font-semibold text-neutral-900">
             {submission?.conferenceName ?? 'Conference workspace'}
           </h1>
@@ -172,29 +268,41 @@ export function GuestWorkspace({ token }: { token: string }) {
           )}
         </div>
 
-        {/* Conference switcher — one workspace tab per conference — plus a way
-            to file a report for another conference at any time. */}
-        <div className="flex flex-wrap items-center gap-2">
-          {data.submissions.map((s) => (
-            <button
-              key={s.id}
-              onClick={() => setActiveSubId(s.id)}
-              className={`rounded-full border px-3 py-1 text-xs font-semibold ${
-                s.id === activeSubId
-                  ? 'border-neutral-950 bg-neutral-950 text-white'
-                  : 'border-neutral-300 bg-white text-neutral-700 hover:bg-neutral-50'
-              }`}
-            >
-              {s.conferenceName}
-            </button>
-          ))}
+        {/* Overview — the conferences on the guest's list, each opening its
+            operating page. Plus a way to add another conference at any time. */}
+        <div className="grid gap-2 sm:grid-cols-2">
+          {data.submissions.map((s) => {
+            const active = s.id === activeSubId
+            const sPhase = deriveConferencePhase(s.conferenceStart, s.conferenceStart, null)
+            const hasPhotos = s.files.some((f) => f.fileType === 'photo')
+            const sStatus = materialStatus(hasPhotos, 'during', sPhase)
+            return (
+              <button
+                key={s.id}
+                onClick={() => setActiveSubId(s.id)}
+                className={`flex flex-col items-start gap-1 rounded-2xl border p-3 text-left transition ${
+                  active ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 bg-white hover:border-neutral-300'
+                }`}
+              >
+                <span className="flex w-full items-center justify-between gap-2">
+                  <span className="truncate text-sm font-semibold text-neutral-900">{s.conferenceName}</span>
+                  <StatusPill status={sStatus} />
+                </span>
+                <span className="text-xs text-neutral-500">
+                  {[s.conferenceLocation, PHASE_LABELS[sPhase]].filter(Boolean).join(' · ')}
+                </span>
+              </button>
+            )
+          })}
           <a
             href={`/congress/attend/${token}?add=1`}
-            className="rounded-full border border-dashed border-orange-300 bg-orange-50 px-3 py-1 text-xs font-semibold text-orange-700 hover:bg-orange-100"
+            className="flex items-center justify-center rounded-2xl border border-dashed border-orange-300 bg-orange-50 p-3 text-xs font-semibold text-orange-700 hover:bg-orange-100"
           >
             + Add another conference
           </a>
         </div>
+
+        {submission && <GuestPhaseHeader phase={phase} start={submission.conferenceStart} />}
 
         {submission && (
           <>
@@ -221,23 +329,29 @@ export function GuestWorkspace({ token }: { token: string }) {
             <SummarySection
               token={token}
               submission={submission}
+              status={summaryStatus}
               onNoteUpdated={handleNoteUpdated}
             />
 
-            {/* Photos */}
+            {/* Photos — always offered, but only "needed" once the conference is on/past */}
             <UploadSection
               token={token}
               submission={submission}
               accept="image/*"
               fileType="photo"
               label="Photos"
-              description="Conference photos, team shots, booth pictures."
+              description={
+                phase === 'before'
+                  ? 'Photos will be requested during the conference — add them once you’re on-site.'
+                  : 'Conference photos, team shots, booth pictures.'
+              }
+              status={photoStatus}
               onFileAdded={handleFileAdded}
               onFileDeleted={handleFileDeleted}
             />
 
-            {/* Presentation — shown if speaker or panelist */}
-            {['speaker', 'panelist', 'organizer'].includes(submission.role) && (
+            {/* Presentation — only for presenters */}
+            {isPresenting(attendingType) && (
               <UploadSection
                 token={token}
                 submission={submission}
@@ -245,6 +359,11 @@ export function GuestWorkspace({ token }: { token: string }) {
                 fileType="presentation"
                 label="Presentation"
                 description="Upload your slides or any document you presented."
+                status={materialStatus(
+                  submission.files.some((f) => f.fileType === 'presentation'),
+                  'during',
+                  phase
+                )}
                 onFileAdded={handleFileAdded}
                 onFileDeleted={handleFileDeleted}
               />
@@ -282,10 +401,12 @@ export function GuestWorkspace({ token }: { token: string }) {
 function SummarySection({
   token,
   submission,
+  status,
   onNoteUpdated,
 }: {
   token: string
   submission: Submission
+  status?: RequirementStatus
   onNoteUpdated: (note: GuestNote) => void
 }) {
   const existing = submission.guestNotes.find((n) => n.noteType === 'summary')
@@ -307,6 +428,8 @@ function SummarySection({
       if (data.ok) {
         setSaved(true)
         onNoteUpdated({ id: data.noteId ?? existing?.id ?? '', noteType: 'summary', content: text, createdAt: new Date().toISOString() })
+        // Mirror the summary into the shared operating record as takeaways.
+        void contributeToPrep(token, submission.conferenceId, { takeaways: text })
         if (timer.current) clearTimeout(timer.current)
         timer.current = setTimeout(() => setSaved(false), 2000)
       }
@@ -317,7 +440,10 @@ function SummarySection({
 
   return (
     <Card>
-      <SectionLabel>Meeting summary</SectionLabel>
+      <div className="flex items-center justify-between gap-2">
+        <SectionLabel>Meeting summary</SectionLabel>
+        {status && <StatusPill status={status} />}
+      </div>
       <p className="mb-2 text-xs text-neutral-500">
         What happened at the conference? Key takeaways, people you met, sessions you attended.
       </p>
@@ -351,6 +477,7 @@ function UploadSection({
   fileType,
   label,
   description,
+  status,
   onFileAdded,
   onFileDeleted,
 }: {
@@ -360,6 +487,7 @@ function UploadSection({
   fileType: 'photo' | 'presentation' | 'document'
   label: string
   description: string
+  status?: RequirementStatus
   onFileAdded: (file: GuestFile) => void
   onFileDeleted: (fileId: string) => void
 }) {
@@ -409,6 +537,14 @@ function UploadSection({
             publicUrl: data.publicUrl ?? null,
             uploadedAt: new Date().toISOString(),
           })
+          // Mirror the upload into the shared operating record.
+          if (data.publicUrl) {
+            if (fileType === 'photo') {
+              void contributeToPrep(token, submission.conferenceId, { photoUrl: data.publicUrl })
+            } else if (fileType === 'presentation') {
+              void contributeToPrep(token, submission.conferenceId, { deckUrl: data.publicUrl, hasPresentation: true })
+            }
+          }
         }
       } catch {
         setError('Upload failed — check your connection.')
@@ -420,7 +556,10 @@ function UploadSection({
 
   return (
     <Card>
-      <SectionLabel>{label}</SectionLabel>
+      <div className="flex items-center justify-between gap-2">
+        <SectionLabel>{label}</SectionLabel>
+        {status && <StatusPill status={status} />}
+      </div>
       <p className="mb-3 text-xs text-neutral-500">{description}</p>
 
       {files.length > 0 && (

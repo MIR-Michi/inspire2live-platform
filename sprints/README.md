@@ -57,6 +57,7 @@ These remain planning placeholders until the Sprint 04 pilot review is complete.
 - [`sprint-15-legacy-cleanup/`](sprint-15-legacy-cleanup/description.md) — retire disused spaces and dead code ahead of the modular restructuring.
 - [`sprint-16-modular-component-foundation/`](sprint-16-modular-component-foundation/description.md) — Stage 1 of the modular component architecture (ADR-0009): declare component boundaries with **zero database change** — stand up `src/kernel/` + `src/modules/`, author a manifest per component, enforce import boundaries in CI, and convert `feedback` end-to-end as the reference. See `docs/MODULAR_COMPONENT_ARCHITECTURE.md`.
 - [`sprint-17-platform-settings-space/`](sprint-17-platform-settings-space/description.md) — Stage 1.5: re-root platform configuration under a first-class **Platform Settings** space and build the manifest-driven settings machinery that doubles as the composition/blueprint layer for the toolbox future. See `docs/PLATFORM_SETTINGS_CONCEPT.md`.
+- [`sprint-18-conference-operations-redesign/`](sprint-18-conference-operations-redesign/description.md) — makes the per-conference **operating page** the single, time-and-role-aware surface for the team and invited guests: de-tabbed operating page, a declarative requirement model (presentation only for presenters; photos only requested during/after), traffic-light status, a guest overview, and instant, logged invites. See `docs/CONFERENCE_OPERATIONS_REDESIGN_CONCEPT.md`.
 
 ## How to read a sprint
 

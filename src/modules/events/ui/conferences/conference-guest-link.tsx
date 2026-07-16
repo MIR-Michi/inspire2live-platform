@@ -96,14 +96,10 @@ export function ConferenceGuestLink({
                   Share in WhatsApp
                 </a>
               </div>
-              {state.sends && state.sends.length > 0 && (
-                <ul className="space-y-1">
-                  {state.sends.map((r) => (
-                    <li key={r.channel} className={`text-xs ${r.ok ? 'text-green-700' : 'text-red-600'}`}>
-                      {r.ok ? 'Sent' : 'Failed'} via {r.channel}{r.ok ? '' : `: ${r.error ?? 'Unknown error'}`}
-                    </li>
-                  ))}
-                </ul>
+              {state.queued && state.queued.length > 0 && (
+                <p className="text-xs text-neutral-500">
+                  Delivering via {state.queued.join(' and ')} in the background — see the invite log for delivery status.
+                </p>
               )}
             </div>
           ) : (
