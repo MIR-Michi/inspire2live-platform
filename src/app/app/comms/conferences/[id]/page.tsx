@@ -6,6 +6,7 @@ import { loadConferenceGuestReports } from '@/lib/comms-conference-guest-reports
 import { loadConferenceInvites } from '@/lib/comms-conference-invites'
 import { loadConferenceTasks } from '@/app/app/comms/conferences/actions'
 import { ConferenceOperatingShell } from '@/components/comms/conferences/conference-operating-shell'
+import { ConferenceParticipationPanel } from '@/modules/events/ui/conferences/conference-participation-panel'
 
 // Depends on the current Supabase session; render at request time.
 export const dynamic = 'force-dynamic'
@@ -47,18 +48,26 @@ export default async function ConferenceOperatingPage({ params }: { params: Prom
   }))
 
   return (
-    <ConferenceOperatingShell
-      conference={conference}
-      stage={tracking?.stage ?? null}
-      notes={tracking?.notes ?? null}
-      prep={prep}
-      profiles={(profiles ?? []).map((p) => ({ id: p.id, name: p.name, email: p.email }))}
-      podcastEvents={(podcastEvents ?? []).map((e) => ({ id: String(e.id), name: String(e.name) }))}
-      campusSessions={campusOptions}
-      assignedContacts={assignedContacts}
-      initialTasks={tasks}
-      guestReports={guestReports}
-      invites={invites}
-    />
+    <div className="mx-auto max-w-7xl xl:grid xl:grid-cols-[minmax(0,48rem)_20rem] xl:items-start xl:gap-6">
+      <ConferenceOperatingShell
+        conference={conference}
+        stage={tracking?.stage ?? null}
+        notes={tracking?.notes ?? null}
+        prep={prep}
+        profiles={(profiles ?? []).map((p) => ({ id: p.id, name: p.name, email: p.email }))}
+        podcastEvents={(podcastEvents ?? []).map((e) => ({ id: String(e.id), name: String(e.name) }))}
+        campusSessions={campusOptions}
+        assignedContacts={assignedContacts}
+        initialTasks={tasks}
+        guestReports={guestReports}
+        invites={invites}
+      />
+      <ConferenceParticipationPanel
+        conferenceName={conference.name}
+        assignedContacts={assignedContacts}
+        guestReports={guestReports}
+        teamPhotoUrls={prep.photoUrls}
+      />
+    </div>
   )
 }
