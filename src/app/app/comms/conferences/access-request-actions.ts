@@ -138,8 +138,12 @@ export async function decideGuestAccessRequest(
   }
 
   const admin = createAdminClient()
+  // Migration 00165 adds fields not yet represented in the checked-in generated
+  // Database type, so this narrow workflow uses the runtime client until types
+  // are regenerated from the deployed schema.
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const { data: request, error: requestError } = await (admin as any)
+  const accessDb = admin as any
+  const { data: request, error: requestError } = await accessDb
     .from('conference_guest_access_requests')
     .select('id, status, contact_name, contact_email, conference_guest_submissions(submitter_name, submitter_email, conference_name)')
     .eq('id', requestId)
@@ -175,7 +179,7 @@ export async function decideGuestAccessRequest(
   }
 
   const status = decision === 'approve' ? 'granted' : 'declined'
-  const { error: updateError } = await admin
+  const { error: updateError } = await accessDb
     .from('conference_guest_access_requests')
     .update({
       status,
