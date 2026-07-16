@@ -38,25 +38,63 @@ export async function GET(request: Request) {
   }
 
   const workspace = data as {
-    token?: { contactEmail?: string | null }
+    token?: { id?: string | null; contactEmail?: string | null }
     submissions?: Array<{ submitterEmail?: string | null }>
   }
-  const contactEmail = normalizeEmail(workspace.token?.contactEmail)
-    ?? normalizeEmail(workspace.submissions?.[0]?.submitterEmail)
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY
   let hasPlatformAccess = false
 
-  if (contactEmail && serviceRoleKey) {
+  if (serviceRoleKey) {
     try {
       const admin = createClient(supabaseUrl, serviceRoleKey, {
         auth: { persistSession: false, autoRefreshToken: false },
       })
-      const { data: profile } = await admin
-        .from('profiles')
-        .select('id')
-        .eq('email', contactEmail)
-        .maybeSingle()
-      hasPlatformAccess = Boolean(profile?.id)
+      const emails = new Set<string>()
+      const workspaceEmail = normalizeEmail(workspace.token?.contactEmail)
+        ?? normalizeEmail(workspace.submissions?.[0]?.submitterEmail)
+      if (workspaceEmail) emails.add(workspaceEmail)
+
+      const tokenId = typeof workspace.token?.id === 'string' ? workspace.token.id : null
+      if (tokenId) {
+        const { data: tokenRow } = await admin
+          .from('conference_guest_tokens')
+          .select('contact_id, contact_email')
+          .eq('id', tokenId)
+          .maybeSingle()
+
+        const tokenEmail = normalizeEmail(tokenRow?.contact_email)
+        if (tokenEmail) emails.add(tokenEmail)
+
+        if (tokenRow?.contact_id) {
+          const { data: contact } = await admin
+            .from('comms_crm_contacts')
+            .select('profile_id, platform_status, email')
+            .eq('id', tokenRow.contact_id)
+            .maybeSingle()
+
+          const contactEmail = normalizeEmail(contact?.email)
+          if (contactEmail) emails.add(contactEmail)
+
+          // The CRM contact spine is the strongest identity signal. A linked
+          // profile or active platform state means this person is already a user,
+          // even if the invite snapshot used another/case-variant email value.
+          hasPlatformAccess = Boolean(contact?.profile_id) || contact?.platform_status === 'active'
+        }
+      }
+
+      if (!hasPlatformAccess) {
+        for (const email of emails) {
+          const { data: profile } = await admin
+            .from('profiles')
+            .select('id')
+            .ilike('email', email)
+            .maybeSingle()
+          if (profile?.id) {
+            hasPlatformAccess = true
+            break
+          }
+        }
+      }
     } catch {
       hasPlatformAccess = false
     }
