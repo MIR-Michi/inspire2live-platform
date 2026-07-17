@@ -2,8 +2,8 @@
  * kernel/manifest/validate.ts
  *
  * Dependency-free runtime validator for a ComponentManifest. Kept as plain
- * TypeScript so the kernel adds no schema-library dependency; if the team later
- * adopts a schema lib, this is the single place to swap it.
+ * TypeScript so the kernel adds no new dependency; if the team later adopts a
+ * schema lib, this is the single place to swap it.
  *
  * Returns a discriminated result rather than throwing, so callers (the
  * governance CI checks) can collect and report every problem in one pass.
@@ -159,6 +159,25 @@ export function validateManifest(input: unknown): ValidationResult {
         }
         if (field.options !== undefined && !isStringArray(field.options)) {
           at(id, `\`config.${key}.options\` must be an array of strings when present`)
+        }
+        for (const bound of ['min', 'max', 'step'] as const) {
+          if (field[bound] !== undefined && (field.type !== 'number' || typeof field[bound] !== 'number' || !Number.isFinite(field[bound]))) {
+            at(id, `\`config.${key}.${bound}\` must be a finite number and is only valid for number fields`)
+          }
+        }
+        if (field.step !== undefined && field.step <= 0) {
+          at(id, `\`config.${key}.step\` must be greater than zero`)
+        }
+        if (field.min !== undefined && field.max !== undefined && field.min > field.max) {
+          at(id, `\`config.${key}.min\` cannot be greater than \`max\``)
+        }
+        if (field.type === 'number' && typeof field.default === 'number') {
+          if (field.min !== undefined && field.default < field.min) {
+            at(id, `\`config.${key}.default\` cannot be below \`min\``)
+          }
+          if (field.max !== undefined && field.default > field.max) {
+            at(id, `\`config.${key}.default\` cannot be above \`max\``)
+          }
         }
       }
     }
