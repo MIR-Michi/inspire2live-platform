@@ -11,6 +11,7 @@ import {
   buildDiscoverySystemPrompt,
   conferenceDedupeKey,
   dedupeConferences,
+  normalizeConferenceName,
   normalizeDetail,
   toIsoDate,
   validateConferences,
@@ -108,6 +109,36 @@ describe('dedupeConferences', () => {
   it('skips conferences whose key already exists', () => {
     const existing = [conferenceDedupeKey('Onco Summit', '2026-09-01')]
     expect(dedupeConferences([make('Onco Summit', 90)], existing)).toHaveLength(0)
+  })
+})
+
+describe('conferenceDedupeKey / normalizeConferenceName', () => {
+  it('collapses title variants of the same conference to one key', () => {
+    const a = conferenceDedupeKey('ESMO Congress 2026', '2026-10-20')
+    const b = conferenceDedupeKey('The ESMO Congress', '2026-10-21')
+    const c = conferenceDedupeKey('ESMO Congress', '2026-10-01')
+    expect(a).toBe(b)
+    expect(b).toBe(c)
+  })
+
+  it('keys on the year, so a month drift between sources does not split', () => {
+    expect(conferenceDedupeKey('ASCO Annual Meeting', '2026-06-01')).toBe(
+      conferenceDedupeKey('ASCO Annual Meeting', '2026-07-15')
+    )
+  })
+
+  it('strips ordinal edition markers', () => {
+    expect(normalizeConferenceName('24th Annual Breast Cancer Symposium')).toBe('breast-cancer-symposium')
+  })
+
+  it('keeps event-type words that distinguish sibling events', () => {
+    expect(conferenceDedupeKey('Onco Summit', '2026-09-01')).not.toBe(
+      conferenceDedupeKey('Onco Congress', '2026-09-01')
+    )
+  })
+
+  it('falls back to a stable key when the name is all noise', () => {
+    expect(conferenceDedupeKey('2026', '2026-09-01')).toBe('conference:2026')
   })
 })
 

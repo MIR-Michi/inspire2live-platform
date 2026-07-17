@@ -285,12 +285,12 @@ export function ConferencesShell({
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
           <h1 className="text-2xl font-semibold text-neutral-900">Oncology conferences</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Saved oncology conference cache, refreshed nightly in the background. Shortlist the ones worth attending and track them through to follow-up.
+            Saved oncology conference cache, refreshed automatically in the background. Shortlist the ones worth attending and track them through to follow-up.
           </p>
         </div>
         <div className="flex flex-wrap items-start gap-2">
           <FindMoreDialog aiEnabled={aiEnabled} />
-          {canRefreshCache && <RefreshControl run={run} aiEnabled={aiEnabled} />}
+          <RefreshStatus run={run} aiEnabled={aiEnabled} canRefreshCache={canRefreshCache} />
         </div>
       </header>
 
@@ -376,23 +376,37 @@ export function ConferencesShell({
   )
 }
 
-function RefreshControl({ run, aiEnabled }: { run: ReturnType<typeof useConferenceRun>; aiEnabled: boolean }) {
+/**
+ * Read-only refresh status. The manual "Refresh cache" button was removed from
+ * this page — discovery cadence is now configured in Platform Settings →
+ * Events & Conferences (how often, look-ahead window, search budget). Admins get
+ * a shortcut to that panel.
+ */
+function RefreshStatus({
+  run,
+  aiEnabled,
+  canRefreshCache,
+}: {
+  run: ReturnType<typeof useConferenceRun>
+  aiEnabled: boolean
+  canRefreshCache: boolean
+}) {
   if (!aiEnabled) {
     return <p className="text-xs text-neutral-400">AI discovery is disabled for this environment.</p>
   }
   return (
     <div className="flex flex-col items-end gap-1">
-      <button
-        type="button"
-        onClick={() => void run.start()}
-        disabled={run.busy}
-        className="inline-flex items-center gap-1.5 rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-60"
-      >
-        {run.running ? `Refreshing cache… ${run.elapsed}s` : run.starting ? 'Starting…' : 'Refresh cache'}
-      </button>
-      {run.running && <p className="text-xs text-neutral-400">Updating saved results in the background; the current list remains available.</p>}
-      {!run.running && run.message && (
-        <p className={['max-w-xs text-right text-xs', run.status === 'error' ? 'text-red-600' : 'text-neutral-500'].join(' ')}>{run.message}</p>
+      <p className="text-xs text-neutral-500">
+        {run.running
+          ? `Refreshing cache… ${run.elapsed}s`
+          : run.message
+            ? run.message
+            : 'Auto-refreshed on a schedule.'}
+      </p>
+      {canRefreshCache && (
+        <Link href="/app/settings" className="text-xs font-semibold text-orange-700 hover:text-orange-800">
+          Discovery settings →
+        </Link>
       )}
     </div>
   )
@@ -809,17 +823,19 @@ function EmptyState({
       <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
         <p className="text-sm font-semibold text-neutral-700">No upcoming conferences saved yet.</p>
         <p className="mt-1 text-sm text-neutral-400">
-          {aiEnabled ? 'Start a background cache refresh to collect upcoming oncology conferences.' : 'AI discovery is disabled for this environment.'}
+          {aiEnabled
+            ? run.running
+              ? `Collecting upcoming oncology conferences… ${run.elapsed}s`
+              : 'The background discovery job will collect upcoming oncology conferences on its next scheduled run.'
+            : 'AI discovery is disabled for this environment.'}
         </p>
-        {aiEnabled && canRefreshCache && (
-          <button
-            type="button"
-            onClick={() => void run.start()}
-            disabled={run.busy}
-            className="mt-3 inline-flex items-center rounded-lg bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700 disabled:opacity-60"
+        {aiEnabled && canRefreshCache && !run.running && (
+          <Link
+            href="/app/settings"
+            className="mt-3 inline-flex items-center rounded-lg border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
           >
-            {run.running ? `Refreshing cache… ${run.elapsed}s` : 'Refresh cache'}
-          </button>
+            Discovery settings →
+          </Link>
         )}
       </div>
     )
