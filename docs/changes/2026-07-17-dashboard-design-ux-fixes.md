@@ -21,7 +21,7 @@ Dashboard editing could expose a large white overflow area, native tile drag-and
 
 - Unit coverage added for nullable kernel settings, all-fields-before-write validation, visible-lane ordering, and visual drop-index translation.
 - Dashboard browser smoke expectations updated for the dedicated drag handle and edit guidance.
-- Full repository CI, migration replay, and Vercel preview are required before merge.
+- Full repository lint, TypeScript, governance, production build, unit tests with coverage, migration replay/schema lint, and Vercel preview are green on PR #182.
 
 ## Risk & rollback
 

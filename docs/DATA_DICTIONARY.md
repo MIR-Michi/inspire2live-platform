@@ -1,7 +1,7 @@
 # Data Dictionary — Inspire2Live Platform
 
 > **Purpose:** Human-readable database schema reference. Table descriptions, key columns, relationships.  
-> **Source of truth:** `supabase/migrations/` (00001–00168) and `src/types/database.ts`  
+> **Source of truth:** `supabase/migrations/` (00001–00169) and `src/types/database.ts`  
 > **Audience:** Developers writing queries, new team members understanding the data model.  
 > **Last reviewed:** 2026-07-17
 
@@ -349,6 +349,22 @@ Kernel-owned, versioned presentation preferences for the adaptive dashboard syst
 **Migration:** `00168_user_dashboard_preferences.sql`.
 
 **Source-of-truth rule:** dashboard catalog/defaults live in `src/kernel/dashboard/catalog.ts`; persisted rows are user overrides and cannot introduce an unknown or unauthorized widget.
+
+---
+
+## 11 · Platform Settings Logical Key Correction
+
+### `platform_settings`
+
+Kernel-owned settings intentionally use `component_id = null`, while component-owned settings use their manifest component ID. Migration `00169_fix_platform_settings_kernel_rows.sql` removes the incompatible composite primary-key constraint introduced in migration `00159`, because PostgreSQL implicitly made the nullable `component_id` column `NOT NULL`.
+
+The logical key remains enforced by the existing unique expression index:
+
+```sql
+(scope, coalesce(component_id, ''), key)
+```
+
+RLS and the settings resolver are unchanged. Platform Admin and Superadmin users can now persist Organization and Design settings, while component panels continue to remain unique per component and key.
 
 ---
 
