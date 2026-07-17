@@ -13,14 +13,16 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       // Unit tests focus on business logic, which since Sprint 16 (ADR-0009)
-      // lives in src/lib (shared), each module's domain/ layer, and the kernel.
-      // UI (src/app, src/components, module ui/) is validated via E2E smoke tests.
+      // lives in src/lib, each module's domain layer, and non-UI kernel code.
+      // UI (src/app, src/components, module ui, kernel ui) is validated via E2E.
       include: [
         'src/lib/**/*.{ts,tsx}',
         'src/modules/**/domain/**/*.{ts,tsx}',
         'src/kernel/**/*.{ts,tsx}',
       ],
       exclude: [
+        // Shared/component-library UI is browser behavior, not unit-domain logic.
+        'src/kernel/ui/**',
         // Thin runtime wrappers around Next/Supabase.
         'src/lib/supabase/**',
         'src/kernel/data/**',
