@@ -7,6 +7,8 @@
 --
 -- Both functions return storage paths so the API/server action can remove the
 -- corresponding Supabase Storage objects through the supported Storage API.
+-- Guest-owned photo links and exact-match summary/deck contributions are also
+-- removed from the shared conference_prep record without deleting team content.
 -- ============================================================
 
 -- ── Guest withdrawal ──────────────────────────────────────────────────────────
@@ -25,7 +27,10 @@ declare
   v_token_id uuid;
   v_conference_id uuid;
   v_conference_name text;
-  v_storage_paths jsonb := '[]'::jsonb;
+  v_storage_paths text[] := '{}'::text[];
+  v_photo_urls text[] := '{}'::text[];
+  v_summary text;
+  v_deck_url text;
 begin
   v_hash := encode(extensions.digest(p_raw_token, 'sha256'), 'hex');
 
@@ -43,21 +48,96 @@ begin
   select
     s.conference_id,
     s.conference_name,
-    coalesce((
-      select jsonb_agg(f.storage_path order by f.uploaded_at)
+    coalesce(array(
+      select f.storage_path
       from public.conference_guest_files f
       where f.submission_id = s.id
-    ), '[]'::jsonb)
+      order by f.uploaded_at
+    ), '{}'::text[]),
+    coalesce(array(
+      select f.public_url
+      from public.conference_guest_files f
+      where f.submission_id = s.id
+        and f.file_type = 'photo'
+        and f.public_url is not null
+      order by f.uploaded_at
+    ), '{}'::text[]),
+    (
+      select n.content
+      from public.conference_guest_notes n
+      where n.submission_id = s.id
+        and n.note_type = 'summary'
+      order by n.updated_at desc
+      limit 1
+    ),
+    (
+      select f.public_url
+      from public.conference_guest_files f
+      where f.submission_id = s.id
+        and f.file_type = 'presentation'
+        and f.public_url is not null
+      order by f.uploaded_at desc
+      limit 1
+    )
   into
     v_conference_id,
     v_conference_name,
-    v_storage_paths
+    v_storage_paths,
+    v_photo_urls,
+    v_summary,
+    v_deck_url
   from public.conference_guest_submissions s
   where s.id = p_sub_id
     and s.token_id = v_token_id;
 
   if not found then
     raise exception 'submission_not_found';
+  end if;
+
+  -- Remove only contribution values that can be tied back to this submission.
+  -- Exact-match checks protect team-edited summary/deck values from being cleared.
+  if v_conference_id is not null then
+    update public.conference_prep p
+    set
+      photo_urls = array(
+        select existing_url
+        from unnest(coalesce(p.photo_urls, '{}'::text[])) existing_url
+        where not (existing_url = any(v_photo_urls))
+      ),
+      takeaways = case
+        when v_summary is not null
+          and p.takeaways = v_summary
+          and not exists (
+            select 1
+            from public.conference_guest_submissions other_submission
+            join public.conference_guest_notes other_note
+              on other_note.submission_id = other_submission.id
+            where other_submission.conference_id = v_conference_id
+              and other_submission.id <> p_sub_id
+              and other_note.note_type = 'summary'
+              and other_note.content = v_summary
+          )
+          then null
+        else p.takeaways
+      end,
+      deck_url = case
+        when v_deck_url is not null
+          and p.deck_url = v_deck_url
+          and not exists (
+            select 1
+            from public.conference_guest_submissions other_submission
+            join public.conference_guest_files other_file
+              on other_file.submission_id = other_submission.id
+            where other_submission.conference_id = v_conference_id
+              and other_submission.id <> p_sub_id
+              and other_file.file_type = 'presentation'
+              and other_file.public_url = v_deck_url
+          )
+          then null
+        else p.deck_url
+      end,
+      updated_at = now()
+    where p.conference_id = v_conference_id;
   end if;
 
   -- Access requests use ON DELETE SET NULL for submission_id, but a withdrawal
@@ -89,7 +169,7 @@ begin
     'submissionId', p_sub_id,
     'conferenceId', v_conference_id,
     'conferenceName', v_conference_name,
-    'storagePaths', v_storage_paths
+    'storagePaths', to_jsonb(v_storage_paths)
   );
 end;
 $$;
@@ -113,7 +193,10 @@ declare
   v_submission_ids uuid[];
   v_token_ids uuid[];
   v_recipients jsonb := '[]'::jsonb;
-  v_storage_paths jsonb := '[]'::jsonb;
+  v_storage_paths text[] := '{}'::text[];
+  v_photo_urls text[] := '{}'::text[];
+  v_guest_summaries text[] := '{}'::text[];
+  v_guest_decks text[] := '{}'::text[];
 begin
   if not public.is_comms_team_or_admin() then
     raise exception 'not_authorized';
@@ -149,11 +232,47 @@ begin
   where s.conference_id = p_conference_id
     and s.status <> 'rejected';
 
-  select coalesce(jsonb_agg(f.storage_path order by f.uploaded_at), '[]'::jsonb)
-  into v_storage_paths
+  select
+    coalesce(array_agg(f.storage_path order by f.uploaded_at), '{}'::text[]),
+    coalesce(array_agg(f.public_url order by f.uploaded_at) filter (
+      where f.file_type = 'photo' and f.public_url is not null
+    ), '{}'::text[]),
+    coalesce(array_agg(f.public_url order by f.uploaded_at) filter (
+      where f.file_type = 'presentation' and f.public_url is not null
+    ), '{}'::text[])
+  into
+    v_storage_paths,
+    v_photo_urls,
+    v_guest_decks
   from public.conference_guest_files f
   join public.conference_guest_submissions s on s.id = f.submission_id
   where s.conference_id = p_conference_id;
+
+  select coalesce(array_agg(n.content order by n.updated_at), '{}'::text[])
+  into v_guest_summaries
+  from public.conference_guest_notes n
+  join public.conference_guest_submissions s on s.id = n.submission_id
+  where s.conference_id = p_conference_id
+    and n.note_type = 'summary';
+
+  -- Remove attributable guest material but preserve team-authored values.
+  update public.conference_prep p
+  set
+    photo_urls = array(
+      select existing_url
+      from unnest(coalesce(p.photo_urls, '{}'::text[])) existing_url
+      where not (existing_url = any(v_photo_urls))
+    ),
+    takeaways = case
+      when p.takeaways = any(v_guest_summaries) then null
+      else p.takeaways
+    end,
+    deck_url = case
+      when p.deck_url = any(v_guest_decks) then null
+      else p.deck_url
+    end,
+    updated_at = now()
+  where p.conference_id = p_conference_id;
 
   if coalesce(array_length(v_submission_ids, 1), 0) > 0 then
     delete from public.conference_guest_access_requests
@@ -187,7 +306,7 @@ begin
     'conferenceId', p_conference_id,
     'conferenceName', v_conference_name,
     'recipients', v_recipients,
-    'storagePaths', v_storage_paths,
+    'storagePaths', to_jsonb(v_storage_paths),
     'removedSubmissions', coalesce(array_length(v_submission_ids, 1), 0)
   );
 end;
