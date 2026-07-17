@@ -4,7 +4,6 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
-import { useConferenceRun } from '@/components/comms/use-conference-run'
 import { FindMoreDialog } from '@/components/comms/conferences/find-more-dialog'
 import { ConferenceContactAssignment } from '@/components/comms/conferences/conference-contact-assignment'
 import {
@@ -18,7 +17,6 @@ import {
   type ConferencesData,
   type ConferenceView,
 } from '@/lib/comms-conferences'
-import type { ConferenceRunStatus } from '@/lib/ai/conference-run'
 import type { ConferenceDetail } from '@/lib/ai/conferences'
 import {
   addConferenceToShortlist,
@@ -119,14 +117,10 @@ function optionLabel(value: string): string {
 
 export function ConferencesShell({
   data,
-  initialStatus,
   aiEnabled,
-  canRefreshCache,
 }: {
   data: ConferencesData
-  initialStatus: ConferenceRunStatus | null
   aiEnabled: boolean
-  canRefreshCache: boolean
 }) {
   const router = useRouter()
   const [tab, setTab] = useState<ConferenceTab>('upcoming')
@@ -134,7 +128,6 @@ export function ConferencesShell({
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [feedback, setFeedback] = useState<ActionFeedback | null>(null)
   const [details, setDetails] = useState<Record<string, DetailState>>(() => {
-    // Seed from any detail already cached on the row.
     const seed: Record<string, DetailState> = {}
     for (const conf of data.conferences) {
       if (conf.detailStatus === 'ready' && conf.detail) seed[conf.id] = { status: 'ready', detail: conf.detail }
@@ -144,7 +137,6 @@ export function ConferencesShell({
   const detailsRef = useRef(details)
   const backgroundQueuedRef = useRef<Set<string>>(new Set())
   const [pending, startTransition] = useTransition()
-  const run = useConferenceRun(initialStatus)
 
   const partitions = useMemo(() => partitionConferences(data.conferences), [data.conferences])
   const filteredUpcoming = useMemo(() => filterConferences(partitions.upcoming, filters), [partitions.upcoming, filters])
@@ -285,13 +277,10 @@ export function ConferencesShell({
           <p className="mb-1 text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Conferences</p>
           <h1 className="text-2xl font-semibold text-neutral-900">Oncology conferences</h1>
           <p className="mt-1 text-sm text-neutral-500">
-            Saved oncology conference cache, refreshed automatically in the background. Shortlist the ones worth attending and track them through to follow-up.
+            Shortlist the conferences worth attending and track them through to follow-up.
           </p>
         </div>
-        <div className="flex flex-wrap items-start gap-2">
-          <FindMoreDialog aiEnabled={aiEnabled} />
-          <RefreshStatus run={run} aiEnabled={aiEnabled} canRefreshCache={canRefreshCache} />
-        </div>
+        <FindMoreDialog aiEnabled={aiEnabled} />
       </header>
 
       {feedback && (
@@ -310,7 +299,6 @@ export function ConferencesShell({
         </div>
       )}
 
-      {/* Tabs */}
       <div className="flex shrink-0 flex-wrap gap-1 border-b border-neutral-200">
         {TABS.map(({ key, label }) => {
           const count = partitions[key].length
@@ -343,11 +331,10 @@ export function ConferencesShell({
         <FiltersBar data={data} conferences={partitions.upcoming} filters={filters} onChange={setFilters} resultCount={filteredUpcoming.length} />
       )}
 
-      {/* Master-detail */}
       <div className="grid min-h-0 flex-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <div className="min-h-[360px] pr-1 lg:h-full lg:min-h-0 lg:overflow-y-scroll">
           {visible.length === 0 ? (
-            <EmptyState tab={tab} aiEnabled={aiEnabled} canRefreshCache={canRefreshCache} run={run} />
+            <EmptyState tab={tab} aiEnabled={aiEnabled} />
           ) : (
             <ul className="space-y-2">
               {visible.map((conf) => (
@@ -373,42 +360,6 @@ export function ConferencesShell({
         </div>
       </div>
     </section>
-  )
-}
-
-/**
- * Read-only refresh status. The manual "Refresh cache" button was removed from
- * this page — discovery cadence is now configured in Platform Settings →
- * Events & Conferences (how often, look-ahead window, search budget). Admins get
- * a shortcut to that panel.
- */
-function RefreshStatus({
-  run,
-  aiEnabled,
-  canRefreshCache,
-}: {
-  run: ReturnType<typeof useConferenceRun>
-  aiEnabled: boolean
-  canRefreshCache: boolean
-}) {
-  if (!aiEnabled) {
-    return <p className="text-xs text-neutral-400">AI discovery is disabled for this environment.</p>
-  }
-  return (
-    <div className="flex flex-col items-end gap-1">
-      <p className="text-xs text-neutral-500">
-        {run.running
-          ? `Refreshing cache… ${run.elapsed}s`
-          : run.message
-            ? run.message
-            : 'Auto-refreshed on a schedule.'}
-      </p>
-      {canRefreshCache && (
-        <Link href="/app/settings" className="text-xs font-semibold text-orange-700 hover:text-orange-800">
-          Discovery settings →
-        </Link>
-      )}
-    </div>
   )
 }
 
@@ -640,7 +591,6 @@ function ConferenceDetailPane({
         </div>
       </div>
 
-      {/* Pipeline actions */}
       <div className="flex flex-wrap items-center gap-2 border-y border-neutral-100 py-3">
         {!conf.tracking ? (
           <button
@@ -687,7 +637,6 @@ function ConferenceDetailPane({
 
       {conf.summary && <p className="text-sm leading-relaxed text-neutral-700">{conf.summary}</p>}
 
-      {/* AI-enriched detail */}
       {!aiEnabled ? null : detail?.status === 'loading' ? (
         <div className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-3 text-sm text-neutral-500">
           <Spinner /> Gathering details…
@@ -810,33 +759,17 @@ function Spinner() {
 function EmptyState({
   tab,
   aiEnabled,
-  canRefreshCache,
-  run,
 }: {
   tab: ConferenceTab
   aiEnabled: boolean
-  canRefreshCache: boolean
-  run: ReturnType<typeof useConferenceRun>
 }) {
   if (tab === 'upcoming') {
     return (
       <div className="rounded-xl border border-dashed border-neutral-300 bg-white px-6 py-10 text-center">
         <p className="text-sm font-semibold text-neutral-700">No upcoming conferences saved yet.</p>
         <p className="mt-1 text-sm text-neutral-400">
-          {aiEnabled
-            ? run.running
-              ? `Collecting upcoming oncology conferences… ${run.elapsed}s`
-              : 'The background discovery job will collect upcoming oncology conferences on its next scheduled run.'
-            : 'AI discovery is disabled for this environment.'}
+          {aiEnabled ? 'New conferences are added automatically.' : 'AI discovery is disabled for this environment.'}
         </p>
-        {aiEnabled && canRefreshCache && !run.running && (
-          <Link
-            href="/app/settings"
-            className="mt-3 inline-flex items-center rounded-lg border border-neutral-200 px-4 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-          >
-            Discovery settings →
-          </Link>
-        )}
       </div>
     )
   }

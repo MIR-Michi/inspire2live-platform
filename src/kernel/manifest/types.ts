@@ -85,6 +85,12 @@ export type ConfigField = {
   default?: unknown
   /** Allowed values for `type: 'enum'`. */
   options?: readonly string[]
+  /** Lower bound for `type: 'number'`. Enforced in the renderer and persistence layer. */
+  min?: number
+  /** Upper bound for `type: 'number'`. Enforced in the renderer and persistence layer. */
+  max?: number
+  /** Input increment for `type: 'number'` (for example 1 for whole numbers). */
+  step?: number
   /** For `type: 'secret'`: the env var / secret reference the value resolves from. */
   secretRef?: string
 }

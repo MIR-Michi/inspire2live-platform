@@ -12,6 +12,11 @@ import { componentManifests } from '@/modules/registry'
 import { composePanels } from '@/kernel/settings'
 import type { SettingsPanel } from '@/kernel/settings'
 
+/** First-class settings destinations for components that need a named IA entry. */
+const COMPONENT_SETTINGS_ROUTES: Readonly<Record<string, string>> = {
+  events: '/app/settings/conferences',
+}
+
 /** Kernel panels + every component's config panel — the full settings tree. */
 export function allSettingsPanels(): SettingsPanel[] {
   return composePanels(componentManifests)
@@ -20,4 +25,9 @@ export function allSettingsPanels(): SettingsPanel[] {
 /** Look up one panel by its id (`kernel:<name>` or `component:<id>`). */
 export function findSettingsPanel(id: string): SettingsPanel | undefined {
   return allSettingsPanels().find((p) => p.id === id)
+}
+
+/** Canonical UI destination for a component's manifest-driven settings panel. */
+export function componentSettingsHref(componentId: string): string {
+  return COMPONENT_SETTINGS_ROUTES[componentId] ?? `/app/settings/components/${componentId}`
 }

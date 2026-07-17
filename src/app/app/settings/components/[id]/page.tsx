@@ -1,8 +1,10 @@
 import Link from 'next/link'
+import { redirect } from 'next/navigation'
 import { createClient } from '@/lib/supabase/server'
 import { componentManifests } from '@/modules/registry'
 import { componentPanel, resolvePanel } from '@/kernel/settings'
 import { SettingsPanelForm } from '@/components/settings/settings-panel-form'
+import { componentSettingsHref } from '@/modules/settings-registry'
 
 /**
  * Per-component config — the reference COMPONENT settings panel (ADR-0010 §5).
@@ -17,6 +19,10 @@ export default async function ComponentSettingsPage({
   const { id } = await params
   const manifest = componentManifests.find((m) => m.id === id)
   const panel = manifest ? componentPanel(manifest) : null
+  const genericHref = `/app/settings/components/${id}`
+  const canonicalHref = componentSettingsHref(id)
+
+  if (canonicalHref !== genericHref) redirect(canonicalHref)
 
   if (!manifest || !panel) {
     return (

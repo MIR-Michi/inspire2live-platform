@@ -146,6 +146,9 @@ function Field({
         <input
           id={id}
           type={field.type === 'number' ? 'number' : field.type === 'email' ? 'email' : field.type === 'url' ? 'url' : 'text'}
+          min={field.type === 'number' ? field.min : undefined}
+          max={field.type === 'number' ? field.max : undefined}
+          step={field.type === 'number' ? field.step : undefined}
           value={String(value ?? '')}
           onChange={(e) => onChange(e.target.value)}
           className={baseInput}
