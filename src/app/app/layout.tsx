@@ -92,7 +92,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
     <RoleLayersProvider platformRole={effectiveRole}>
       <DesignSystemProvider config={designConfig}>
         <TestModeProvider>
-          <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
+          <div className="flex h-dvh min-h-0 w-full max-w-full flex-col overflow-hidden overscroll-none bg-neutral-50">
             <TopNav
               userName={name}
               userRole={effectiveRole}
@@ -111,7 +111,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
               previewUsers={previewUsers}
               effectiveSpaces={effectiveSpaces}
             />
-            <div className="flex min-h-0 flex-1">
+            <div className="flex min-h-0 min-w-0 flex-1">
               <SideNav
                 role={effectiveRole}
                 effectiveSpaces={effectiveSpaces}
@@ -119,7 +119,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
                 commsUnreadCount={commsUnreadCount ?? 0}
                 workspaceLabel={workspaceLabel}
               />
-              <main className="flex-1 overflow-y-auto px-3 py-4 md:p-6" role="main" aria-label="Page content">
+              <main className="min-w-0 flex-1 overflow-y-auto overscroll-contain bg-neutral-50 px-3 py-4 md:p-6" role="main" aria-label="Page content">
                 {children}
               </main>
             </div>
