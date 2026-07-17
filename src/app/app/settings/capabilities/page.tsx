@@ -1,6 +1,7 @@
 import Link from 'next/link'
 import { componentManifests } from '@/modules/registry'
 import { componentPanel } from '@/kernel/settings'
+import { componentSettingsHref } from '@/modules/settings-registry'
 
 export const metadata = { title: 'Capabilities · Platform Settings' }
 
@@ -18,6 +19,7 @@ export default function CapabilitiesPage() {
     summary: m.summary,
     flag: m.featureFlag ?? null,
     hasPanel: componentPanel(m) !== null,
+    settingsHref: componentSettingsHref(m.id),
   }))
 
   return (
@@ -56,7 +58,7 @@ export default function CapabilitiesPage() {
                 </td>
                 <td className="px-4 py-3">
                   {r.hasPanel ? (
-                    <Link href={`/app/settings/components/${r.id}`} className="text-sm font-medium text-orange-600 hover:underline">
+                    <Link href={r.settingsHref} className="text-sm font-medium text-orange-600 hover:underline">
                       Configure →
                     </Link>
                   ) : (
