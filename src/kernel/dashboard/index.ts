@@ -19,6 +19,7 @@ export {
   sanitizeDashboardLayout,
   validateDashboardLayout,
   moveDashboardWidget,
+  resolveDashboardDropIndex,
   updateDashboardWidget,
   applyDashboardPreset,
   dashboardLayoutsEqual,
