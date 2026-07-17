@@ -150,9 +150,9 @@ describe('persistPanelValues', () => {
     expect(supabase.inserts[0]).toMatchObject({ scope: 'component', component_id: 'intake', key: 'classifier', value: 'rules' })
   })
 
-  it('surfaces an insert error', async () => {
+  it('surfaces an actionable insert error with the affected field', async () => {
     const supabase = fakeSupabase([], 'db exploded')
     const result = await persistPanelValues(supabase, kernelPanel, { displayName: 'X' }, USER)
-    expect(result).toEqual({ ok: false, error: 'db exploded' })
+    expect(result).toEqual({ ok: false, error: 'displayName could not be saved: db exploded' })
   })
 })
