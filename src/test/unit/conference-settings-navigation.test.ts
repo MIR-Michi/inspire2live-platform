@@ -10,11 +10,10 @@ describe('conference settings navigation', () => {
 
   it('exposes conference discovery in the Automation settings section', () => {
     const automation = SETTINGS_SECTIONS.find((section) => section.label === 'Automation')
+    const item = automation?.items.find((entry) => entry.id === 'conference-discovery')
+
     expect(automation).toBeDefined()
-    expect(automation?.items).toContainEqual(expect.objectContaining({
-      id: 'conference-discovery',
-      href: '/app/settings/conferences',
-      planned: undefined,
-    }))
+    expect(item).toMatchObject({ href: '/app/settings/conferences' })
+    expect(item?.planned).not.toBe(true)
   })
 })
