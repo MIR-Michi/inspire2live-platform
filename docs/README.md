@@ -16,6 +16,7 @@
 | [ADR/](ADR/) | Architecture Decision Records (numbered, immutable) |
 | [MODULAR_COMPONENT_ARCHITECTURE.md](MODULAR_COMPONENT_ARCHITECTURE.md) | Kernel + component toolbox model, manifests, governance, AI levels (ADR-0009) |
 | [PLATFORM_SETTINGS_CONCEPT.md](PLATFORM_SETTINGS_CONCEPT.md) | Platform Settings space as the manifest-driven blueprint editor (ADR-0010) |
+| [ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md](ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md) | Sprint 19 concept for Campus-inspired two-zone dashboards, personal widget layouts, accessible drag/resize, persisted preferences, and purposeful motion |
 | [ROLE_PERMISSION_MODEL.md](ROLE_PERMISSION_MODEL.md) | Full role × space permission matrix, override logic |
 | [DATA_DICTIONARY.md](DATA_DICTIONARY.md) | Database schema reference, table descriptions, key relationships |
 | [DESIGN_CHANGELOG.md](DESIGN_CHANGELOG.md) | History of UI/UX design decisions and deviations |
