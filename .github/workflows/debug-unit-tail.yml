@@ -1,0 +1,40 @@
+name: Debug unit failure tail
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  debug-unit-tail:
+    name: Unit failure tail
+    runs-on: ubuntu-latest
+    steps:
+      - name: Run tests and print failure tail first
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -e
+          git init .
+          git remote add origin "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+          git fetch --depth=1 origin "${GITHUB_SHA}"
+          git checkout --detach FETCH_HEAD
+          corepack enable
+          pnpm install --frozen-lockfile --reporter=silent
+
+          set +e
+          pnpm test:coverage > /tmp/unit-output.log 2>&1
+          code=$?
+          set -e
+
+          if [ "$code" -ne 0 ]; then
+            echo "=== Reversed failure tail (latest line first) ==="
+            tac /tmp/unit-output.log | head -n 90 || true
+          else
+            echo "Unit tests passed."
+          fi
+
+          exit "$code"
