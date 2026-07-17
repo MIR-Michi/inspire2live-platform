@@ -14,7 +14,7 @@ import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
 import { persistPanelValues } from '@/kernel/settings'
 import type { PersistResult } from '@/kernel/settings'
-import { findSettingsPanel } from '@/modules/settings-registry'
+import { componentSettingsHref, findSettingsPanel } from '@/modules/settings-registry'
 
 export type SaveSettingsResult = PersistResult
 
@@ -39,6 +39,9 @@ export async function saveSettingsPanel(
 
   revalidatePath('/app/settings')
   revalidatePath('/app/settings/organization')
-  if (panel.componentId) revalidatePath(`/app/settings/components/${panel.componentId}`)
+  if (panel.componentId) {
+    revalidatePath(`/app/settings/components/${panel.componentId}`)
+    revalidatePath(componentSettingsHref(panel.componentId))
+  }
   return result
 }
