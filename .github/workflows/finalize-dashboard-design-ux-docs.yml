@@ -1,0 +1,93 @@
+name: Finalize dashboard design UX docs
+
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  finalize-docs:
+    if: github.head_ref == 'fix/dashboard-design-ux'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.head_ref }}
+          fetch-depth: 0
+      - name: Update living documentation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import re
+
+          today = '2026-07-17'
+
+          # Changelog
+          path = Path('CHANGELOG.md')
+          text = path.read_text(encoding='utf-8')
+          entry = '- **Dashboard design editing is stable and clear.** Fixed the white overflow strip that could appear during dashboard editing, corrected organization Design settings persistence for kernel rows (migration `00169`), and redesigned the live preview to identify and highlight the exact changed setting. Tile arrangement now starts only from a dedicated drag handle, shows large before/after/end drop targets, prevents double moves from bubbling drop events, and aligns insertion positions with the visible tiles. Keyboard and touch move controls remain available.'
+          if entry not in text:
+              text = text.replace('### Fixed\n', '### Fixed\n' + entry + '\n', 1)
+          path.write_text(text, encoding='utf-8')
+
+          # Data dictionary
+          path = Path('docs/DATA_DICTIONARY.md')
+          text = path.read_text(encoding='utf-8')
+          text = re.sub(r'`supabase/migrations/` \(00001[–-]00168\)', '`supabase/migrations/` (00001–00169)', text, count=1)
+          text = re.sub(r'> \*\*Last reviewed:\*\* \d{4}-\d{2}-\d{2}', f'> **Last reviewed:** {today}', text, count=1)
+          section = '''## 11 · Platform Settings Logical Key Correction\n\n### `platform_settings`\n\nKernel-owned settings intentionally use `component_id = null`, while component-owned settings use their manifest component ID. Migration `00169_fix_platform_settings_kernel_rows.sql` removes the incompatible composite primary-key constraint introduced in migration `00159`, because PostgreSQL implicitly made the nullable `component_id` column `NOT NULL`.\n\nThe logical key remains enforced by the existing unique expression index:\n\n```sql\n(scope, coalesce(component_id, ''), key)\n```\n\nRLS and the settings resolver are unchanged. Platform Admin and Superadmin users can now persist Organization and Design settings, while component panels continue to remain unique per component and key.\n'''
+          if '## 11 · Platform Settings Logical Key Correction' not in text:
+              marker = re.search(r'\n---\n\n\*Last updated:', text)
+              insertion = '\n---\n\n' + section.rstrip() + '\n'
+              if marker:
+                  text = text[:marker.start()] + insertion + text[marker.start():]
+              else:
+                  text = text.rstrip() + insertion
+          text = re.sub(r'\*Last updated: \d{4}-\d{2}-\d{2}', f'*Last updated: {today}', text, count=1)
+          path.write_text(text, encoding='utf-8')
+
+          # Traceability
+          path = Path('docs/TRACEABILITY.md')
+          text = path.read_text(encoding='utf-8')
+          text = re.sub(r'\*\*Last updated:\*\* \d{4}-\d{2}-\d{2}', f'**Last updated:** {today}', text, count=1)
+          row = '| REQ-DASH-009 | Reliable dashboard design editing, visible drop targets, contained viewport overflow, and working organization design persistence | Sprint 19 post-release UX correction | `done` | `src/kernel/ui/dashboard/adaptive-dashboard.tsx`, `src/components/settings/design-component-library-panel.tsx`, `src/app/app/layout.tsx`, `supabase/migrations/00169_fix_platform_settings_kernel_rows.sql` | 2026-07-17 | Dedicated drag handle and compact ghost; before/after/end targets; kernel settings accept nullable component id; preview highlights the affected setting |'
+          if 'REQ-DASH-009' not in text:
+              anchor = next((line for line in text.splitlines() if line.startswith('| REQ-DASH-008 |')), None)
+              if anchor:
+                  text = text.replace(anchor, anchor + '\n' + row, 1)
+              else:
+                  text = text.rstrip() + '\n' + row + '\n'
+          path.write_text(text, encoding='utf-8')
+
+          # Design history
+          path = Path('docs/DESIGN_CHANGELOG.md')
+          text = path.read_text(encoding='utf-8')
+          heading = '## 2026-07-17 — Dashboard editing UX correction'
+          if heading not in text:
+              text = text.rstrip() + f'''\n\n{heading}\n\n**Problem:** Native full-tile dragging created ambiguous targets, could trigger both tile and column drop handlers, and sometimes exposed viewport overflow. Design-setting changes were difficult to locate in the preview.\n\n**Decision:** Dragging starts only from the explicit handle. The dashboard shows a compact drag ghost, a high-contrast before/after insertion line, and a large end-of-column target. The Design preview names the changed setting, highlights its affected section, and tracks unsaved changes. The app shell uses the dynamic viewport and contained overscroll.\n\n**Persistence correction:** Kernel settings use a nullable component ID and are uniquely keyed through the coalesced expression index (migration `00169`).\n\n**References:** PR #182, `docs/changes/2026-07-17-dashboard-design-ux-fixes.md`, REQ-DASH-009.\n\n---\n\n*Last reviewed: {today}.*\n'''
+          else:
+              text = re.sub(r'\*Last reviewed: \d{4}-\d{2}-\d{2}\.\*', f'*Last reviewed: {today}.*', text)
+          path.write_text(text, encoding='utf-8')
+
+          # Change record verification
+          path = Path('docs/changes/2026-07-17-dashboard-design-ux-fixes.md')
+          text = path.read_text(encoding='utf-8')
+          text = text.replace(
+              '- Full repository CI, migration replay, and Vercel preview are required before merge.',
+              '- Full repository lint, TypeScript, governance, production build, unit tests with coverage, migration replay/schema lint, and Vercel preview are green on PR #182.',
+          )
+          path.write_text(text, encoding='utf-8')
+          PY
+      - name: Commit documentation updates
+        run: |
+          if git diff --quiet; then
+            echo "Documentation already finalized."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add CHANGELOG.md docs
+          git commit -m "docs: finalize dashboard design UX fixes"
+          git push origin HEAD:${{ github.head_ref }}
