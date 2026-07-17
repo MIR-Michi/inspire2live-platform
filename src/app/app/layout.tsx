@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { TopNav, type PreviewUserOption } from '@/components/layouts/top-nav'
 import { SideNav } from '@/components/layouts/side-nav'
@@ -9,6 +10,8 @@ import { getViewAsRole, getViewAsUserId } from '@/lib/view-as'
 import { RoleLayersProvider } from '@/components/roles/role-layers-context'
 import { TestModeProvider, FeedbackOverlay } from '@/modules/feedback'
 import { ActivityTracker } from '@/components/activity/activity-tracker'
+import { resolveDashboardDesignConfig } from '@/kernel/dashboard'
+import { DesignSystemProvider } from '@/kernel/ui/design-system-context'
 
 function getInitials(name: string): string {
   return name
@@ -118,50 +121,55 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   // Campus badge = canonical "incoming" for the current/next campus meeting
   // (unreviewed campus-channel intake in that meeting's window), so the nav,
   // the Campus overview cards, and the month-detail header all agree.
-  const commsUnreadCount = canViewComms ? await countCurrentCampusIncoming(supabase) : 0
+  const [commsUnreadCount, designConfig] = await Promise.all([
+    canViewComms ? countCurrentCampusIncoming(supabase) : Promise.resolve(0),
+    resolveDashboardDesignConfig(supabase as unknown as SupabaseClient),
+  ])
 
   return (
     <RoleLayersProvider platformRole={effectiveRole}>
-      <TestModeProvider>
-        <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
-          <TopNav
-            userName={name}
-            userRole={effectiveRole}
-            userInitials={getInitials(name)}
-            userAvatarUrl={effectiveProfile?.avatar_url ?? null}
-            unreadCount={unread ?? 0}
-            isAdmin={isAdmin}
-            canPreview={canPreview}
-            viewAsRole={viewAsRole}
-            viewAsUser={viewAsUser ? {
-              id: viewAsUser.id,
-              name: viewAsUser.name ?? 'Unnamed user',
-              email: viewAsUser.email ?? '',
-              role: viewAsUser.role ?? effectiveRole,
-            } : null}
-            previewUsers={previewUsers}
-            effectiveSpaces={effectiveSpaces}
-          />
-          <div className="flex min-h-0 flex-1">
-            <SideNav
-              role={effectiveRole}
-              effectiveSpaces={effectiveSpaces}
+      <DesignSystemProvider config={designConfig}>
+        <TestModeProvider>
+          <div className="flex h-screen flex-col overflow-hidden bg-neutral-50">
+            <TopNav
+              userName={name}
+              userRole={effectiveRole}
+              userInitials={getInitials(name)}
+              userAvatarUrl={effectiveProfile?.avatar_url ?? null}
+              unreadCount={unread ?? 0}
               isAdmin={isAdmin}
-              commsUnreadCount={commsUnreadCount ?? 0}
-              workspaceLabel={workspaceLabel}
+              canPreview={canPreview}
+              viewAsRole={viewAsRole}
+              viewAsUser={viewAsUser ? {
+                id: viewAsUser.id,
+                name: viewAsUser.name ?? 'Unnamed user',
+                email: viewAsUser.email ?? '',
+                role: viewAsUser.role ?? effectiveRole,
+              } : null}
+              previewUsers={previewUsers}
+              effectiveSpaces={effectiveSpaces}
             />
-            <main
-              className="flex-1 overflow-y-auto px-3 py-4 md:p-6"
-              role="main"
-              aria-label="Page content"
-            >
-              {children}
-            </main>
+            <div className="flex min-h-0 flex-1">
+              <SideNav
+                role={effectiveRole}
+                effectiveSpaces={effectiveSpaces}
+                isAdmin={isAdmin}
+                commsUnreadCount={commsUnreadCount ?? 0}
+                workspaceLabel={workspaceLabel}
+              />
+              <main
+                className="flex-1 overflow-y-auto px-3 py-4 md:p-6"
+                role="main"
+                aria-label="Page content"
+              >
+                {children}
+              </main>
+            </div>
           </div>
-        </div>
-        <FeedbackOverlay />
-        <ActivityTracker />
-      </TestModeProvider>
+          <FeedbackOverlay />
+          <ActivityTracker />
+        </TestModeProvider>
+      </DesignSystemProvider>
     </RoleLayersProvider>
   )
 }
