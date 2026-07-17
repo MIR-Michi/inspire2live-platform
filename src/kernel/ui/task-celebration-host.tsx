@@ -20,14 +20,17 @@ export function announceTaskCompletion(element?: HTMLElement | null) {
 export function TaskCelebrationHost() {
   const [active, setActive] = useState(false)
   const [origin, setOrigin] = useState<CelebrationOrigin | null>(null)
+  const [announcementKey, setAnnouncementKey] = useState(0)
   const lastAt = useRef(0)
   const timer = useRef<number | null>(null)
 
   useEffect(() => {
     const onCompleted = (event: Event) => {
       const now = Date.now()
-      // Rapid completions receive the accessible status announcement, but avoid
-      // continuously covering the interface with particles.
+      setAnnouncementKey((key) => key + 1)
+
+      // Rapid completions still receive the live-region acknowledgement, but
+      // avoid continuously covering the interface with particles.
       if (now - lastAt.current < COOLDOWN_MS) return
       lastAt.current = now
       const detail = (event as CustomEvent<{ origin?: CelebrationOrigin | null }>).detail
@@ -44,5 +47,12 @@ export function TaskCelebrationHost() {
     }
   }, [])
 
-  return <TaskCompletionCelebration active={active} origin={origin} />
+  return (
+    <>
+      {announcementKey > 0 && (
+        <span key={announcementKey} className="sr-only" role="status" aria-live="polite">Task completed.</span>
+      )}
+      <TaskCompletionCelebration active={active} origin={origin} />
+    </>
+  )
 }
