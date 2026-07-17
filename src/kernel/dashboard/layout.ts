@@ -146,8 +146,12 @@ export function moveDashboardWidget(
   const index = Math.max(0, Math.min(targetIndex, zoneWidgets.length))
   zoneWidgets.splice(index, 0, { ...source, zone })
 
+  // Assign the requested sequence before the shared normalizer runs. Without
+  // this, the moved tile retained its old-zone order and could be sorted back
+  // behind the intended insertion point.
+  const positioned = zoneWidgets.map((widget, order) => ({ ...widget, order }))
   const updated = other.filter((widget) => widget.zone !== zone)
-  return { ...layout, widgets: normalizeOrders([...updated, ...zoneWidgets]) }
+  return { ...layout, widgets: normalizeOrders([...updated, ...positioned]) }
 }
 
 export function updateDashboardWidget(
@@ -187,11 +191,11 @@ export function applyDashboardPreset(
     density,
     splitRatio: clampDashboardSplit(splitRatio),
     widgets: layout.widgets.map((widget) => {
-      const def = definition.widgets.find((item) => item.id === widget.id)
-      const compactAllowed = Boolean(def?.allowedSizes.includes('compact'))
+      const definitionWidget = definition.widgets.find((item) => item.id === widget.id)
+      const compactAllowed = Boolean(definitionWidget?.allowedSizes.includes('compact'))
       return {
         ...widget,
-        size: preset === 'overview' && compactAllowed ? 'compact' : def?.defaultSize ?? widget.size,
+        size: preset === 'overview' && compactAllowed ? 'compact' : definitionWidget?.defaultSize ?? widget.size,
       }
     }),
   }
