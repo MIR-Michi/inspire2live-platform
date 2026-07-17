@@ -1,23 +1,13 @@
 /**
  * kernel/settings/kernel-panels.ts
  *
- * The fixed, kernel-owned settings panels (ADR-0010 §4 — the *kernel* half of
- * the settings tree). Components declare their panels through their manifest
- * `config`; the kernel declares its panels here, in the exact same field
- * vocabulary, so the settings shell renders both identically.
- *
- * Adding a field here surfaces a control in the Platform Settings space with no
- * bespoke form code — the same property component panels have.
+ * Fixed, kernel-owned settings panels (ADR-0010). Components declare their
+ * panels through manifests; the kernel declares organization-wide identity and
+ * design defaults here using the same typed field vocabulary.
  */
 
 import type { SettingsPanel } from '@/kernel/settings/types'
 
-/**
- * Organization / Brand — the platform's identity. Today the app name lives in
- * `NEXT_PUBLIC_APP_NAME` (env, redeploy to change); these settings move it (and
- * the rest of the brand) into the DB so an operator can tune it live and so it
- * becomes the `brand` block of a generated-platform blueprint (ADR-0009 §11).
- */
 export const organizationPanel: SettingsPanel = {
   id: 'kernel:organization',
   scope: 'kernel',
@@ -66,5 +56,79 @@ export const organizationPanel: SettingsPanel = {
   ],
 }
 
+/**
+ * Organization-wide design defaults. Personal dashboard arrangements remain
+ * user-owned; this panel only controls the validated defaults and semantic
+ * component-library variants used when a user has not customized a surface.
+ */
+export const designSystemPanel: SettingsPanel = {
+  id: 'kernel:design-system',
+  scope: 'kernel',
+  componentId: null,
+  title: 'Design & Component Library',
+  description:
+    'Organization-wide semantic design defaults and dashboard starting points. ' +
+    'Individual users can still personalize their own dashboard arrangement.',
+  fields: [
+    {
+      key: 'dashboardDensity',
+      type: 'enum',
+      label: 'Default dashboard density',
+      description: 'Comfortable provides more breathing room; compact fits more operational content.',
+      options: ['comfortable', 'compact'],
+      default: 'comfortable',
+    },
+    {
+      key: 'radiusStyle',
+      type: 'enum',
+      label: 'Card corner style',
+      description: 'Semantic radius profile used by new component-library surfaces.',
+      options: ['crisp', 'rounded', 'soft'],
+      default: 'rounded',
+    },
+    {
+      key: 'elevationStyle',
+      type: 'enum',
+      label: 'Card elevation',
+      description: 'Controls the default separation between tiles and the page surface.',
+      options: ['minimal', 'subtle', 'layered'],
+      default: 'subtle',
+    },
+    {
+      key: 'motionProfile',
+      type: 'enum',
+      label: 'Motion profile',
+      description: 'Controls the pace of purposeful interface transitions.',
+      options: ['calm', 'balanced', 'expressive'],
+      default: 'balanced',
+    },
+    {
+      key: 'taskCelebration',
+      type: 'boolean',
+      label: 'Task completion celebration',
+      description: 'Show a brief localized confetti acknowledgement after a deliberate task completion.',
+      default: true,
+    },
+    {
+      key: 'dashboardDefaultPreset',
+      type: 'enum',
+      label: 'Default dashboard preset',
+      description: 'Starting composition for users who have not customized a dashboard.',
+      options: ['balanced', 'focus', 'overview'],
+      default: 'balanced',
+    },
+    {
+      key: 'dashboardDefaultSplitRatio',
+      type: 'number',
+      label: 'Default primary-column share',
+      description: 'Primary column width as a decimal share of the desktop dashboard.',
+      min: 0.42,
+      max: 0.78,
+      step: 0.01,
+      default: 0.64,
+    },
+  ],
+}
+
 /** Every kernel-owned settings panel, in display order. */
-export const kernelPanels: SettingsPanel[] = [organizationPanel]
+export const kernelPanels: SettingsPanel[] = [organizationPanel, designSystemPanel]
