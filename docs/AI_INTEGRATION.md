@@ -35,24 +35,31 @@ pnpm install --lockfile-only
 
 Then commit both `package.json` and `pnpm-lock.yaml`. The current Sprint 14 branch uses `pnpm install --no-frozen-lockfile` in `vercel.json` as a temporary preview-build safety valve only. Before merging to `main`, restore frozen installs once the lockfile is regenerated.
 
+## Canonical location
+
+Since the modular restructure (ADR-0009) the AI client lives in the kernel at
+`src/kernel/ai-client/*` (`client.ts`, `models.ts`, `crypto.ts`, `feature-flag.ts`).
+The historical `src/lib/ai/*` paths referenced throughout this document are thin
+**re-export shims** that point at the kernel module and remain valid import paths.
+
 ## Shared wrapper
 
-All provider calls must go through `src/lib/ai/client.ts`. Product code must not instantiate the SDK directly. The wrapper centralizes configuration, model and effort validation, structured output setup, usage logging, and typed errors.
+All provider calls must go through the kernel AI client wrapper
+(`src/kernel/ai-client/client.ts`; also importable as `@/lib/ai/client`). Product code
+must not instantiate the SDK directly. The wrapper centralizes configuration, model and
+effort validation, structured output setup, usage logging, and typed errors.
 
 ## Model and effort policy
 
-The model catalog lives in `src/lib/ai/models.ts`.
+**The model catalog is code, not this document.** `src/kernel/ai-client/models.ts` is the
+single source of truth for the available models, their effort levels, and per-workload
+defaults; workload overrides can also be configured at runtime (Platform Settings).
+Consult that file rather than hardcoding model names here — doing so keeps this guide from
+drifting as the catalog evolves.
 
-| Workload | Default model | Effort | Notes |
-|---|---|---|---|
-| Intake structure | `claude-sonnet-4-6` | `low` or `medium` | Rule-based classifier remains fallback. |
-| Meeting summaries | `claude-opus-4-8` | `high` | Use long-context model first. |
-| Follow-up tasks | `claude-opus-4-8` | `high` | Tasks are proposed, not committed automatically. |
-| Organization news | `claude-sonnet-4-6` | `medium` | Citations are mandatory. |
-| Personal monitoring | `claude-sonnet-4-6` | `medium` | Public information only. |
-| Lightweight backfills | `claude-haiku-4-5` | `none` | Simple classification only. |
-
-The server validates the selected effort against the selected model before each request.
+Every workload maps to a default model + effort chosen for its job (e.g. long-context
+models for meeting summaries, lighter models for simple backfills). The server validates
+the selected effort against the selected model before each request.
 
 ## Structured output
 

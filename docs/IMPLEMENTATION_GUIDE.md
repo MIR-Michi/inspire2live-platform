@@ -345,6 +345,41 @@ push/PR
 
 ---
 
+## Defensive data access (Supabase)
+
+Server Components crash to a blank "Application error" page when a Supabase query throws
+and the error is ignored. Every DB access must be defensive:
+
+1. **Always destructure `{ data, error }`** from every query, and **check `error` before
+   using `data`** — `data` can be `null` even on success; `error` is the source of truth.
+2. **Log with a searchable prefix**: `console.error('[context] reason:', error)` (shows in
+   Vercel function logs).
+3. **Never use `(supabase as any)` for a new table** — add it to `src/types/database.ts`
+   first, then query it typed.
+4. **Wrap Server Component bodies in `try/catch`** and render a graceful fallback rather
+   than throwing.
+5. **Add an `error.tsx`** next to any page that queries the DB (App Router error boundary).
+6. **DB `role` values must match RLS policy strings exactly** — normalisation that happens
+   in TypeScript does not change what PostgreSQL RLS sees.
+
+```typescript
+// ✅ destructure error, check it, fall back gracefully
+const { data: profiles, error } = await supabase.from('profiles').select('id, name, role')
+if (error) {
+  console.error('[my-page] profiles fetch failed:', error.message)
+  return <ErrorState message={error.message} />
+}
+
+// ❌ ignoring error → white screen on any RLS/schema failure
+const { data } = await supabase.from('profiles').select('*')
+```
+
+New migrations pair with a **types regen** (`supabase gen types`), a
+`NOTIFY pgrst, 'reload schema';` after DDL, and an `error.tsx` on any page using the new
+table. See `docs/SDLC.md` (Database migration lifecycle) and `AGENTS.md` §6.
+
+---
+
 ## 10) Quick Links
 
 | Document | Purpose | When to Open |

@@ -1,40 +1,41 @@
 # Software Development Lifecycle — Inspire2Live Platform
 
-> **How to view this document:** Open it in VS Code and press `Ctrl+Shift+V` to see all Mermaid diagrams rendered.  
+> **How to view this document:** Open it in VS Code and press `Ctrl+Shift+V` to see all Mermaid diagrams rendered.
 > On GitHub the diagrams render automatically in the browser.
+>
+> For the short, everyday brief (commands, guardrails, workflow, how to document work),
+> see [`../AGENTS.md`](../AGENTS.md). This document is the deeper lifecycle reference it
+> points into; where the two overlap, AGENTS.md and the code are the source of truth.
 
 ---
 
 ## Overview
 
-This document describes the complete Software Development Lifecycle (SDLC) as it is
-implemented in the Inspire2Live Platform project. The process is an **AI-assisted,
-trunk-based, continuously-deployed** development model driven by a structured design
-document, automated quality gates, and zero-friction deployment to Vercel + Supabase.
+This document describes the Software Development Lifecycle (SDLC) as implemented in the
+Inspire2Live Platform. The process is a **PR-based, sprint-cadenced, continuously-deployed**
+model: work happens on short-lived branches, merges to `main` through pull requests that
+must pass automated gates, and deploys to Vercel + Supabase on every green `main` merge.
+
+The codebase is organised as a **kernel + independent components** (ADR-0009); the workflow
+below applies uniformly across all of them. The direct-to-`main` "pure trunk-based" model
+described in ADR-0005 has been **superseded by [ADR-0011](ADR/0011-pr-based-trunk-with-sprints.md)**.
 
 ---
 
 ## 1 · High-Level Lifecycle
 
 The lifecycle is a continuous loop of six phases. Every line of production code can be
-traced from a requirement through design, implementation, testing, deployment, and back to
-planning.
+traced from a requirement through design, implementation, verification, deployment, and back
+to planning.
 
 ```mermaid
 flowchart LR
-    A(["🎯 Plan"]):::phase --> B(["🏗️ Design"]):::phase
-    B --> C(["💻 Develop"]):::phase
-    C --> D(["✅ Verify"]):::phase
-    D --> E(["🚀 Deploy"]):::phase
-    E --> F(["📊 Monitor"]):::phase
+    A(["🎯 Plan"]):::phaseA --> B(["🏗️ Design"]):::phaseB
+    B --> C(["💻 Develop"]):::phaseC
+    C --> D(["✅ Verify"]):::phaseD
+    D --> E(["🚀 Deploy"]):::phaseE
+    E --> F(["📊 Monitor"]):::phaseF
     F -->|"next iteration"| A
-
-    A:::phaseA
-    B:::phaseB
-    C:::phaseC
-    D:::phaseD
-    E:::phaseE
-    F:::phaseF
 
     classDef phaseA  fill:#4f46e5,stroke:#3730a3,color:#fff,rx:20
     classDef phaseB  fill:#7c3aed,stroke:#6d28d9,color:#fff,rx:20
@@ -46,12 +47,12 @@ flowchart LR
 
 | Phase | Owner | Key Artefacts |
 |-------|-------|---------------|
-| 🎯 Plan | PM / Stakeholder | Design Doc, Work Package (WP) Definition, `MVP_SCOPE_AND_ROADMAP.md` |
-| 🏗️ Design | Architect | ADR, `TRACEABILITY.md`, DB migration spec |
-| 💻 Develop | Cline AI + Developer | Source files, unit tests, Supabase migration |
-| ✅ Verify | GitHub Actions | CI pipeline — lint, typecheck, build, unit, E2E |
-| 🚀 Deploy | Vercel + Supabase | Production URL, applied migration |
-| 📊 Monitor | Developer / PM | `PLATFORM_AUDIT_REPORT.md`, `WP_STATUS.md` |
+| 🎯 Plan | PM / Stakeholder | `sprints/`, `MVP_SCOPE_AND_ROADMAP.md`, `PLATFORM_CONCEPT_UPDATE_v1.md` |
+| 🏗️ Design | Architect | ADR, `TRACEABILITY.md`, component `manifest.ts`, migration spec |
+| 💻 Develop | Contributor + AI assistant | Source in `src/modules/*` / `src/kernel/*`, unit tests, Supabase migration |
+| ✅ Verify | GitHub Actions | CI — lint · typecheck · governance · build · unit · E2E · DB-migration validation |
+| 🚀 Deploy | GitHub Actions + Vercel + Supabase | `supabase db push` (migrations) then Vercel production deploy |
+| 📊 Monitor | Developer / PM | `MONITORING.md`, `INCIDENT_RESPONSE.md`, `CHANGELOG.md`, `docs/changes/` |
 
 ---
 
@@ -60,27 +61,24 @@ flowchart LR
 ```mermaid
 graph TD
     subgraph BROWSER["🌐  Browser"]
-        direction LR
-        UI["Next.js 15 · App Router\nTypeScript · Tailwind CSS\nReact Server Components"]
+        UI["Next.js 16 · App Router\nTypeScript · Tailwind CSS v4\nReact Server Components"]
     end
 
     subgraph EDGE["⚡  Edge / Server"]
-        direction LR
         MW["Middleware\n(route guard · role check)"]
         SA["Server Actions\n(mutations)"]
-        API["Route Handlers\n(/api/version …)"]
+        API["Route Handlers\n(/api/*)"]
     end
 
     subgraph SUPABASE["🗄️  Supabase (BaaS)"]
-        direction TB
         AUTH["Auth\nMagic Link · OAuth"]
-        DB["PostgreSQL\n22 migrations · RLS"]
-        STORAGE["Storage\nAvatars · Evidence"]
+        DB["PostgreSQL\nsequential migrations · RLS"]
+        STORAGE["Storage\nprivate buckets (RLS)"]
     end
 
     subgraph CI["⚙️  CI / CD"]
-        GHA["GitHub Actions\n3 jobs"]
-        VERCEL["Vercel\nAuto-deploy on push"]
+        GHA["GitHub Actions\nci · db-migrations · deploy-vercel"]
+        VERCEL["Vercel\nprod deploy on green main"]
     end
 
     BROWSER -->|"RSC fetch"| EDGE
@@ -88,7 +86,7 @@ graph TD
     BROWSER -->|"supabase-js client"| AUTH
     AUTH -->|"JWT"| DB
     DB -->|"RLS policies"| STORAGE
-    GHA -->|"quality gate"| VERCEL
+    GHA -->|"quality gate + db push"| VERCEL
 
     style BROWSER fill:#eff6ff,stroke:#3b82f6,color:#1e3a8a
     style EDGE    fill:#f0fdf4,stroke:#16a34a,color:#14532d
@@ -96,310 +94,265 @@ graph TD
     style CI      fill:#fff7ed,stroke:#ea580c,color:#7c2d12
 ```
 
+Full tooling table in [§9](#9--tooling-reference). Framework/library versions are pinned in
+`package.json`; treat it as the source of truth rather than this diagram.
+
 ---
 
-## 3 · AI-Assisted Development Workflow
+## 3 · Development Workflow (PR-based, sprint cadence)
 
-Cline (AI coding assistant) is the primary implementation agent. All work is done in
-**PLAN → ACT** cycles that mirror a human pair-programming session.
+Most implementation is done by **AI coding agents**, with a human reviewing and approving;
+the workflow and the quality gates are identical regardless of who writes the code. Work is
+scoped either to a **sprint** (`sprints/sprint-NN/`) or, for standalone work, tracked as a
+**Change Record** (`docs/changes/`) — see [`../AGENTS.md`](../AGENTS.md) §8.
 
 ```mermaid
 sequenceDiagram
-    actor PM  as 👤 PM / Developer
-    participant DD  as 📄 Design Doc
-    participant Cline as 🤖 Cline AI
-    participant FS  as 🗂️ File System
-    participant Git as 🐙 GitHub
+    actor Dev as 👤 Developer / AI agent
+    participant Br as 🌿 Feature branch
+    participant CI as ⚙️ GitHub Actions
+    participant PR as 🔀 Pull Request
+    participant Main as 🚀 main
 
-    PM->>DD: Define requirement (REQ-xxx)
-    PM->>Cline: Describe task in PLAN mode
-    Cline->>FS: Read relevant files (context)
-    Cline-->>PM: Present implementation plan
-    PM->>Cline: Approve → switch to ACT mode
-
+    Dev->>Br: branch off latest main (feat/ · fix/ · …)
     rect rgb(239,246,255)
-        Note over Cline,FS: ACT mode — autonomous implementation
-        Cline->>FS: Write / edit source files (.tsx · .ts · .sql)
-        Cline->>FS: Write Vitest unit tests
-        Cline->>FS: Run pnpm test (all suites must pass)
-        FS-->>Cline: ✅ Tests green
+        Note over Dev,Br: implement + verify locally
+        Dev->>Br: edit source / tests / migration
+        Dev->>Br: pnpm typecheck · lint · test · governance · build
+        Dev->>Br: update docs trail (CHANGELOG · TRACEABILITY · sprint/change record)
     end
-
-    Cline->>Git: git add -A
-    Cline->>Git: git commit -m "type(scope): message"
-    Cline->>Git: git push origin main
-    Git-->>PM: Push confirmed · CI triggered
+    Dev->>Br: commit (Conventional Commits) + push
+    Br->>CI: CI runs on the branch / PR
+    Dev->>PR: open PR (when ready)
+    CI-->>PR: gates must be green
+    PR->>Main: review → merge
+    Main->>CI: deploy-vercel (db push → Vercel prod)
 ```
 
-### Cline git protocol (anti-hang rules)
-
-| Rule | Rationale |
-|------|-----------|
-| Commit messages are **single-line only** | Multi-line `-m "..."` in PowerShell causes stdin hang |
-| `git add`, `git commit`, `git push` run as **separate commands** | Never chain all three with `&&` |
-| Use `scripts/git-push.ps1` for complex pushes | Wrapper script with per-step error checks |
-| Always verify with `git log --oneline -1` | Confirms push landed |
+The historical Cline/PowerShell git protocol that this section used to describe is retained
+only as a record in [`CLINE_WORKFLOW.md`](CLINE_WORKFLOW.md); it no longer governs the workflow.
 
 ---
 
-## 4 · Continuous Integration Pipeline
+## 4 · Continuous Integration & Deployment
 
-Three GitHub Actions jobs run on every push to `main`, `develop`, or `release/**`.
+Three GitHub Actions workflows run in `.github/workflows/`.
 
 ```mermaid
 flowchart TD
-    TRIGGER(["🔀 Push / PR\nmain · develop · release/**"])
+    TRIGGER(["🔀 push (main · develop · release/**)\nor PR → (main · develop)"])
 
     TRIGGER --> QG
-
-    subgraph QG ["🔒 Job 1 · Quality Gate  (always)"]
+    subgraph QG ["🔒 ci.yml · Job 1 · Quality Gate"]
         direction TB
         Q1["Validate vercel.json"] --> Q2["pnpm install --frozen-lockfile"]
-        Q2 --> Q3["ESLint"]
-        Q3 --> Q4["TypeScript check\n(pnpm typecheck)"]
-        Q4 --> Q5["Next.js Build\n(pnpm build)"]
-        Q5 --> Q6[("Upload .next artifact")]
+        Q2 --> Q3["pnpm lint"] --> Q4["pnpm typecheck"]
+        Q4 --> Q5["pnpm governance"] --> Q6["pnpm build"]
+        Q6 --> Q7[("upload .next artifact")]
     end
 
     QG --> UT
     QG --> E2E
-
-    subgraph UT ["🧪 Job 2 · Unit Tests  (parallel)"]
-        direction TB
-        U1["pnpm install"] --> U2["Vitest\n12 test files · 80+ assertions"]
-        U2 --> U3[("Upload coverage\nretained 7 days")]
+    subgraph UT ["🧪 ci.yml · Job 2 · Unit Tests"]
+        U1["pnpm test:coverage (Vitest)"] --> U2[("upload coverage")]
+    end
+    subgraph E2E ["🌐 ci.yml · Job 3 · E2E (main + release only)"]
+        E1["download .next artifact"] --> E2["Playwright Chromium"]
+        E2 --> E3["auth.spec.ts · dashboard.spec.ts"]
     end
 
-    subgraph E2E ["🌐 Job 3 · E2E Smoke Tests  (main + release only)"]
-        direction TB
-        E1["Download .next artifact"] --> E2["Install Playwright Chromium"]
-        E2 --> E3["auth.spec.ts\ndashboard.spec.ts"]
-        E3 --> E4[("Upload report on failure\nretained 7 days")]
+    TRIGGER2(["🗄️ change under supabase/migrations/**\n(PR or push)"]) --> DBM
+    subgraph DBM ["🧬 db-migrations.yml"]
+        D1["supabase start (throwaway Postgres)"] --> D2["apply EVERY migration + seed.sql"]
+        D2 --> D3["fail on any migration/seed error"]
     end
 
-    UT --> ALL_GREEN(["✅ All Green"])
-    E2E --> ALL_GREEN
-    ALL_GREEN --> DEPLOY(["🚀 Vercel auto-deploy"])
+    UT --> GREEN(["✅ All green"])
+    E2E --> GREEN
+    DBM --> GREEN
+    GREEN --> DEPLOY
+
+    subgraph DEPLOY ["🚀 deploy-vercel.yml (push to main)"]
+        P1["supabase db push --include-all (migrations first)"] --> P2["Vercel production deploy"]
+    end
 
     style QG    fill:#eff6ff,stroke:#3b82f6
     style UT    fill:#f0fdf4,stroke:#16a34a
     style E2E   fill:#faf5ff,stroke:#9333ea
+    style DBM   fill:#fef2f2,stroke:#dc2626
+    style DEPLOY fill:#fff7ed,stroke:#ea580c
     style TRIGGER fill:#1e3a8a,color:#fff,stroke:#1e3a8a
-    style ALL_GREEN fill:#059669,color:#fff,stroke:#047857
-    style DEPLOY fill:#d97706,color:#fff,stroke:#b45309
+    style GREEN fill:#059669,color:#fff,stroke:#047857
 ```
 
-### CI environment matrix
+- **`ci.yml`** — Quality Gate (lint · typecheck · **governance** · build), Unit Tests
+  (`pnpm test:coverage`), and E2E smoke (only on `main` / `release/**`). Runs on pushes to
+  `main`/`develop`/`release/**` and on PRs to `main`/`develop`.
+- **`db-migrations.yml`** — spins up a throwaway Supabase stack and applies **every**
+  migration + `seed.sql`, so a broken or mis-numbered migration fails at PR time, not on
+  the production `db push`. Runs when `supabase/migrations/**`, `seed.sql`, or `config.toml`
+  change.
+- **`deploy-vercel.yml`** — on push to `main`, runs `supabase db push` (applies new
+  migrations to the remote DB) **then** deploys the app to Vercel production. Idempotent —
+  only new migrations are applied.
 
-| Environment | Trigger | Supabase | E2E |
-|-------------|---------|----------|-----|
-| Local dev | `pnpm dev` | Local / remote | Manual |
-| Vercel Preview | PR branch push | Production secrets | ❌ |
-| Vercel Production | `main` push | Production secrets | ✅ |
+### Environment matrix
+
+| Environment | Trigger | DB | E2E |
+|-------------|---------|----|-----|
+| Local dev | `pnpm dev` | local or remote Supabase | manual |
+| CI (PR) | PR to `main`/`develop` | throwaway Postgres for migration validation | ❌ |
+| Vercel Preview | branch push | production Supabase | ❌ |
+| Vercel Production | `main` merge | production Supabase (`db push` first) | ✅ |
 
 ---
 
 ## 5 · Database Migration Lifecycle
 
-The PostgreSQL schema evolves through **sequential, numbered migrations** managed by the
-Supabase CLI. Migrations are never edited after merge — schema changes always add a new
-migration file.
-
-```mermaid
-timeline
-    title Supabase Migration History (00001 → 00022)
-    section 🏗️ Foundation
-        00001 : Initial Schema
-              : profiles · initiatives · tasks · milestones
-        00002 : Row-Level Security Policies
-        00003 : Storage Buckets (avatars · evidence)
-        00004 : Database Views (health · pipeline · activity)
-        00005 : Seed Data (roles · lookup tables)
-    section 📦 Work Packages
-        00006 : WP3 — Initiative Seed Data
-        00007 : WP4 — Congress & Notifications
-        00008 : WP5 — Resources & Partners
-        00009 : Admin Bootstrap (first admin user)
-        00010 : Schema Reconciliation
-        00011 : Promote Admin utility
-    section 🏛️ Congress Lifecycle
-        00012 : Congress Full Lifecycle (states · transitions)
-        00013 : Congress Assignments (roles in congress)
-        00014 : Congress Workspace Tables (workstreams · RAID · tasks)
-        00015 : Activity Log
-        00016 : Chat Thread Types (message channels)
-    section 📖 Features & Governance
-        00017 : Patient Stories (create · review · publish)
-        00018 : Patient Stories — Policy Fix (RLS)
-        00019 : Moderator Governance
-        00020 : Multi-Role Active Context
-        00021 : PostgREST Schema Reload
-        00022 : Permission System (space × role matrix)
-```
+The PostgreSQL schema evolves through **sequential, numbered migrations** in
+`supabase/migrations/` (the directory is the authoritative history — do not hardcode a count
+here). Migrations are never edited after merge; schema changes always add a new file.
 
 ### Migration rules
 
-- **Never modify** a committed migration — add a new one instead
-- File name format: `NNNNN_short_description.sql`
-- Every migration must be idempotent (safe to replay)
-- Seed data lives in `supabase/seed.sql` (dev) and `supabase/seed-demo.sql` (demo)
+- **Never modify** a committed migration — add a new one instead.
+- **File name** `NNNNN_snake_case.sql`, numbered **uniquely and above the highest number on
+  `main`**. A duplicate version fails the `db-migrations` gate (the CI checks out the PR
+  *merge* ref, so a number that `main` also used collides). Rebase + renumber to fix.
+- **Idempotent / re-runnable** — guard with `if not exists`, `on conflict`, `drop … if
+  exists`, etc.
+- **Declare new tables in an owning `manifest.ts`** (`src/modules/<c>/manifest.ts` or the
+  kernel) so the table-ownership governance check accounts for them (ADR-0009).
+- **After DDL**: regenerate `src/types/database.ts` (`supabase gen types`), rely on the
+  migration's `notify pgrst, 'reload schema';`, and add an `error.tsx` next to any new
+  DB-querying page (see `IMPLEMENTATION_GUIDE.md` → Defensive data access).
+- **Seed data** lives in `supabase/seed.sql` (dev) and `supabase/seed-demo.sql` (demo).
+
+Application to production is automated by `deploy-vercel.yml` (`supabase db push`) on merge
+to `main`.
 
 ---
 
 ## 6 · Permission & Role Access Model
 
-The platform uses a **4-tier permission system** combining role defaults with per-user,
-per-space database overrides.
+The platform resolves access from **role defaults + per-user, per-space database overrides**,
+with the highest applicable level winning.
 
 ```mermaid
 flowchart TD
-    REQ(["🌐 Incoming Request"])
-
-    REQ --> MW["⚙️ Middleware\nroute guard · redirect logic"]
-    MW --> RESOLVE["🔍 Resolve Active Role\nfrom profiles.role + session"]
-    RESOLVE --> MATRIX["📋 ROLE_SPACE_DEFAULTS\n8 roles × 13 spaces\n(role-access.ts)"]
-    MATRIX --> DB{{"💾 DB Override?\nuser_space_permissions"}}
-
-    DB -- "No override" --> DEFAULT["Use role default\n(invisible / view / edit / manage)"]
-    DB -- "Global override" --> GLOBAL["Apply global override\n(affects all spaces)"]
-    DB -- "Scoped override" --> SCOPED["Apply scoped override\n(space-specific · highest wins)"]
-
+    REQ(["🌐 Incoming Request"]) --> MW["⚙️ Middleware\nroute guard · redirect"]
+    MW --> RESOLVE["🔍 Resolve role\nprofiles.role (normalizeRole)"]
+    RESOLVE --> MATRIX["📋 ROLE_SPACE_DEFAULTS\n(src/kernel/rbac/role-access.ts)"]
+    MATRIX --> DB{{"💾 DB override?\nuser_space_permissions"}}
+    DB -- "none" --> DEFAULT["role default\n(invisible / view / edit / manage)"]
+    DB -- "global" --> GLOBAL["global override"]
+    DB -- "scoped" --> SCOPED["space-scoped override (highest wins)"]
     DEFAULT & GLOBAL & SCOPED --> LEVEL["🎯 Effective AccessLevel"]
+    LEVEL --> NAV["🧭 Nav hides invisible spaces"]
+    LEVEL --> PAGE["📄 Page renders or 403"]
+    LEVEL --> ACTION["⚡ Server Action checks before write"]
 
-    LEVEL --> NAV["🧭 Side Nav\nhides invisible spaces"]
-    LEVEL --> PAGE["📄 Page\nrenders or returns 403"]
-    LEVEL --> ACTION["⚡ Server Action\nchecks before DB write"]
-
-    style REQ     fill:#1e3a8a,color:#fff,stroke:#1e3a8a
-    style LEVEL   fill:#059669,color:#fff,stroke:#047857
-    style DB      fill:#7c3aed,color:#fff,stroke:#6d28d9
-    style NAV     fill:#eff6ff,stroke:#3b82f6
-    style PAGE    fill:#eff6ff,stroke:#3b82f6
-    style ACTION  fill:#eff6ff,stroke:#3b82f6
+    style REQ   fill:#1e3a8a,color:#fff,stroke:#1e3a8a
+    style LEVEL fill:#059669,color:#fff,stroke:#047857
+    style DB    fill:#7c3aed,color:#fff,stroke:#6d28d9
 ```
 
-### Role definitions
-
-| Role | Description | Default spaces |
-|------|-------------|----------------|
-| `super_admin` | Platform owner | All (manage) |
-| `admin` | Organisation admin | All (manage) |
-| `board_member` | Board governance | Board + Congress + Initiatives |
-| `bureau_member` | Operations | Bureau + Congress + Initiatives |
-| `researcher` | Research contributor | Initiatives + Resources |
-| `partner` | External partner | Partners + Public |
-| `patient_advocate` | Patient representation | Stories + Congress (view) |
-| `public` | Unauthenticated / guest | Public pages only |
+- **Roles** are defined in `src/kernel/rbac/platform-roles.ts` (canonical values include
+  `PatientAdvocate`, `Researcher`, `Comms`, `HubCoordinator`, `IndustryPartner`,
+  `BoardMember`, `PlatformAdmin`, `Superadmin`; legacy DB values are normalised). A
+  `comms_team` capability gates the Communications Workspace.
+- **Spaces + the default matrix** live in `role-access.ts` / `permissions.ts`. Because these
+  evolve, treat the code and [`ROLE_PERMISSION_MODEL.md`](ROLE_PERMISSION_MODEL.md) as the
+  authoritative source rather than a table here.
+- **Enforcement is in the database (RLS)**, not only the UI — see ADR-0004 and
+  [`SECURITY_AND_PRIVACY.md`](SECURITY_AND_PRIVACY.md).
 
 ---
 
 ## 7 · Branching & Release Strategy
 
-```mermaid
-gitGraph
-    commit id: "init"
-    branch develop
-    checkout develop
-    commit id: "feat: WP3"
-    commit id: "feat: WP4"
-    checkout main
-    merge develop id: "release v0.1"
-    branch release/v0.2
-    checkout release/v0.2
-    commit id: "fix: congress RLS"
-    checkout main
-    merge release/v0.2 id: "release v0.2"
-    checkout develop
-    commit id: "feat: WP5"
-    commit id: "feat: permissions"
-    checkout main
-    merge develop id: "release v0.3"
-```
+Short-lived branches → PR → `main`. See [ADR-0011](ADR/0011-pr-based-trunk-with-sprints.md).
 
-| Branch pattern | Purpose | CI jobs |
-|----------------|---------|---------|
-| `main` | Production · always deployable | Quality + Unit + E2E |
-| `develop` | Integration branch | Quality + Unit |
-| `release/**` | Hotfix / release prep | Quality + Unit + E2E |
-| Feature branches | Not enforced yet (trunk-based) | — |
+| Branch pattern | Purpose | CI |
+|----------------|---------|----|
+| `feat/… · fix/… · ci/… · chore/… · docs/…` | all feature/fix/ops work | Quality + Unit (+ DB-migrations if migrations changed) |
+| `main` | production · always deployable | Quality + Unit + E2E → `db push` + deploy |
+| `develop` | optional integration branch | Quality + Unit |
+| `release/**` | release prep / hotfix | Quality + Unit + E2E |
+
+- Branch off the latest `main`; keep branches small and short-lived.
+- Merge via PR once the gates are green (open a PR when the work is ready, not per commit).
+- Release/versioning detail → [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md).
 
 ---
 
 ## 8 · Commit Convention & PR Process
 
-### Commit message format
+### Commit messages — [Conventional Commits](https://www.conventionalcommits.org)
 
 ```
 type(scope): short imperative description
 
-Types:  feat | fix | ux | docs | refactor | test | chore | migration
-Scopes: congress | initiatives | auth | nav | ui | admin | stories | cline | vercel | db
+Types:  feat · fix · docs · refactor · test · chore · ci
+Scope:  the area touched, e.g. conferences · intake · auth · nav · ui · db
 ```
 
-**Examples:**
+Examples:
 ```
-feat(congress): add workspace RAID log table
+feat(conferences): add attending-type-aware operating page
 fix(auth): resolve magic-link redirect loop
-migration(db): add multi-role active context (00020)
-chore(cline): update git-push script and CLINE_WORKFLOW rules
+docs(sdlc): refresh CI and workflow sections
 ```
 
-### PR checklist (from `.github/pull_request_template.md`)
+### Pull requests
 
-- [ ] Maps to a requirement: `REQ-xxx`
-- [ ] TypeScript compiles clean (`pnpm typecheck`)
-- [ ] RLS / permission impact reviewed
-- [ ] Traceability matrix updated (`docs/TRACEABILITY.md`)
-- [ ] Screenshots attached for UI changes
-- [ ] ADR filed if architecture deviates from design document
+Open a PR only when the change is ready (not for every commit). Fill in the repository PR
+template — [`.github/pull_request_template.md`](../.github/pull_request_template.md) — which
+covers requirement mapping, ADR/deviation, validation (typecheck · tests · RLS ·
+accessibility · traceability), and a **database-changes checklist** (migration added, types
+regenerated, defensive `{ data, error }` queries, `error.tsx`, RLS role strings). Follow the
+documentation standard in [`../AGENTS.md`](../AGENTS.md) §8.
 
 ---
 
 ## 9 · Tooling Reference
 
-| Tool | Role | Config file |
-|------|------|-------------|
-| **Next.js 15** | Full-stack React framework | `next.config.ts` |
+| Tool | Role | Config |
+|------|------|--------|
+| **Next.js 16** | Full-stack React (App Router, RSC) | `next.config.ts` |
 | **TypeScript** | Type safety | `tsconfig.json` |
-| **Tailwind CSS** | Utility-first styling | `postcss.config.mjs` |
-| **Supabase** | Auth · DB · Storage | `supabase/config.toml` |
-| **pnpm** | Package manager | `pnpm-workspace.yaml` |
-| **Vitest** | Unit test runner | `vitest.config.ts` |
-| **Playwright** | E2E test runner | `playwright.config.ts` |
+| **Tailwind CSS v4** | Styling | `postcss.config.mjs` |
+| **Supabase** | Auth · Postgres · Storage | `supabase/config.toml` |
+| **pnpm** | Package manager (Node 20, see `.nvmrc`) | `pnpm-workspace.yaml` |
+| **Vitest** | Unit tests | `vitest.config.ts` |
+| **Playwright** | E2E smoke | `playwright.config.ts` |
 | **ESLint** | Static analysis | `eslint.config.mjs` |
-| **GitHub Actions** | CI/CD orchestration | `.github/workflows/ci.yml` |
+| **Governance gates** | Module boundaries · table ownership · reachability | `pnpm governance` (`src/kernel/governance/*`) |
+| **GitHub Actions** | CI/CD | `.github/workflows/{ci,db-migrations,deploy-vercel}.yml` |
 | **Vercel** | Hosting · Edge CDN | `vercel.json` |
-| **Cline** | AI coding assistant | `.clinerules` (implicit) |
-| **scripts/git-push.ps1** | Safe commit + push wrapper | — |
 
 ---
 
 ## 10 · Cross-Document Index
 
-See `docs/README.md` for the full categorized documentation index.
+Start with [`../AGENTS.md`](../AGENTS.md) (quick brief) and [`README.md`](README.md) (full index).
 
 | Document | Content |
 |----------|---------|
-| `docs/README.md` | **Documentation index** — start here |
-| `docs/MVP_SCOPE_AND_ROADMAP.md` | Work Package definitions and delivery milestones |
-| `docs/TRACEABILITY.md` | Requirement → ADR → code → test mapping |
-| `docs/IMPLEMENTATION_GUIDE.md` | Detailed coding patterns and conventions |
-| `docs/CLINE_WORKFLOW.md` | Cline git protocol and no-hang rules |
-| `docs/TEST_STRATEGY.md` | Test philosophy, coverage goals, risk map |
-| `docs/RELEASE_PROCESS.md` | Versioning, deployment, hotfix, rollback |
-| `docs/SECURITY_AND_PRIVACY.md` | GDPR compliance, data handling, security controls |
-| `docs/INCIDENT_RESPONSE.md` | Severity levels, escalation, rollback runbook |
-| `docs/MONITORING.md` | Observability, alerting, log access |
-| `docs/ENVIRONMENT_REFERENCE.md` | Every env variable explained |
-| `docs/ROLE_PERMISSION_MODEL.md` | Full role × space permission matrix |
-| `docs/DATA_DICTIONARY.md` | Database schema reference |
-| `docs/PLATFORM_AUDIT_REPORT.md` | Full audit of platform state against design |
-| `docs/WP_STATUS.md` | Current WP delivery status |
-| `docs/DESIGN_CHANGELOG.md` | Design decisions and deviations log |
-| `docs/ADR/` | Architecture Decision Records (5 ADRs) |
-| `CHANGELOG.md` | Release history (semver) |
-| `supabase/migrations/` | Sequential DB schema history |
+| [`../AGENTS.md`](../AGENTS.md) | **Canonical brief** — commands, guardrails, workflow, documentation standard |
+| [`README.md`](README.md) | Documentation index |
+| [`MODULAR_COMPONENT_ARCHITECTURE.md`](MODULAR_COMPONENT_ARCHITECTURE.md) | Kernel + components, manifests, governance (ADR-0009) |
+| [`IMPLEMENTATION_GUIDE.md`](IMPLEMENTATION_GUIDE.md) | Coding patterns, Definition of Done, defensive data access |
+| [`TEST_STRATEGY.md`](TEST_STRATEGY.md) | Test philosophy, coverage, risk map |
+| [`AI_INTEGRATION.md`](AI_INTEGRATION.md) | How the app uses AI (model catalog lives in code) |
+| [`ROLE_PERMISSION_MODEL.md`](ROLE_PERMISSION_MODEL.md) | Authoritative role × space matrix |
+| [`SECURITY_AND_PRIVACY.md`](SECURITY_AND_PRIVACY.md) | GDPR, data handling, security controls |
+| [`TRACEABILITY.md`](TRACEABILITY.md) | Requirement → ADR → code → test mapping |
+| [`RELEASE_PROCESS.md`](RELEASE_PROCESS.md) · [`INCIDENT_RESPONSE.md`](INCIDENT_RESPONSE.md) · [`MONITORING.md`](MONITORING.md) | Release, incident, observability |
+| [`ADR/`](ADR/) | Architecture Decision Records |
+| [`sprints/`](../sprints/README.md) · [`changes/`](changes/) | Delivery records (planned + standalone) |
+| [`../CHANGELOG.md`](../CHANGELOG.md) | Release history (semver) |
 
 ---
 
-*Last updated: 2026-02-23 · Maintainer: Michael Wittinger*
+*Last reviewed: 2026-07-17 · Maintainer: Michael Wittinger · Defers to `AGENTS.md` for the quick brief.*
