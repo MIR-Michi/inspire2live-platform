@@ -20,9 +20,10 @@ const KEYBOARD_STEP = 0.02
  * the divider is hidden (CSS-only, no JS) so there is no hydration flash. The
  * chosen ratio is persisted per `storageKey` by default.
  *
- * Sprint 19 adds an optional controlled mode (`ratio` + callbacks) so durable
- * user dashboard preferences can remain authoritative across devices while all
- * existing localStorage-only surfaces keep their current behavior.
+ * Controlled consumers keep a local transient ratio during pointer movement,
+ * then publish the final value through `onRatioCommit`. This gives durable
+ * dashboard preferences smooth drag feedback without regressing legacy
+ * localStorage-only surfaces.
  */
 export function ResizableSplit({
   storageKey,
@@ -44,13 +45,9 @@ export function ResizableSplit({
   left: ReactNode
   right: ReactNode
   defaultRatio?: number
-  /** Controlled ratio. Omit to retain the original internal/localStorage mode. */
   ratio?: number
-  /** Fires while pointer or keyboard resizing changes the controlled ratio. */
   onRatioChange?: (ratio: number) => void
-  /** Fires after pointer/key/reset interaction completes; suitable for persistence. */
   onRatioCommit?: (ratio: number) => void
-  /** Keep the historical localStorage cache. Disable only when a parent owns it. */
   persistLocal?: boolean
   minRatio?: number
   maxRatio?: number
@@ -62,10 +59,17 @@ export function ResizableSplit({
   const seam = variant === 'seam'
   const effectiveHandlePx = handlePx ?? (seam ? 9 : DEFAULT_HANDLE_PX)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [internalRatio, setInternalRatio] = useState(() => clampRatio(defaultRatio, minRatio, maxRatio))
+  const [internalRatio, setInternalRatio] = useState(() => clampRatio(controlledRatio ?? defaultRatio, minRatio, maxRatio))
   const [dragging, setDragging] = useState(false)
-  const ratio = clampRatio(controlledRatio ?? internalRatio, minRatio, maxRatio)
   const controlled = controlledRatio !== undefined
+  const ratio = clampRatio(dragging ? internalRatio : controlledRatio ?? internalRatio, minRatio, maxRatio)
+
+  useEffect(() => {
+    if (!controlled || dragging) return
+    // Sync the local preview after a controlled value changes outside a drag.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setInternalRatio(clampRatio(controlledRatio, minRatio, maxRatio))
+  }, [controlled, controlledRatio, dragging, maxRatio, minRatio])
 
   useEffect(() => {
     if (controlled || !persistLocal) return
@@ -92,7 +96,7 @@ export function ResizableSplit({
 
   const change = (value: number) => {
     const next = clampRatio(value, minRatio, maxRatio)
-    if (!controlled) setInternalRatio(next)
+    setInternalRatio(next)
     onRatioChange?.(next)
     return next
   }
@@ -105,6 +109,7 @@ export function ResizableSplit({
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
+    setInternalRatio(ratio)
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
   }
@@ -117,13 +122,14 @@ export function ResizableSplit({
 
   const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging) return
+    const finalRatio = internalRatio
     setDragging(false)
     try {
       event.currentTarget.releasePointerCapture(event.pointerId)
     } catch {
       /* not captured */
     }
-    commit(ratio)
+    commit(finalRatio)
   }
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -139,8 +145,8 @@ export function ResizableSplit({
   }
 
   const reset = () => {
-    const value = change(defaultRatio)
-    commit(value)
+    const next = change(defaultRatio)
+    commit(next)
   }
 
   const gapClass = seam ? 'gap-0' : 'gap-6 lg:gap-0'
