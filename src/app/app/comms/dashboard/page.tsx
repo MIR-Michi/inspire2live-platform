@@ -1,4 +1,5 @@
 import { redirect } from 'next/navigation'
+import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { resolveEffectiveViewer } from '@/lib/view-as'
@@ -10,19 +11,17 @@ import { loadCommsPersonalDashboardData } from '@/lib/comms-personal-dashboard-d
 import { loadCommsTeamDashboardData } from '@/lib/comms-dashboard-data'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { getRunStatus } from '@/lib/ai/org-newsfeed-run'
+import {
+  getDashboardDefinition,
+  loadDashboardLayout,
+  resolveDashboardDesignConfig,
+  type DashboardId,
+} from '@/kernel/dashboard'
 
-// The "Refresh now" server action runs the web-search newsfeed job inline.
 export const maxDuration = 300
 
 const VALID_VIEWS = new Set(['personal', 'team'])
 
-/**
- * Best-effort newsfeed run status. Fully guarded: `createAdminClient()` throws
- * synchronously when `SUPABASE_SERVICE_ROLE_KEY` isn't set (e.g. preview
- * environments), and a bare `.catch()` on the argument can't catch that — a
- * missing key would otherwise crash the whole dashboard render. This widget is
- * non-critical, so any failure degrades to `null`.
- */
 async function loadNewsfeedRunStatus() {
   try {
     return await getRunStatus(createAdminClient())
@@ -38,31 +37,46 @@ export default async function CommsDashboardPage({
 }) {
   const params = (await searchParams) ?? {}
   const view = VALID_VIEWS.has(params.view ?? '') ? (params.view as 'personal' | 'team') : 'team'
+  const dashboardId: DashboardId = view === 'personal' ? 'comms-personal' : 'comms-team'
 
   const supabase = await createClient()
-
-  // Resolve the effective viewer so an admin previewing another user (view-as)
-  // sees that user's dashboard, not their own. Only admins can ever preview;
-  // otherwise this is the logged-in user.
   const viewer = await resolveEffectiveViewer(supabase)
   if (!viewer) redirect('/login')
+  if (!canAccessCommsWorkspace(viewer.role)) redirect('/app/dashboard')
 
-  if (!canAccessCommsWorkspace(viewer.role)) {
-    redirect('/app/dashboard')
-  }
+  const design = await resolveDashboardDesignConfig(supabase as unknown as SupabaseClient)
+  const preferenceClient = viewer.isPreviewing
+    ? createAdminClient() as unknown as SupabaseClient
+    : supabase as unknown as SupabaseClient
+  const { layout } = await loadDashboardLayout(
+    preferenceClient,
+    viewer.userId,
+    getDashboardDefinition(dashboardId),
+    { preset: design.defaultPreset, splitRatio: design.defaultSplitRatio, density: design.density },
+  )
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="mx-auto max-w-[1500px] space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <h1 className="text-2xl font-bold text-neutral-900">Communications dashboard</h1>
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">Communications</p>
+          <h1 className="mt-1 text-2xl font-bold text-neutral-900">Dashboard</h1>
+        </div>
         <CommsDashboardToggle view={view} showAdmin={isPlatformAdmin(viewer.role)} />
       </div>
 
       {view === 'personal' ? (
-        <CommsDashboardPanel name={viewer.name} {...(await loadCommsPersonalDashboardData(supabase, viewer.userId))} />
+        <CommsDashboardPanel
+          name={viewer.name}
+          {...(await loadCommsPersonalDashboardData(supabase, viewer.userId))}
+          initialLayout={layout}
+          readOnly={viewer.isPreviewing}
+        />
       ) : (
         <TeamDashboard
           data={await loadCommsTeamDashboardData(supabase)}
+          initialLayout={layout}
+          readOnly={viewer.isPreviewing}
           canApprove={isPlatformAdmin(viewer.role)}
           newsfeedRunStatus={await loadNewsfeedRunStatus()}
         />
