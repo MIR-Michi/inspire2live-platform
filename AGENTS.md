@@ -141,6 +141,40 @@ then always do the "both paths" updates.
 Keep it proportionate: a one-line fix needs a CHANGELOG line, not an essay; a schema or
 architectural change needs the full record.
 
+### Keep the living docs current (don't let them rot)
+
+**A change that makes a doc wrong must fix that doc in the same PR.** Documentation is part
+of the change, not a later clean-up. This is how obsolescence is caught at authoring time —
+so nobody has to hunt for stale content afterwards.
+
+When your change touches the left column, update the right column **in the same PR**:
+
+| If you change… | Update / check |
+|---|---|
+| CI workflows, gates, or the commands to run | [`docs/SDLC.md`](docs/SDLC.md) §4, this file §3/§5 |
+| a migration / DB schema / a new table | [`docs/DATA_DICTIONARY.md`](docs/DATA_DICTIONARY.md), `docs/SDLC.md` §5, regen `src/types/database.ts`, an owning `manifest.ts` |
+| roles, spaces, or permission logic | [`docs/ROLE_PERMISSION_MODEL.md`](docs/ROLE_PERMISSION_MODEL.md) (+ `SDLC.md` §6 only if the *mechanism* changed) |
+| environment variables | [`docs/ENVIRONMENT_REFERENCE.md`](docs/ENVIRONMENT_REFERENCE.md), `.env.example` |
+| the AI client, model catalog, or a workload | [`docs/AI_INTEGRATION.md`](docs/AI_INTEGRATION.md) (never hardcode model names — link to `models.ts`) |
+| module boundaries, a manifest, or governance | [`docs/MODULAR_COMPONENT_ARCHITECTURE.md`](docs/MODULAR_COMPONENT_ARCHITECTURE.md) |
+| the branching / release / deploy workflow | `docs/SDLC.md` §7, [`docs/RELEASE_PROCESS.md`](docs/RELEASE_PROCESS.md), and an ADR |
+| a framework / library version | `docs/SDLC.md` §2/§9, `README.md` (versions live in `package.json` — the source of truth) |
+| add a new doc or ADR | [`docs/README.md`](docs/README.md) index (and the `SDLC.md` §10 index if relevant) |
+| make an architectural decision | write a new [ADR](docs/ADR/), mark any superseded one, update the index |
+
+Two standing habits keep this honest:
+
+- **Freshness date.** Living docs end with a `Last reviewed: YYYY-MM-DD` line. When you edit
+  one, bump it. A stale date is a signal that a doc may need a look.
+- **Prefer linking over restating.** When a fact lives in code or in one owning doc (versions
+  in `package.json`, models in `models.ts`, the role matrix in `ROLE_PERMISSION_MODEL.md`),
+  **link to it instead of copying it** — copies are what drift. If a doc and the code
+  disagree, the code and this file win; fix the doc.
+
+If you notice an unrelated doc that already contradicts reality while working nearby, either
+fix it in your PR or log it in a `docs/changes/` record — don't leave it to be discovered by
+hand later.
+
 ## 9. AI features (how the app uses AI)
 
 AI is an assistive layer for the Communications Workspace (classification, summaries,

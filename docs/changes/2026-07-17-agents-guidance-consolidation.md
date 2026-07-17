@@ -34,6 +34,17 @@ establishes one clear, benchmarked entry point and a consistent documentation st
   noted and the hardcoded model table replaced with a pointer to `models.ts`.
 - **`docs/README.md`** refreshed: ADR index extended to 0006–0011, AI docs + change records
   added, last-updated bumped.
+- **`docs/SDLC.md` fully refreshed** to the current reality (verified against the repo):
+  PR-based/sprint workflow (was direct-to-`main`/Cline), Next.js 16 (was 15), the three
+  CI workflows incl. the **governance** gate and **db-migrations** validation and the
+  **deploy-vercel `db push` → deploy** flow, migration numbering/table-ownership rules,
+  the current role model, and an index that links to `AGENTS.md`/ADR-0011. Counts and
+  version tables were softened to *link to the source of truth* rather than restate it,
+  so the doc resists re-drift.
+- **Doc-maintenance rule added to `AGENTS.md` §8** ("Keep the living docs current"): a
+  change→docs trigger matrix, a `Last reviewed:` freshness convention, and a
+  link-don't-restate rule — so obsolete content is fixed at authoring time instead of found
+  by manual audit.
 
 ## Verification
 
