@@ -3,7 +3,7 @@
 Maps design requirements to implementation status and code locations.  
 **Source of truth for requirement IDs:** `docs/IMPLEMENTATION_GUIDE.md` §5  
 **Benchmark:** `PLATFORM_DESIGN_DOCUMENT.md` v2.0  
-**Last updated:** 2026-05-24
+**Last updated:** 2026-07-17
 
 ---
 
@@ -243,3 +243,18 @@ manifest's requirements change). The kernel owns cross-cutting requirements
 | REQ-CONF-OPS-007 | Cheaper discovery search — "do not repeat" list moved into the cached system prompt (billed once/run) + capped; operator-tunable breadth/budget | `done` | `src/modules/ai-features/domain/conferences.ts`, `src/modules/ai-features/domain/conference-discovery-job.ts`, `src/modules/ai-features/domain/conference-run.ts` | Fewer tokens per sweep; knobs read from the events panel |
 | REQ-CONF-OPS-008 | Conference-discovery settings panel + cadence — Platform Settings "Events & Conferences" panel (enable, interval days, months ahead, searches/lane, lenses/region, hint size); daily cron honours enable + interval; manual "Refresh cache" button removed from the conferences page | `done` | `src/modules/events/manifest.ts` (config + `settingsPanel`), `src/app/api/comms/conferences/route.ts`, `src/modules/events/ui/conferences/conferences-shell.tsx` | Cron gated by `discoveryEnabled` + `discoveryIntervalDays`; page shows read-only status + settings shortcut |
 | REQ-CONF-OPS-004 | Instant, logged invites — `generateGuestToken` returns the link immediately and sends WhatsApp/email in the background (`after()`); durable invite log (recipient, channels, per-channel status, `sent_at`, `invited_by`) surfaced on the operating page | `done` | `supabase/migrations/00162_conference_guest_invites.sql`, `src/modules/events/domain/comms-conference-invites.ts`, `src/app/app/comms/conferences/guest-token-actions.ts`, `src/modules/events/ui/conferences/conference-operating-shell.tsx` | Answers "who was invited, how, when, delivered?" (S18-T11/T12) |
+
+---
+
+## Sprint 19 — Adaptive Dashboards
+
+| Requirement ID | Description | Design Ref | Status | Code Location | Last Verified | Notes |
+|---|---|---|---|---|---|---|
+| REQ-DASH-001 | Campus-inspired responsive primary/supporting dashboard shell across active role variants | Adaptive Dashboard Concept §§3–4 | `done` | `src/kernel/ui/dashboard/adaptive-dashboard.tsx`, `src/components/**/dashboard*.tsx` | 2026-07-17 | Full-width KPI orientation band, controlled `ResizableSplit`, mobile stack |
+| REQ-DASH-002 | Explicit personal dashboard edit mode with move, size, hide/restore, presets, undo, reset, focus and autosave | Adaptive Dashboard Concept §5 | `done` | `src/kernel/ui/dashboard/adaptive-dashboard.tsx` | 2026-07-17 | Normal mode cannot move tiles; required widgets cannot be hidden |
+| REQ-DASH-003 | Versioned cross-device user layout preferences with owner-only RLS and server validation | ADR-0012 | `done` | `supabase/migrations/00168_user_dashboard_preferences.sql`, `src/kernel/dashboard/*`, `src/app/api/dashboard-preferences/route.ts` | 2026-07-17 | Presentation data only; no access grants or widget data |
+| REQ-DASH-004 | Stable dashboard/widget catalog with role defaults and safe version migration | ADR-0012 | `done` | `src/kernel/dashboard/catalog.ts`, `src/kernel/dashboard/layout.ts` | 2026-07-17 | Unknown/duplicate widgets rejected or sanitized; new required widgets restored |
+| REQ-DASH-005 | Read-only effective-user layout during Superadmin view-as | ADR-0012 §6 | `done` | `src/app/app/dashboard/page.tsx`, `src/app/app/comms/dashboard/page.tsx` | 2026-07-17 | User preview loads target preference through privileged server path but exposes no edit mode |
+| REQ-DASH-006 | Organization Design & Component Library settings panel with validated semantic defaults and live production preview | Platform Settings Design Panel Concept | `done` | `src/app/app/settings/design/page.tsx`, `src/components/settings/design-component-library-panel.tsx`, `src/kernel/settings/kernel-panels.ts` | 2026-07-17 | No arbitrary CSS; separate from personal layout and Profile & Brand |
+| REQ-DASH-007 | Successful direct task completion receives accessible, reduced-motion-aware celebration | Adaptive Dashboard Concept §8 | `done` | `src/modules/tasks/ui/unified-task-status-control.tsx`, `src/kernel/ui/task-celebration-host.tsx`, `src/components/ui/confetti-burst.tsx` | 2026-07-17 | Fires only after successful direct completion; cooldown prevents continuous particles |
+| REQ-DASH-008 | Dashboard domain, migration, governance, build, coverage and browser-smoke verification | Sprint 19 T14 | `done` | `src/test/unit/dashboard-layout.test.ts`, `src/test/e2e/dashboard.spec.ts`, CI workflows | 2026-07-17 | PR #181 standard quality, unit-coverage and migration gates green |

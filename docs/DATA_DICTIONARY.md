@@ -1,9 +1,9 @@
 # Data Dictionary — Inspire2Live Platform
 
 > **Purpose:** Human-readable database schema reference. Table descriptions, key columns, relationships.  
-> **Source of truth:** `supabase/migrations/` (00001–00026) and `src/types/database.ts`  
+> **Source of truth:** `supabase/migrations/` (00001–00168) and `src/types/database.ts`  
 > **Audience:** Developers writing queries, new team members understanding the data model.  
-> **Last reviewed:** 2026-02-24
+> **Last reviewed:** 2026-07-17
 
 ---
 
@@ -327,4 +327,29 @@ unifying the CRM, User Management, the new-member dashboard, and Profile. See
 
 ---
 
-*Last updated: 2026-06-21 · Maintainer: Michael Wittinger*
+## 10 · Dashboard Composition Preferences (Sprint 19)
+
+### `user_dashboard_preferences`
+
+Kernel-owned, versioned presentation preferences for the adaptive dashboard system. One row exists per user and dashboard. The JSON layout stores presentation choices only and never grants access to widget data.
+
+| Column | Type | Description |
+|--------|------|-------------|
+| `user_id` | uuid (PK, FK → profiles) | Preference owner; cascades on profile deletion |
+| `dashboard_id` | text (PK) | Stable dashboard catalog identifier |
+| `layout_version` | integer | Dashboard-definition version used for safe migration |
+| `layout` | jsonb | Validated split ratio, preset, density, widget zone/order/size/visibility/collapse state |
+| `created_at` | timestamptz | Initial preference creation |
+| `updated_at` | timestamptz | Last successful layout save |
+
+**Constraints:** composite primary key `(user_id, dashboard_id)`; dashboard ID format check; positive layout version; `layout` must be a JSON object.
+
+**RLS:** authenticated users can select, insert, update, and delete only rows where `auth.uid() = user_id`; `anon` has no access. Superadmin view-as reads the target layout only through the existing privileged server path and renders it read-only.
+
+**Migration:** `00168_user_dashboard_preferences.sql`.
+
+**Source-of-truth rule:** dashboard catalog/defaults live in `src/kernel/dashboard/catalog.ts`; persisted rows are user overrides and cannot introduce an unknown or unauthorized widget.
+
+---
+
+*Last updated: 2026-07-17 · Maintainer: Michael Wittinger*
