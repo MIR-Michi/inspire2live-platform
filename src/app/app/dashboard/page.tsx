@@ -97,16 +97,24 @@ export default async function DashboardPage() {
   const role = viewer?.isPreviewing ? normalizeRole(viewer.role) : roleOnlyPreviewValue ?? actualRole
   const effectiveUserId = viewer?.userId ?? user.id
   const effectiveName = viewer?.name ?? profile?.name
-  const readOnly = Boolean(viewer?.isPreviewing || roleOnlyPreviewValue)
+  const previewingUser = Boolean(viewer?.isPreviewing)
+  const roleOnlyPreview = Boolean(roleOnlyPreviewValue)
+  const readOnly = previewingUser || roleOnlyPreview
 
   if (role === 'Comms') redirect('/app/comms/dashboard')
 
   if (isPlatformAdmin(role)) {
     const [adminData, layout] = await Promise.all([
-      loadAdminDashboardData(supabase, user.id),
-      resolveLayout({ supabase, userId: user.id, dashboardId: 'admin', previewingUser: false, roleOnlyPreview: false }),
+      loadAdminDashboardData(supabase, effectiveUserId),
+      resolveLayout({
+        supabase,
+        userId: effectiveUserId,
+        dashboardId: 'admin',
+        previewingUser,
+        roleOnlyPreview,
+      }),
     ])
-    const greeting = buildDashboardGreeting(profile?.name)
+    const greeting = buildDashboardGreeting(effectiveName)
     return (
       <div className="mx-auto max-w-[1500px] space-y-6">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -115,9 +123,9 @@ export default async function DashboardPage() {
             <h1 className="mt-1 text-2xl font-bold text-neutral-900">Admin dashboard</h1>
             <p className="mt-1 text-sm text-neutral-500">{greeting} Platform health and what needs your attention.</p>
           </div>
-          <AdminDashboardToggle active="admin" />
+          {!readOnly && <AdminDashboardToggle active="admin" />}
         </div>
-        <AdminDashboard data={adminData} initialLayout={layout} />
+        <AdminDashboard data={adminData} initialLayout={layout} readOnly={readOnly} />
       </div>
     )
   }
@@ -168,8 +176,8 @@ export default async function DashboardPage() {
       supabase,
       userId: effectiveUserId,
       dashboardId,
-      previewingUser: Boolean(viewer?.isPreviewing),
-      roleOnlyPreview: Boolean(roleOnlyPreviewValue),
+      previewingUser,
+      roleOnlyPreview,
     }),
   ])
   const greeting = buildDashboardGreeting(effectiveName)
