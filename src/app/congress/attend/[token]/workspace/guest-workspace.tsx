@@ -139,6 +139,8 @@ export function GuestWorkspace({ token }: { token: string }) {
   const [loading, setLoading] = useState(true)
   const [expired, setExpired] = useState(false)
   const [activeSubId, setActiveSubId] = useState<string | null>(null)
+  const [removingSubId, setRemovingSubId] = useState<string | null>(null)
+  const [removeError, setRemoveError] = useState<string | null>(null)
 
   useEffect(() => {
     void fetch(`/api/congress-guest/workspace?token=${encodeURIComponent(token)}`)
@@ -247,26 +249,74 @@ export function GuestWorkspace({ token }: { token: string }) {
     })
   }
 
+  const handleRemoveConference = async (target: Submission) => {
+    const confirmed = window.confirm(
+      `Remove ${target.conferenceName} from your conference list?\n\nYour summary, uploaded files, photos, and comments for this conference will also be deleted. This does not remove the conference from the Inspire2Live team shortlist.`
+    )
+    if (!confirmed) return
+
+    setRemovingSubId(target.id)
+    setRemoveError(null)
+    try {
+      const response = await fetch('/api/congress-guest/workspace/remove', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token, submissionId: target.id }),
+      })
+      const payload = await response.json() as { ok?: boolean; error?: string }
+      if (!response.ok || !payload.ok) {
+        setRemoveError(payload.error ?? 'Could not remove the conference.')
+        return
+      }
+
+      const remaining = data.submissions.filter((item) => item.id !== target.id)
+      setData((prev) => prev ? { ...prev, submissions: prev.submissions.filter((item) => item.id !== target.id) } : prev)
+      setActiveSubId(remaining[0]?.id ?? null)
+    } catch {
+      setRemoveError('Could not remove the conference. Check your connection and try again.')
+    } finally {
+      setRemovingSubId(null)
+    }
+  }
+
   return (
     <Shell>
       <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
         {/* Header */}
-        <div>
-          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-600">Your conferences</p>
-          <h1 className="text-2xl font-semibold text-neutral-900">
-            {submission?.conferenceName ?? 'Conference workspace'}
-          </h1>
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0">
+            <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-600">Your conferences</p>
+            <h1 className="truncate text-2xl font-semibold text-neutral-900">
+              {submission?.conferenceName ?? 'Conference workspace'}
+            </h1>
+            {submission && (
+              <p className="mt-1 text-sm text-neutral-500">
+                {[
+                  submission.conferenceLocation,
+                  submission.conferenceStart
+                    ? new Date(submission.conferenceStart).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
+                    : null,
+                ].filter(Boolean).join(' · ')}
+              </p>
+            )}
+          </div>
           {submission && (
-            <p className="mt-1 text-sm text-neutral-500">
-              {[
-                submission.conferenceLocation,
-                submission.conferenceStart
-                  ? new Date(submission.conferenceStart).toLocaleDateString('en-GB', { month: 'long', year: 'numeric' })
-                  : null,
-              ].filter(Boolean).join(' · ')}
-            </p>
+            <button
+              type="button"
+              onClick={() => { void handleRemoveConference(submission) }}
+              disabled={removingSubId === submission.id}
+              className="shrink-0 rounded-lg border border-red-200 bg-white px-3 py-2 text-xs font-semibold text-red-700 transition hover:bg-red-50 disabled:opacity-50"
+            >
+              {removingSubId === submission.id ? 'Removing…' : 'Remove conference'}
+            </button>
           )}
         </div>
+
+        {removeError && (
+          <div role="alert" className="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+            {removeError}
+          </div>
+        )}
 
         {/* Overview — the conferences on the guest's list, each opening its
             operating page. Plus a way to add another conference at any time. */}
@@ -279,7 +329,10 @@ export function GuestWorkspace({ token }: { token: string }) {
             return (
               <button
                 key={s.id}
-                onClick={() => setActiveSubId(s.id)}
+                onClick={() => {
+                  setActiveSubId(s.id)
+                  setRemoveError(null)
+                }}
                 className={`flex flex-col items-start gap-1 rounded-2xl border p-3 text-left transition ${
                   active ? 'border-neutral-900 bg-neutral-50' : 'border-neutral-200 bg-white hover:border-neutral-300'
                 }`}
@@ -388,7 +441,7 @@ export function GuestWorkspace({ token }: { token: string }) {
 
         {data.submissions.length === 0 && (
           <div className="rounded-xl border border-dashed border-neutral-300 bg-white p-8 text-center text-sm text-neutral-500">
-            No submissions yet. Go back and fill in the form.
+            No conferences are currently on your list. Add another conference whenever needed.
           </div>
         )}
       </div>
