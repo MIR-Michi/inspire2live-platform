@@ -18,6 +18,7 @@ function useReducedMotion(): boolean {
 
 export type CelebrationOrigin = ConfettiOrigin
 
+/** Visual portion only; the global host owns the persistent live announcement. */
 export function TaskCompletionCelebration({
   active,
   origin,
@@ -27,18 +28,14 @@ export function TaskCompletionCelebration({
 }) {
   const design = useDesignSystem()
   const reducedMotion = useReducedMotion()
-
   if (!active) return null
 
   return (
-    <>
-      <span className="sr-only" role="status" aria-live="polite">Task completed.</span>
-      <ConfettiBurst
-        fireKey={1}
-        count={20}
-        origin={origin}
-        disabled={!design.taskCelebration || reducedMotion}
-      />
-    </>
+    <ConfettiBurst
+      fireKey={1}
+      count={20}
+      origin={origin}
+      disabled={!design.taskCelebration || reducedMotion}
+    />
   )
 }
