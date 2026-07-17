@@ -24,6 +24,11 @@ type CoerceResult =
   | { ok: true; skip: false; value: unknown }
   | { ok: false; error: string }
 
+type PreparedSetting = {
+  field: SettingsFieldSpec
+  value: unknown
+}
+
 /** Coerce and validate a raw form value against the field declaration. */
 function coerce(field: SettingsFieldSpec, raw: unknown): CoerceResult {
   switch (field.type) {
@@ -58,6 +63,13 @@ function coerce(field: SettingsFieldSpec, raw: unknown): CoerceResult {
   }
 }
 
+function fieldDatabaseError(field: SettingsFieldSpec, message: string): PersistResult {
+  return {
+    ok: false,
+    error: `${field.label ?? field.key} could not be saved: ${message}`,
+  }
+}
+
 /** Persist a panel's non-secret values (replace-in-place per key). */
 export async function persistPanelValues(
   supabase: SupabaseClient,
@@ -65,16 +77,23 @@ export async function persistPanelValues(
   values: Record<string, unknown>,
   userId: string,
 ): Promise<PersistResult> {
-  let saved = 0
+  // Validate the complete submitted change set before touching the database. This
+  // avoids partially applying a panel when one later field is out of bounds.
+  const prepared: PreparedSetting[] = []
   for (const field of panel.fields) {
     if (field.type === 'secret') continue // never persisted here (secret guard)
     if (!(field.key in values)) continue
     const coerced = coerce(field, values[field.key])
     if (!coerced.ok) return coerced
     if (coerced.skip) continue
+    prepared.push({ field, value: coerced.value })
+  }
 
-    // The coalesced unique index makes (scope, component, key) single-valued, so
-    // delete-then-insert is a safe upsert across the nullable component_id.
+  let saved = 0
+  for (const { field, value } of prepared) {
+    // The coalesced unique index makes (scope, component, key) single-valued.
+    // Delete-then-insert also works for nullable kernel component ids after
+    // migration 00169 and keeps this primitive compatible with PostgREST.
     const del = supabase
       .from('platform_settings')
       .delete()
@@ -83,17 +102,17 @@ export async function persistPanelValues(
     const { error: deleteError } = await (panel.componentId === null
       ? del.is('component_id', null)
       : del.eq('component_id', panel.componentId))
-    if (deleteError) return { ok: false, error: deleteError.message }
+    if (deleteError) return fieldDatabaseError(field, deleteError.message)
 
     const { error } = await supabase.from('platform_settings').insert({
       scope: panel.scope,
       component_id: panel.componentId,
       key: field.key,
-      value: coerced.value,
+      value,
       updated_by: userId,
       updated_at: new Date().toISOString(),
     })
-    if (error) return { ok: false, error: error.message }
+    if (error) return fieldDatabaseError(field, error.message)
     saved++
   }
   return { ok: true, saved }
