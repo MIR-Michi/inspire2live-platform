@@ -3,10 +3,10 @@
  *
  * The section sub-nav for the Platform Settings space (ADR-0010 §4). Sections map
  * 1:1 to the ADR-0009 kernel/component split: *Access & Identity*, *Organization*,
- * and *Observability & Review* are kernel surfaces; *Capabilities* and
- * *Integrations* are component surfaces. Existing admin pages keep their
- * `/app/admin/*` URLs and are unified into this tree; new panels live under
- * `/app/settings/*`. All routes are PlatformAdmin-gated.
+ * and *Observability & Review* are kernel surfaces; *Capabilities*,
+ * *Integrations*, and *Automation* are component surfaces. Existing admin pages
+ * keep their `/app/admin/*` URLs and are unified into this tree; new panels live
+ * under `/app/settings/*`. All routes are PlatformAdmin-gated.
  *
  * Feedback is intentionally KEPT IN, under *Observability & Review* (ADR-0010 §2)
  * — an admin monitoring/review surface, not moved out to its component.
@@ -56,6 +56,12 @@ export const SETTINGS_SECTIONS: SettingsNavSection[] = [
       { id: 'intake',   label: 'Channel Intake',     href: '/app/settings/components/intake',  icon: 'whatsapp' },
       { id: 'whatsapp', label: 'WhatsApp',           href: '/app/settings/capabilities',       icon: 'whatsapp', planned: true },
       { id: 'email',    label: 'Email (Resend)',     href: '/app/settings/capabilities',       icon: 'feedback', planned: true },
+    ],
+  },
+  {
+    label: 'Automation',
+    items: [
+      { id: 'conference-discovery', label: 'Conference discovery', href: '/app/settings/conferences', icon: 'conferences' },
     ],
   },
   {
