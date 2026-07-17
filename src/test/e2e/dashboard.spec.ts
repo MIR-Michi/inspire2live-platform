@@ -48,7 +48,6 @@ test.describe('Adaptive dashboard smoke tests (authenticated)', () => {
     const edit = page.getByRole('button', { name: 'Edit dashboard' })
     await expect(edit).toBeVisible()
 
-    // Normal mode has no visible move handles.
     await expect(page.getByRole('button', { name: /Move .+ Use arrow keys or drag/ })).toHaveCount(0)
     await edit.click()
 
@@ -77,9 +76,12 @@ test.describe('Adaptive dashboard smoke tests (authenticated)', () => {
     const separator = page.getByRole('separator', { name: 'Resize columns' })
     await expect(separator).toBeVisible()
     const before = Number(await separator.getAttribute('aria-valuenow'))
+    const maximum = Number(await separator.getAttribute('aria-valuemax'))
+    const key = before < maximum ? 'ArrowRight' : 'ArrowLeft'
+    const expected = before < maximum ? before + 2 : before - 2
     await separator.focus()
-    await page.keyboard.press('ArrowLeft')
-    await expect(separator).toHaveAttribute('aria-valuenow', String(before - 2))
+    await page.keyboard.press(key)
+    await expect(separator).toHaveAttribute('aria-valuenow', String(expected))
     await context.close()
   })
 })
