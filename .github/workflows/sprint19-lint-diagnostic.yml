@@ -1,4 +1,4 @@
-name: Sprint 19 lint diagnostic
+name: Sprint 19 diagnostics
 
 on:
   pull_request:
@@ -8,7 +8,7 @@ permissions:
   contents: read
 
 jobs:
-  lint-diagnostic:
+  diagnostics:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -19,16 +19,16 @@ jobs:
           cache: pnpm
           cache-dependency-path: pnpm-lock.yaml
       - run: pnpm install --frozen-lockfile
-      - name: Capture lint output
+      - name: Capture unit output
         run: |
           set +e
-          pnpm lint > lint-output.txt 2>&1
+          pnpm test:coverage > unit-output.txt 2>&1
           code=$?
-          echo "$code" > lint-exit-code.txt
+          echo "$code" > unit-exit-code.txt
           exit 0
       - uses: actions/upload-artifact@v4
         with:
-          name: sprint19-lint-output
+          name: sprint19-unit-output
           path: |
-            lint-output.txt
-            lint-exit-code.txt
+            unit-output.txt
+            unit-exit-code.txt
