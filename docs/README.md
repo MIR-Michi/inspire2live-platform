@@ -17,6 +17,7 @@
 | [MODULAR_COMPONENT_ARCHITECTURE.md](MODULAR_COMPONENT_ARCHITECTURE.md) | Kernel + component toolbox model, manifests, governance, AI levels (ADR-0009) |
 | [PLATFORM_SETTINGS_CONCEPT.md](PLATFORM_SETTINGS_CONCEPT.md) | Platform Settings space as the manifest-driven blueprint editor (ADR-0010) |
 | [ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md](ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md) | Sprint 19 concept for Campus-inspired two-zone dashboards, personal widget layouts, accessible drag/resize, persisted preferences, and purposeful motion |
+| [PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md](PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md) | Organization-wide Design & Component Library panel, semantic tokens, live production component catalog, dashboard/motion defaults, and component-toolbox alignment |
 | [ROLE_PERMISSION_MODEL.md](ROLE_PERMISSION_MODEL.md) | Full role × space permission matrix, override logic |
 | [DATA_DICTIONARY.md](DATA_DICTIONARY.md) | Database schema reference, table descriptions, key relationships |
 | [DESIGN_CHANGELOG.md](DESIGN_CHANGELOG.md) | History of UI/UX design decisions and deviations |
@@ -30,7 +31,7 @@
 | [TEST_STRATEGY.md](TEST_STRATEGY.md) | Test philosophy, coverage goals, risk-based test map |
 | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Versioning, staging → production, hotfix, rollback |
 | [AI_INTEGRATION.md](AI_INTEGRATION.md) | How the app uses AI: config, shared wrapper, model policy (catalog in code), structured output, human-in-the-loop |
-| [changes/](changes/) | Change Records — standardised documentation for work done **outside a sprint** |
+| [changes/](changes/) | Change Records — standardised documentation for work done **outside** a sprint |
 | [CLINE_WORKFLOW.md](CLINE_WORKFLOW.md) | *(historical)* Cline git protocol — consolidated into `../AGENTS.md` + `IMPLEMENTATION_GUIDE.md` |
 | [TRACEABILITY.md](TRACEABILITY.md) | Requirement → ADR → code → test mapping |
 
