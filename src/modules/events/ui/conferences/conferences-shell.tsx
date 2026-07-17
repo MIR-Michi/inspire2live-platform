@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { useRouter } from 'next/navigation'
 import { useCallback, useEffect, useMemo, useRef, useState, useTransition } from 'react'
 import { StatusBadge, type StatusTone } from '@/components/ui/status-badge'
 import { useConferenceRun } from '@/components/comms/use-conference-run'
@@ -22,9 +23,9 @@ import type { ConferenceDetail } from '@/lib/ai/conferences'
 import {
   addConferenceToShortlist,
   enrichConferenceDetail,
-  removeConferenceFromPipeline,
   setConferenceStage,
 } from '@/app/app/comms/conferences/actions'
+import { removeConferenceFromPipelineSafely } from '@/app/app/comms/conferences/removal-actions'
 
 const FORMAT_LABELS: Record<string, string> = { in_person: 'In person', virtual: 'Virtual', hybrid: 'Hybrid' }
 const BACKGROUND_DETAIL_LIMIT = 120
@@ -48,6 +49,7 @@ const TABS: Array<{ key: ConferenceTab; label: string }> = [
 ]
 
 type DetailState = { status: 'idle' | 'loading' | 'ready' | 'error'; detail?: ConferenceDetail; message?: string }
+type ActionFeedback = { tone: 'success' | 'warning' | 'error'; message: string }
 
 const AVATAR_COLORS = [
   'bg-violet-100 text-violet-700',
@@ -126,9 +128,11 @@ export function ConferencesShell({
   aiEnabled: boolean
   canRefreshCache: boolean
 }) {
+  const router = useRouter()
   const [tab, setTab] = useState<ConferenceTab>('upcoming')
   const [filters, setFilters] = useState<ConferenceFilters>({ region: 'all', focus: 'all', format: 'all', search: '' })
   const [selectedId, setSelectedId] = useState<string | null>(null)
+  const [feedback, setFeedback] = useState<ActionFeedback | null>(null)
   const [details, setDetails] = useState<Record<string, DetailState>>(() => {
     // Seed from any detail already cached on the row.
     const seed: Record<string, DetailState> = {}
@@ -209,6 +213,7 @@ export function ConferencesShell({
   const handleSelect = useCallback(
     (conf: ConferenceView) => {
       setSelectedId(conf.id)
+      setFeedback(null)
       if (aiEnabled) void loadDetail(conf)
     },
     [aiEnabled, loadDetail]
@@ -216,17 +221,60 @@ export function ConferencesShell({
 
   const handleShortlist = (conf: ConferenceView) => {
     startTransition(async () => {
-      await addConferenceToShortlist(conf.id)
+      setFeedback(null)
+      const result = await addConferenceToShortlist(conf.id)
+      if (!result.ok) {
+        setFeedback({ tone: 'error', message: result.message ?? 'Could not add the conference.' })
+        return
+      }
+      setFeedback({ tone: 'success', message: `${conf.name} was added to the shortlist.` })
+      router.refresh()
     })
   }
+
   const handleStage = (conf: ConferenceView, stage: ConferenceStage) => {
     startTransition(async () => {
-      await setConferenceStage(conf.id, stage)
+      setFeedback(null)
+      const result = await setConferenceStage(conf.id, stage)
+      if (!result.ok) {
+        setFeedback({ tone: 'error', message: result.message ?? 'Could not update the conference stage.' })
+        return
+      }
+      setFeedback({ tone: 'success', message: `${conf.name} moved to ${CONFERENCE_STAGE_LABELS[stage]}.` })
+      router.refresh()
     })
   }
+
   const handleRemove = (conf: ConferenceView) => {
     startTransition(async () => {
-      await removeConferenceFromPipeline(conf.id)
+      setFeedback(null)
+      let result = await removeConferenceFromPipelineSafely(conf.id)
+
+      if (!result.ok && result.requiresConfirmation) {
+        const visibleNames = result.attendeeNames.slice(0, 5).join(', ')
+        const remaining = result.attendeeCount - Math.min(result.attendeeNames.length, 5)
+        const names = remaining > 0 ? `${visibleNames} and ${remaining} more` : visibleNames
+        const confirmed = window.confirm(
+          `${conf.name} has ${result.attendeeCount} guest attendee${result.attendeeCount === 1 ? '' : 's'}${names ? ` (${names})` : ''}.\n\nRemoving it will also remove the conference from their guest workspace and send each attendee an email. Continue?`
+        )
+        if (!confirmed) {
+          setFeedback({ tone: 'warning', message: 'Conference removal was cancelled.' })
+          return
+        }
+        result = await removeConferenceFromPipelineSafely(conf.id, true)
+      }
+
+      if (!result.ok) {
+        setFeedback({ tone: 'error', message: result.message })
+        return
+      }
+
+      setSelectedId(null)
+      setFeedback({
+        tone: result.notificationFailures > 0 ? 'warning' : 'success',
+        message: result.message,
+      })
+      router.refresh()
     })
   }
 
@@ -246,6 +294,22 @@ export function ConferencesShell({
         </div>
       </header>
 
+      {feedback && (
+        <div
+          role="status"
+          className={[
+            'shrink-0 rounded-xl border px-4 py-3 text-sm',
+            feedback.tone === 'success'
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
+              : feedback.tone === 'warning'
+                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-red-200 bg-red-50 text-red-700',
+          ].join(' ')}
+        >
+          {feedback.message}
+        </div>
+      )}
+
       {/* Tabs */}
       <div className="flex shrink-0 flex-wrap gap-1 border-b border-neutral-200">
         {TABS.map(({ key, label }) => {
@@ -257,6 +321,7 @@ export function ConferencesShell({
               type="button"
               onClick={() => {
                 setTab(key)
+                setFeedback(null)
                 const next = key === 'upcoming' ? filteredUpcoming : partitions[key]
                 setSelectedId(next[0]?.id ?? null)
               }}
@@ -596,7 +661,7 @@ function ConferenceDetailPane({
               </select>
             </label>
             <button type="button" onClick={() => onRemove(conf)} disabled={pending} className="text-xs font-semibold text-neutral-400 hover:text-red-600 disabled:opacity-60">
-              Remove
+              {pending ? 'Removing…' : 'Remove'}
             </button>
           </>
         )}
