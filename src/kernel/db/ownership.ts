@@ -21,7 +21,7 @@
  * reconciliation check fails.
  */
 
-/** Kernel-owned tables (identity / rbac / notifications). */
+/** Kernel-owned tables (identity / rbac / notifications / platform composition). */
 export const KERNEL_TABLES: readonly string[] = [
   // identity
   'profiles',
@@ -39,6 +39,8 @@ export const KERNEL_TABLES: readonly string[] = [
   'email_log',
   // platform settings store (ADR-0010) — kernel-owned, no single component
   'platform_settings',
+  // per-user dashboard composition preferences (ADR-0012 / Sprint 19)
+  'user_dashboard_preferences',
 ]
 
 /**
