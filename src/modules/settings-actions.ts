@@ -1,12 +1,9 @@
 'use server'
 
 /**
- * modules/settings-actions.ts
- *
  * The server action behind every Platform Settings panel (ADR-0010). It resolves
- * the authoritative panel by id server-side (never trusting the client's field
- * definitions), gates to PlatformAdmin, then delegates the write — including the
- * secret guard and type coercion — to the kernel `persistPanelValues` primitive.
+ * the authoritative panel by id server-side, gates to PlatformAdmin, then
+ * delegates coercion and persistence to the kernel.
  */
 
 import { revalidatePath } from 'next/cache'
@@ -18,7 +15,6 @@ import { componentSettingsHref, findSettingsPanel } from '@/modules/settings-reg
 
 export type SaveSettingsResult = PersistResult
 
-/** Persist a panel's non-secret values. `values` is keyed by field key. */
 export async function saveSettingsPanel(
   panelId: string,
   values: Record<string, unknown>,
@@ -39,6 +35,13 @@ export async function saveSettingsPanel(
 
   revalidatePath('/app/settings')
   revalidatePath('/app/settings/organization')
+  revalidatePath('/app/settings/design')
+  // Design defaults are resolved in the app shell and dashboard pages.
+  if (panel.id === 'kernel:design-system') {
+    revalidatePath('/app', 'layout')
+    revalidatePath('/app/dashboard')
+    revalidatePath('/app/comms/dashboard')
+  }
   if (panel.componentId) {
     revalidatePath(`/app/settings/components/${panel.componentId}`)
     revalidatePath(componentSettingsHref(panel.componentId))
