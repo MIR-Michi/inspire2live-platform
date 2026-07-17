@@ -15,7 +15,11 @@ export type {
 } from '@/kernel/settings/types'
 export { settingStorageKey } from '@/kernel/settings/types'
 
-export { kernelPanels, organizationPanel } from '@/kernel/settings/kernel-panels'
+export {
+  kernelPanels,
+  organizationPanel,
+  designSystemPanel,
+} from '@/kernel/settings/kernel-panels'
 export {
   composePanels,
   componentPanel,
