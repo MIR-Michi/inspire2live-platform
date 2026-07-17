@@ -20,17 +20,21 @@ export type PersistResult =
   | { ok: false; error: string }
 
 type CoerceResult =
-  | { ok: true; value: unknown }
+  | { ok: true; skip: true }
+  | { ok: true; skip: false; value: unknown }
   | { ok: false; error: string }
 
 /** Coerce and validate a raw form value against the field declaration. */
 function coerce(field: SettingsFieldSpec, raw: unknown): CoerceResult {
   switch (field.type) {
     case 'boolean':
-      return { ok: true, value: raw === true || raw === 'true' || raw === 'on' }
+      return { ok: true, skip: false, value: raw === true || raw === 'true' || raw === 'on' }
     case 'number': {
       const n = typeof raw === 'number' ? raw : Number(String(raw).trim())
-      if (!Number.isFinite(n)) return { ok: false, error: `${field.label ?? field.key} must be a number.` }
+      // Preserve the settings framework's compatibility rule: malformed values
+      // are ignored rather than replacing a valid stored value. Declared bounds,
+      // however, are an explicit operator contract and therefore return an error.
+      if (!Number.isFinite(n)) return { ok: true, skip: true }
       if (field.min !== undefined && n < field.min) {
         return { ok: false, error: `${field.label ?? field.key} must be at least ${field.min}.` }
       }
@@ -43,14 +47,14 @@ function coerce(field: SettingsFieldSpec, raw: unknown): CoerceResult {
           return { ok: false, error: `${field.label ?? field.key} must use increments of ${field.step}.` }
         }
       }
-      return { ok: true, value: n }
+      return { ok: true, skip: false, value: n }
     }
     case 'enum':
       return field.options?.includes(String(raw))
-        ? { ok: true, value: String(raw) }
-        : { ok: false, error: `${field.label ?? field.key} has an unsupported value.` }
+        ? { ok: true, skip: false, value: String(raw) }
+        : { ok: true, skip: true }
     default:
-      return { ok: true, value: typeof raw === 'string' ? raw : String(raw ?? '') }
+      return { ok: true, skip: false, value: typeof raw === 'string' ? raw : String(raw ?? '') }
   }
 }
 
@@ -67,6 +71,7 @@ export async function persistPanelValues(
     if (!(field.key in values)) continue
     const coerced = coerce(field, values[field.key])
     if (!coerced.ok) return coerced
+    if (coerced.skip) continue
 
     // The coalesced unique index makes (scope, component, key) single-valued, so
     // delete-then-insert is a safe upsert across the nullable component_id.
