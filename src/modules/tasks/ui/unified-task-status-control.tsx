@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useRef, useState, useTransition } from 'react'
+import { useRef, useState, useTransition } from 'react'
 import { updateTaskStatus } from '@/lib/tasks/actions'
 import { UNIFIED_STATUS_ORDER, UNIFIED_STATUS_META, type UnifiedStatus } from '@/lib/comms-status'
 import type { TaskSource } from '@/lib/tasks/types'
@@ -25,8 +25,6 @@ export function UnifiedTaskStatusControl({
   const [success, setSuccess] = useState(false)
   const [pending, startTransition] = useTransition()
   const selectRef = useRef<HTMLSelectElement>(null)
-
-  useEffect(() => setCurrent(status), [status])
 
   const change = (next: UnifiedStatus) => {
     const previous = current
