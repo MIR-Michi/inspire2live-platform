@@ -3,7 +3,7 @@ import 'server-only'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { Database } from '@/types/database'
 import { createAdminClient } from '@/lib/supabase/admin'
-import { runConferenceDiscoveryJob } from './conference-discovery-job'
+import { runConferenceDiscoveryJob, type ConferenceDiscoveryTuning } from './conference-discovery-job'
 
 // The AI sweep is hard-capped below this. If the serverless task is interrupted
 // before it can write a final state, the next status read self-heals the row.
@@ -111,7 +111,10 @@ export async function markConferenceRunStarted(): Promise<{ started: boolean; re
 }
 
 /** Execute the discovery job and record the outcome on the singleton status row. */
-export async function executeAndRecordConferenceRun(userId: string | null): Promise<void> {
+export async function executeAndRecordConferenceRun(
+  userId: string | null,
+  tuning?: ConferenceDiscoveryTuning,
+): Promise<void> {
   const admin = createAdminClient()
   const db = admin as unknown as LooseDb
 
@@ -129,7 +132,7 @@ export async function executeAndRecordConferenceRun(userId: string | null): Prom
   }
 
   try {
-    const result = await runConferenceDiscoveryJob(admin, { createdBy: userId, onProgress: progress })
+    const result = await runConferenceDiscoveryJob(admin, { createdBy: userId, onProgress: progress, ...tuning })
     if (result.inserted > 0) {
       const laneCount = result.groupCount ?? 0
       const note = result.groupErrors ? ` (${result.groupErrors} search lane${result.groupErrors === 1 ? '' : 's'} timed out or failed)` : ''

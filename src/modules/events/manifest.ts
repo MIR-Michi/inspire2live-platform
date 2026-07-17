@@ -23,6 +23,48 @@ export const manifest = defineManifest({
   provides: {
     api: ["loadEventPipeline", "loadConference"],
     ui: ["EventsPipelineShell"],
+    settingsPanel: true,
+  },
+  // Operator-tunable conference-discovery settings, rendered as a panel in the
+  // Platform Settings space (ADR-0010 §5). Resolver precedence: these defaults
+  // → platform_settings → env. Read by the discovery route/cron.
+  config: {
+    discoveryEnabled: {
+      type: "boolean",
+      label: "Automatic conference discovery",
+      description: "Let the scheduled job search the web for new conferences and refresh the list.",
+      default: true,
+    },
+    discoveryIntervalDays: {
+      type: "number",
+      label: "Minimum days between searches",
+      description: "The scheduled job runs at most this often (it is triggered daily but skips until this interval has elapsed since the last successful refresh).",
+      default: 7,
+    },
+    discoveryMonthsAhead: {
+      type: "number",
+      label: "Look-ahead window (months)",
+      description: "Only collect conferences whose start date falls within this many months.",
+      default: 12,
+    },
+    discoveryMaxSearchesPerLane: {
+      type: "number",
+      label: "Max web searches per lane",
+      description: "Token/cost budget: how many web searches each discovery lane may run.",
+      default: 4,
+    },
+    discoveryMaxLanesPerRegion: {
+      type: "number",
+      label: "Source lenses per region",
+      description: "Breadth vs cost: how many source lenses to search per region (max 6).",
+      default: 6,
+    },
+    discoveryExistingNamesCap: {
+      type: "number",
+      label: "Known-conference hint size",
+      description: "How many existing conference names to send the model as a “do not repeat” hint.",
+      default: 50,
+    },
   },
   dependsOn: {
     kernel: ["identity", "rbac", "notifications", "ai-client"],

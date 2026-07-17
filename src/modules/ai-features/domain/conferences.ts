@@ -81,6 +81,12 @@ export type DiscoverConferencesInput = {
   createdBy?: string | null
   /** Restrict discovery to specific regions (defaults to all). */
   regions?: ConferenceRegion[]
+  /** Cap the "already have these" names sent to the model (token budget). */
+  existingNamesCap?: number
+  /** Max web searches per lane (token/cost budget; default 4). */
+  maxSearchesPerLane?: number
+  /** Cap the number of source lenses per region (breadth vs cost; default all). */
+  maxLanesPerRegion?: number
   model?: AiModelId
   effort?: AiReasoningEffort
 }
@@ -171,9 +177,19 @@ const ORG_PROFILE = `Inspire2Live is an international patient-driven cancer orga
 /**
  * Stable, cacheable system prefix shared by every discovery lane. The specific
  * region + oncology focus is supplied per lane in the user message.
+ *
+ * The "already have these" list lives HERE (not in each lane's user message) so
+ * that Anthropic prompt caching bills it once per run instead of re-sending it
+ * uncached on every one of the ~36 lanes — a large token saving. The list is
+ * capped and stably sorted so the cache prefix is reused across lanes (and, for
+ * an unchanged list, across runs).
  */
-export function buildDiscoverySystemPrompt(monthsAhead: number): string {
-  return [
+export function buildDiscoverySystemPrompt(
+  monthsAhead: number,
+  existingNames: string[] = [],
+  maxSearchesPerLane = 4,
+): string {
+  const lines = [
     'You find real, upcoming oncology and cancer-research conferences for the Inspire2Live communications team.',
     ORG_PROFILE,
     '',
@@ -185,11 +201,20 @@ export function buildDiscoverySystemPrompt(monthsAhead: number): string {
     '- Prefer the official conference website for websiteUrl; copy sourceUrl from a real search result.',
     '- Search both official society calendars and reputable conference-listing directories; then verify each result against an official event page when possible.',
     '- Include major global congresses and smaller regionally important oncology, cancer research, patient advocacy, survivorship, palliative oncology, nursing, radiotherapy, surgical oncology, and tumor-specific meetings.',
-    '- Use at most 4 searches for this lane, then return ONLY schema-valid JSON — nothing else.',
+    `- Use at most ${maxSearchesPerLane} searches for this lane, then return ONLY schema-valid JSON — nothing else.`,
     '- Dates must be ISO (YYYY-MM-DD). If only a month is known, use the first day of that month.',
     '- Set mainFocus to the primary oncology theme ("Breast cancer", "Immuno-oncology", "General oncology", …).',
     '- relevance is 0-100 for how valuable the conference is to a patient-advocacy organization.',
-  ].join('\n')
+  ]
+  if (existingNames.length > 0) {
+    const known = [...new Set(existingNames.map((n) => n.trim()).filter(Boolean))].sort()
+    lines.push(
+      '',
+      'We ALREADY have these conferences — do not return any of them again (return brand-new events only):',
+      known.join(' | '),
+    )
+  }
+  return lines.join('\n')
 }
 
 // ── Pure helpers (exported for unit tests) ───────────────────────────────────
@@ -266,15 +291,43 @@ function normalizeTopics(value: unknown): string[] {
  * Stable dedupe key from the conference identity: normalized name + start month
  * (so the same event found in two regions, or re-found next month, collapses).
  */
-export function conferenceDedupeKey(name: string, startDate: string | null): string {
-  const slug = name
+/**
+ * Noise words that vary between listings of the *same* conference and so must
+ * not split its dedupe key. Deliberately conservative — event-type words
+ * (congress, summit, symposium, meeting, workshop) are kept because they can
+ * genuinely distinguish two events from the same organiser.
+ */
+const DEDUPE_STOPWORDS = new Set(['the', 'a', 'an', 'annual', 'edition'])
+
+/**
+ * Normalise a conference name into a stable slug for de-duplication. Strips
+ * diacritics, punctuation, a trailing/embedded 4-digit year, ordinal edition
+ * markers ("24th"), and low-signal stopwords so that "ESMO Congress 2026",
+ * "ESMO Congress", and "the ESMO Congress" all collapse to one slug.
+ */
+export function normalizeConferenceName(name: string): string {
+  return name
     .toLowerCase()
-    .normalize('NFKD')
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim()
-    .replace(/\s+/g, '-')
-  const month = startDate ? startDate.slice(0, 7) : 'tbd'
-  return `${slug}:${month}`.slice(0, 200)
+    .normalize('NFKD') // decompose accents so the strip below drops them
+    .replace(/[^a-z0-9]+/g, ' ') // punctuation + combining marks → space
+    .replace(/\b(?:19|20)\d{2}\b/g, ' ') // drop 4-digit years
+    .replace(/\b\d+(?:st|nd|rd|th)\b/g, ' ') // drop ordinals (24th, 3rd…)
+    .split(/\s+/)
+    .filter((word) => word && !DEDUPE_STOPWORDS.has(word))
+    .join('-')
+}
+
+/**
+ * A source-agnostic dedupe key: normalised name + the conference *year*.
+ * Keying on the year rather than the month means a source that reports the
+ * event a month early/late no longer creates a phantom duplicate. The same key
+ * is computed in the database (migration 00164) so every insert path — AI
+ * discovery, guest resolution, seed, manual — converges on one row.
+ */
+export function conferenceDedupeKey(name: string, startDate: string | null): string {
+  const slug = normalizeConferenceName(name) || 'conference'
+  const year = startDate && /^\d{4}/.test(startDate) ? startDate.slice(0, 4) : 'tbd'
+  return `${slug}:${year}`.slice(0, 200)
 }
 
 function normalizeConference(value: unknown, region: ConferenceRegion): DiscoveredConference | null {
@@ -496,8 +549,10 @@ type GroupResult = {
   effort: AiReasoningEffort | null
 }
 
-function buildDiscoveryLanes(regions: ConferenceRegion[]): DiscoveryLane[] {
-  return regions.flatMap((region) => DISCOVERY_LENSES.map((lens) => ({ ...lens, region })))
+function buildDiscoveryLanes(regions: ConferenceRegion[], maxLensesPerRegion?: number): DiscoveryLane[] {
+  const lenses =
+    maxLensesPerRegion && maxLensesPerRegion > 0 ? DISCOVERY_LENSES.slice(0, maxLensesPerRegion) : DISCOVERY_LENSES
+  return regions.flatMap((region) => lenses.map((lens) => ({ ...lens, region })))
 }
 
 function buildLaneInstruction(lane: DiscoveryLane, monthsAhead: number): string {
@@ -523,15 +578,14 @@ async function discoverLane(
   lane: DiscoveryLane,
   system: string,
   monthsAhead: number,
-  existingNames: string[],
   createdBy: string | null,
+  maxSearchesPerLane: number,
   model?: AiModelId,
   effort?: AiReasoningEffort
 ): Promise<GroupResult> {
-  const existingContext = wrapExternalData(
-    'conferences.existing',
-    JSON.stringify({ existingNames: existingNames.slice(0, 100), note: 'Do not repeat these.' })
-  )
+  // NB: the "already have these" list is baked into the cached `system` prompt
+  // (see buildDiscoverySystemPrompt) — deliberately NOT repeated here, so it is
+  // not re-billed uncached on every lane.
   try {
     const result = await runAiMessage<unknown>({
       feature: 'conference_discovery_lane',
@@ -544,7 +598,7 @@ async function discoverLane(
       createdBy,
       system,
       cacheSystemPrompt: true,
-      tools: [webSearchTool({ maxUses: 4 })],
+      tools: [webSearchTool({ maxUses: maxSearchesPerLane })],
       structuredFormat: {
         type: 'json_schema',
         name: 'conference_list',
@@ -552,7 +606,7 @@ async function discoverLane(
         schema: CONFERENCE_LIST_SCHEMA as unknown as Record<string, unknown>,
       },
       messages: [
-        { role: 'user', content: [buildLaneInstruction(lane, monthsAhead), existingContext].join('\n\n') },
+        { role: 'user', content: buildLaneInstruction(lane, monthsAhead) },
       ],
     })
     const candidates = listFrom(result.output, 'conferences').length
@@ -580,12 +634,14 @@ async function discoverLane(
 export async function discoverConferences(input: DiscoverConferencesInput = {}): Promise<DiscoverConferencesResult> {
   const monthsAhead = input.monthsAhead ?? DEFAULT_MONTHS_AHEAD
   const regions = input.regions && input.regions.length > 0 ? input.regions : [...CONFERENCE_REGIONS]
-  const lanes = buildDiscoveryLanes(regions)
-  const system = buildDiscoverySystemPrompt(monthsAhead)
-  const existingNames = input.existingNames ?? []
+  const lanes = buildDiscoveryLanes(regions, input.maxLanesPerRegion)
+  const maxSearchesPerLane = input.maxSearchesPerLane && input.maxSearchesPerLane > 0 ? input.maxSearchesPerLane : 4
+  const existingNamesCap = input.existingNamesCap && input.existingNamesCap > 0 ? input.existingNamesCap : 50
+  const existingNames = (input.existingNames ?? []).slice(0, existingNamesCap)
+  const system = buildDiscoverySystemPrompt(monthsAhead, existingNames, maxSearchesPerLane)
 
   const groupResults = await mapWithConcurrency(lanes, GROUP_CONCURRENCY, (lane) =>
-    discoverLane(lane, system, monthsAhead, existingNames, input.createdBy ?? null, input.model, input.effort)
+    discoverLane(lane, system, monthsAhead, input.createdBy ?? null, maxSearchesPerLane, input.model, input.effort)
   )
 
   let candidateCount = 0

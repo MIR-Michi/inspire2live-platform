@@ -65,9 +65,20 @@ async function withTimeout<T>(promise: Promise<T>, ms: number, message: string):
  *
  * Shared by the CRON_SECRET-protected route and the admin/comms "Refresh" action.
  */
+export type ConferenceDiscoveryTuning = {
+  monthsAhead?: number
+  maxSearchesPerLane?: number
+  maxLanesPerRegion?: number
+  existingNamesCap?: number
+}
+
 export async function runConferenceDiscoveryJob(
   supabase: SupabaseClient<Database>,
-  options?: { createdBy?: string | null; monthsAhead?: number; regions?: ConferenceRegion[]; onProgress?: ProgressReporter }
+  options?: {
+    createdBy?: string | null
+    regions?: ConferenceRegion[]
+    onProgress?: ProgressReporter
+  } & ConferenceDiscoveryTuning
 ): Promise<ConferenceDiscoveryJobResult> {
   const db = supabase as unknown as LooseDb
 
@@ -96,6 +107,9 @@ export async function runConferenceDiscoveryJob(
       existingNames,
       monthsAhead: options?.monthsAhead,
       regions: options?.regions,
+      maxSearchesPerLane: options?.maxSearchesPerLane,
+      maxLanesPerRegion: options?.maxLanesPerRegion,
+      existingNamesCap: options?.existingNamesCap,
       createdBy: options?.createdBy ?? null,
     }),
     AI_SWEEP_TIMEOUT_MS,
