@@ -4,6 +4,7 @@ import {
   buildDefaultDashboardLayout,
   getDashboardDefinition,
   moveDashboardWidget,
+  resolveDashboardDropIndex,
   sanitizeDashboardLayout,
   updateDashboardWidget,
   validateDashboardLayout,
@@ -52,12 +53,45 @@ describe('adaptive dashboard layout domain', () => {
     const original = buildDefaultDashboardLayout(definition)
     const moved = moveDashboardWidget(original, 'incoming-review', 'supporting', 0)
 
-    expect(moved.widgets.find((widget) => widget.id === 'incoming-review')).toMatchObject({ zone: 'supporting', order: 0 })
+    expect(moved.widgets.find((widget) => widget.id === 'incoming-review')).toMatchObject({ zone: 'supporting' })
     const supportingOrders = moved.widgets
       .filter((widget) => widget.zone === 'supporting')
       .map((widget) => widget.order)
       .sort((a, b) => a - b)
     expect(supportingOrders).toEqual(supportingOrders.map((_, index) => index))
+  })
+
+  it('translates a visual drop slot after the source into the post-removal index', () => {
+    const original = buildDefaultDashboardLayout(definition)
+    const arranged = moveDashboardWidget(original, 'project-summaries', 'primary', 1)
+
+    expect(resolveDashboardDropIndex(arranged, 'incoming-review', 'primary', 2)).toBe(1)
+    const moved = moveDashboardWidget(
+      arranged,
+      'incoming-review',
+      'primary',
+      resolveDashboardDropIndex(arranged, 'incoming-review', 'primary', 2),
+    )
+    const visiblePrimary = moved.widgets
+      .filter((widget) => widget.zone === 'primary' && widget.visible && widget.size !== 'wide')
+      .sort((a, b) => a.order - b.order)
+      .map((widget) => widget.id)
+
+    expect(visiblePrimary).toEqual(['project-summaries', 'incoming-review'])
+  })
+
+  it('keeps hidden and full-width tiles out of visible column insertion positions', () => {
+    const original = buildDefaultDashboardLayout(definition)
+    const withHidden = updateDashboardWidget(definition, original, 'recent-decisions', { visible: false })
+    const moved = moveDashboardWidget(withHidden, 'shortcuts', 'primary', 0)
+    const visiblePrimary = moved.widgets
+      .filter((widget) => widget.zone === 'primary' && widget.visible && widget.size !== 'wide')
+      .sort((a, b) => a.order - b.order)
+      .map((widget) => widget.id)
+
+    expect(visiblePrimary).toEqual(['shortcuts', 'incoming-review'])
+    expect(moved.widgets.find((widget) => widget.id === 'my-tasks')).toMatchObject({ size: 'wide', visible: true })
+    expect(moved.widgets.find((widget) => widget.id === 'recent-decisions')).toMatchObject({ visible: false })
   })
 
   it('honors size constraints and required visibility when updating a widget', () => {

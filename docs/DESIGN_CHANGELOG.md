@@ -137,3 +137,17 @@ Tracks meaningful interpretation/changes from the benchmark design document that
 ---
 
 *Last reviewed: 2026-07-17.*
+
+## 2026-07-17 — Dashboard editing UX correction
+
+**Problem:** Native full-tile dragging created ambiguous targets, could trigger both tile and column drop handlers, and sometimes exposed viewport overflow. Design-setting changes were difficult to locate in the preview.
+
+**Decision:** Dragging starts only from the explicit handle. The dashboard shows a compact drag ghost, a high-contrast before/after insertion line, and a large end-of-column target. The Design preview names the changed setting, highlights its affected section, and tracks unsaved changes. The app shell uses the dynamic viewport and contained overscroll.
+
+**Persistence correction:** Kernel settings use a nullable component ID and are uniquely keyed through the coalesced expression index (migration `00169`).
+
+**References:** PR #182, `docs/changes/2026-07-17-dashboard-design-ux-fixes.md`, REQ-DASH-009.
+
+---
+
+*Last reviewed: 2026-07-17.*

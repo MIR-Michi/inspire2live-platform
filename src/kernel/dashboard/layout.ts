@@ -72,6 +72,12 @@ function normalizeOrders(widgets: DashboardWidgetLayout[]): DashboardWidgetLayou
   return result
 }
 
+function sameMovementLane(source: DashboardWidgetLayout, candidate: DashboardWidgetLayout, zone: DashboardZone): boolean {
+  return candidate.zone === zone
+    && candidate.visible === source.visible
+    && (candidate.size === 'wide') === (source.size === 'wide')
+}
+
 /**
  * Merge an untrusted stored layout with the current dashboard definition.
  * Unknown/duplicate widgets are discarded, new widgets are appended, and all
@@ -140,8 +146,11 @@ export function moveDashboardWidget(
   if (!source) return layout
 
   const other = layout.widgets.filter((widget) => widget.id !== widgetId)
+  // Visible column tiles, hidden library tiles, and full-width tiles are distinct
+  // movement lanes. Hidden or wide items must not distort the insertion index a
+  // user sees while arranging the visible primary/supporting columns.
   const zoneWidgets = other
-    .filter((widget) => widget.zone === zone)
+    .filter((widget) => sameMovementLane(source, widget, zone))
     .sort((a, b) => a.order - b.order)
   const index = Math.max(0, Math.min(targetIndex, zoneWidgets.length))
   zoneWidgets.splice(index, 0, { ...source, zone })
@@ -150,8 +159,28 @@ export function moveDashboardWidget(
   // this, the moved tile retained its old-zone order and could be sorted back
   // behind the intended insertion point.
   const positioned = zoneWidgets.map((widget, order) => ({ ...widget, order }))
-  const updated = other.filter((widget) => widget.zone !== zone)
+  const updated = other.filter((widget) => !sameMovementLane(source, widget, zone))
   return { ...layout, widgets: normalizeOrders([...updated, ...positioned]) }
+}
+
+/**
+ * Translate a visual drop slot (before/after a rendered tile) into the insertion
+ * index expected by moveDashboardWidget, which removes the source first.
+ */
+export function resolveDashboardDropIndex(
+  layout: DashboardLayoutState,
+  widgetId: string,
+  zone: DashboardZone,
+  visualIndex: number,
+): number {
+  const peers = layout.widgets
+    .filter((widget) => widget.zone === zone && widget.visible && widget.size !== 'wide')
+    .sort((a, b) => a.order - b.order)
+  const sourceIndex = peers.findIndex((widget) => widget.id === widgetId)
+  const sourceIsInLane = sourceIndex >= 0
+  const adjusted = sourceIsInLane && visualIndex > sourceIndex ? visualIndex - 1 : visualIndex
+  const max = peers.length - (sourceIsInLane ? 1 : 0)
+  return Math.max(0, Math.min(adjusted, max))
 }
 
 export function updateDashboardWidget(

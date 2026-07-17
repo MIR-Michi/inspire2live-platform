@@ -36,7 +36,7 @@ test.describe('Adaptive dashboard smoke tests (authenticated)', () => {
     await context.close()
   })
 
-  test('edit mode exposes personalization controls without moving content accidentally', async ({ browser }) => {
+  test('edit mode exposes clear personalization and drag controls', async ({ browser }) => {
     const authenticated = await authenticatedPage(browser)
     if (!authenticated) {
       test.skip()
@@ -48,7 +48,7 @@ test.describe('Adaptive dashboard smoke tests (authenticated)', () => {
     const edit = page.getByRole('button', { name: 'Edit dashboard' })
     await expect(edit).toBeVisible()
 
-    await expect(page.getByRole('button', { name: /Move .+ Use arrow keys or drag/ })).toHaveCount(0)
+    await expect(page.getByRole('button', { name: /Move .+ Drag this handle/ })).toHaveCount(0)
     await edit.click()
 
     await expect(page.getByRole('button', { name: 'Done' })).toBeVisible()
@@ -57,7 +57,9 @@ test.describe('Adaptive dashboard smoke tests (authenticated)', () => {
     await expect(page.getByRole('button', { name: 'Overview' })).toBeVisible()
     await expect(page.getByRole('button', { name: /Add tiles/ })).toBeVisible()
     await expect(page.getByRole('button', { name: 'Reset' })).toBeVisible()
-    await expect(page.getByRole('button', { name: /Move .+ Use arrow keys or drag/ }).first()).toBeVisible()
+    await expect(page.getByText('Drag from the ⠿ handle')).toBeVisible()
+    await expect(page.getByRole('button', { name: /Move .+ Drag this handle/ }).first()).toBeVisible()
+    await expect(page.getByText(/Drop at end of (primary|supporting) column/).first()).toBeHidden()
 
     await page.getByRole('button', { name: 'Done' }).click()
     await expect(page.getByRole('button', { name: 'Edit dashboard' })).toBeVisible()
