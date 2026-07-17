@@ -53,6 +53,31 @@ const panel: SettingsPanel = {
   }],
 }
 
+const designPanel: SettingsPanel = {
+  id: 'kernel:design-system',
+  scope: 'kernel',
+  componentId: null,
+  title: 'Design & Component Library',
+  fields: [
+    {
+      key: 'dashboardDensity',
+      type: 'enum',
+      label: 'Default dashboard density',
+      options: ['comfortable', 'compact'],
+      default: 'comfortable',
+    },
+    {
+      key: 'dashboardDefaultSplitRatio',
+      type: 'number',
+      label: 'Default primary-column share',
+      min: 0.42,
+      max: 0.78,
+      step: 0.01,
+      default: 0.64,
+    },
+  ],
+}
+
 describe('persistPanelValues numeric constraints', () => {
   it('coerces and saves a valid bounded number', async () => {
     const db = fakeSupabase()
@@ -69,11 +94,38 @@ describe('persistPanelValues numeric constraints', () => {
     })
   })
 
+  it('persists kernel design settings with a nullable component id', async () => {
+    const db = fakeSupabase()
+    const result = await persistPanelValues(db.client, designPanel, { dashboardDensity: 'compact' }, 'admin-1')
+
+    expect(result).toEqual({ ok: true, saved: 1 })
+    expect(db.inserted[0]).toMatchObject({
+      scope: 'kernel',
+      component_id: null,
+      key: 'dashboardDensity',
+      value: 'compact',
+      updated_by: 'admin-1',
+    })
+    expect(db.deleted).toContainEqual(['component_id', null])
+  })
+
   it('rejects a number above the declared maximum without writing', async () => {
     const db = fakeSupabase()
     const result = await persistPanelValues(db.client, panel, { discoveryMaxLanesPerRegion: 7 }, 'user-1')
 
     expect(result).toEqual({ ok: false, error: 'Source lenses per region must be no more than 6.' })
+    expect(db.inserted).toHaveLength(0)
+    expect(db.deleted).toHaveLength(0)
+  })
+
+  it('validates the entire panel before writing any earlier valid field', async () => {
+    const db = fakeSupabase()
+    const result = await persistPanelValues(db.client, designPanel, {
+      dashboardDensity: 'compact',
+      dashboardDefaultSplitRatio: 0.9,
+    }, 'admin-1')
+
+    expect(result).toEqual({ ok: false, error: 'Default primary-column share must be no more than 0.78.' })
     expect(db.inserted).toHaveLength(0)
     expect(db.deleted).toHaveLength(0)
   })
