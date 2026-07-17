@@ -1,5 +1,6 @@
 'use client'
 
+import { useRouter } from 'next/navigation'
 import { useState, useTransition, type CSSProperties } from 'react'
 import type { ResolvedField } from '@/kernel/settings'
 import { saveSettingsPanel } from '@/modules/settings-actions'
@@ -33,6 +34,7 @@ export function DesignComponentLibraryPanel({
   description?: string
   fields: ResolvedField[]
 }) {
+  const router = useRouter()
   const [values, setValues] = useState<Record<string, unknown>>(
     () => Object.fromEntries(fields.map((field) => [field.key, field.value])),
   )
@@ -48,9 +50,12 @@ export function DesignComponentLibraryPanel({
     event.preventDefault()
     startTransition(async () => {
       const result = await saveSettingsPanel(panelId, values)
-      setMessage(result.ok
-        ? { ok: true, text: `Saved ${result.saved} design setting${result.saved === 1 ? '' : 's'}. Reloaded pages now use these defaults.` }
-        : { ok: false, text: result.error })
+      if (result.ok) {
+        setMessage({ ok: true, text: `Saved ${result.saved} design setting${result.saved === 1 ? '' : 's'}. The current shell now uses these defaults.` })
+        router.refresh()
+      } else {
+        setMessage({ ok: false, text: result.error })
+      }
     })
   }
 
