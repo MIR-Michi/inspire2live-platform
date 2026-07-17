@@ -121,3 +121,19 @@ Tracks meaningful interpretation/changes from the benchmark design document that
 
 ### Technical adjustment
 - Resource full-text search implemented with **trigger-based `fts` update** instead of generated column expression due to PostgreSQL immutability constraint encountered during migration push.
+
+## 2026-07-17 — Adaptive dashboard composition
+
+**Decision:** Replace independent stacked dashboard layouts with one component-library-first adaptive composition contract. Desktop uses a resizable primary/supporting workspace; mobile retains logical primary-first order. Personal changes require explicit edit mode and persist across devices.
+
+**Interaction:** Move/resize/hide/restore/presets/undo/reset are available only in edit mode. Required governance widgets remain visible. View-as is read-only.
+
+**Visual system:** Organization defaults for density, semantic radius, elevation, motion, task celebration, preset, and split ratio are edited in Platform Settings → Design & Component Library and preview the real production components.
+
+**Motion:** Task completion celebrates only after successful direct persistence. Reduced-motion users receive static success feedback and announcements without particles.
+
+**References:** ADR-0012, `docs/ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md`, PR #181.
+
+---
+
+*Last reviewed: 2026-07-17.*

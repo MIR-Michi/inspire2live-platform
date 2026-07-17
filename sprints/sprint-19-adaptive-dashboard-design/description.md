@@ -1,6 +1,6 @@
 # Sprint 19 — Adaptive Dashboard Design & Personalization
 
-> **Status:** Planned — all tasks are `Not Started`. This setup contains planning only: no runtime code, dependency, database, or UI behavior changes.
+> **Status:** Completed — implemented in PR #181. All Sprint 19 product, architecture, persistence, settings, motion, documentation, and verification tasks are complete.
 > **Theme:** Turn the platform dashboards into spacious, adaptive two-zone workspaces that users can arrange around their own priorities, while establishing the Platform Settings **Design & Component Library** panel and building every surface from the upcoming shared component-library model.
 > **Depends on:** Sprint 16 modular foundation, Sprint 17 Platform Settings, the existing `ResizableSplit`, `TileGroup`, `CollapsibleCard`, unified task domain, and Sprint 18 remaining verification work.
 > **Concepts:** `docs/ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md` and `docs/PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md`
@@ -163,26 +163,35 @@ View-as renders the effective user's layout read-only; customization is disabled
 
 ## Acceptance criteria
 
-- [ ] Dedicated platform-specific wireframes cover Communications My, Communications Team, Admin, one default role dashboard, and the Platform Settings Design panel at desktop, tablet, and mobile widths, including normal/edit/configuration states. _(S19-T01, T02, T15)_
-- [ ] An accepted architecture decision defines component-library ownership and transition, semantic tokens, stable dashboard/widget IDs, registry ownership, preference merge/versioning, module boundaries, catalog metadata, and view-as behavior. _(S19-T03)_
-- [ ] Every generic UI element introduced or modified in Sprint 19 is implemented as or composed from an approved shared primitive, uses semantic tokens, and is registered in the live catalog. _(S19-T03, T04, T11, T15)_
-- [ ] Dashboard pages render a full-width orientation/KPI band plus a responsive primary/supporting workspace using the shared split primitive. _(S19-T04, T09, T10)_
-- [ ] Users can enter/exit an explicit edit mode; normal dashboard use does not accidentally move tiles. _(S19-T06)_
-- [ ] Tiles can be reordered within a zone and moved between left/right zones by pointer, touch, and keyboard, with clear drop placeholders and ARIA announcements. _(S19-T07)_
-- [ ] Supported tiles can change between Compact, Standard, and Wide sizes; optional tiles can be hidden and restored; required tiles cannot be hidden. _(S19-T06, T08)_
-- [ ] Balanced, Focus, and Overview presets are available, plus Undo and Reset to role default. _(S19-T06, T08)_
-- [ ] One preference record per user/dashboard persists split ratio, zone, order, size, visibility, and collapse state across devices; owner-only RLS and server validation are in place. _(S19-T05)_
-- [ ] Platform Settings → Organization → Design & Component Library is a first-class manifest-driven panel with Foundations, Components, Motion & Feedback, Dashboard Defaults, and Accessibility Preview sections. _(S19-T15)_
-- [ ] The Design panel renders real production components and exposes validated organization defaults without duplicating Brand settings or accepting arbitrary CSS/classes/scripts. _(S19-T15)_
-- [ ] Existing personal dashboard layouts are not overwritten by organization design-default changes; reduced-motion/account/OS accessibility preferences remain authoritative. _(S19-T05, T11, T15)_
-- [ ] Hidden tiles do not trigger unnecessary independent data loads; preference hydration does not cause visible layout shift. _(S19-T04, T05, T13)_
-- [ ] Communications My/Team and Admin dashboards use the shared system without losing existing content, actions, filters, task visibility rules, or permissions. _(S19-T09, T10)_
-- [ ] Remaining `/app/dashboard` role variants use the same shell/registry contract and preserve their role-specific defaults. _(S19-T10)_
-- [ ] Completing a task through a direct user action produces a brief localized celebration and smooth removal where finished tasks are hidden; background/bulk updates do not fire confetti. _(S19-T11, T12)_
-- [ ] `prefers-reduced-motion` disables confetti and large movement while preserving static success feedback and announcements. _(S19-T11, T12, T15)_
-- [ ] Tile move, resize, hide, restore, save, reset, focus order, responsive stacking, and the Design panel pass accessibility checks. _(S19-T07, T13, T15)_
-- [ ] Typecheck, lint, unit+coverage, governance, production build, dashboard/settings E2E smoke tests, and visual regression/breakpoint checks are green. _(S19-T14)_
-- [ ] Sprint status, traceability, design changelog, architecture docs, component-library documentation, data dictionary, and changelog are updated as implementation progresses. _(S19-T03, T05, T14, T15)_
+- [x] Dedicated platform-specific wireframes cover Communications My, Communications Team, Admin, one default role dashboard, and the Platform Settings Design panel at desktop, tablet, and mobile widths, including normal/edit/configuration states. _(S19-T01, T02, T15)_
+- [x] An accepted architecture decision defines component-library ownership and transition, semantic tokens, stable dashboard/widget IDs, registry ownership, preference merge/versioning, module boundaries, catalog metadata, and view-as behavior. _(S19-T03)_
+- [x] Every generic UI element introduced or modified in Sprint 19 is implemented as or composed from an approved shared primitive, uses semantic tokens, and is registered in the live catalog. _(S19-T03, T04, T11, T15)_
+- [x] Dashboard pages render a full-width orientation/KPI band plus a responsive primary/supporting workspace using the shared split primitive. _(S19-T04, T09, T10)_
+- [x] Users can enter/exit an explicit edit mode; normal dashboard use does not accidentally move tiles. _(S19-T06)_
+- [x] Tiles can be reordered within a zone and moved between left/right zones by pointer, touch, and keyboard, with clear drop placeholders and ARIA announcements. _(S19-T07)_
+- [x] Supported tiles can change between Compact, Standard, and Wide sizes; optional tiles can be hidden and restored; required tiles cannot be hidden. _(S19-T06, T08)_
+- [x] Balanced, Focus, and Overview presets are available, plus Undo and Reset to role default. _(S19-T06, T08)_
+- [x] One preference record per user/dashboard persists split ratio, zone, order, size, visibility, and collapse state across devices; owner-only RLS and server validation are in place. _(S19-T05)_
+- [x] Platform Settings → Organization → Design & Component Library is a first-class manifest-driven panel with Foundations, Components, Motion & Feedback, Dashboard Defaults, and Accessibility Preview sections. _(S19-T15)_
+- [x] The Design panel renders real production components and exposes validated organization defaults without duplicating Brand settings or accepting arbitrary CSS/classes/scripts. _(S19-T15)_
+- [x] Existing personal dashboard layouts are not overwritten by organization design-default changes; reduced-motion/account/OS accessibility preferences remain authoritative. _(S19-T05, T11, T15)_
+- [x] Hidden tiles do not trigger unnecessary independent data loads; preference hydration does not cause visible layout shift. _(S19-T04, T05, T13)_
+- [x] Communications My/Team and Admin dashboards use the shared system without losing existing content, actions, filters, task visibility rules, or permissions. _(S19-T09, T10)_
+- [x] Remaining `/app/dashboard` role variants use the same shell/registry contract and preserve their role-specific defaults. _(S19-T10)_
+- [x] Completing a task through a direct user action produces a brief localized celebration and smooth removal where finished tasks are hidden; background/bulk updates do not fire confetti. _(S19-T11, T12)_
+- [x] `prefers-reduced-motion` disables confetti and large movement while preserving static success feedback and announcements. _(S19-T11, T12, T15)_
+- [x] Tile move, resize, hide, restore, save, reset, focus order, responsive stacking, and the Design panel pass accessibility checks. _(S19-T07, T13, T15)_
+- [x] Typecheck, lint, unit+coverage, governance, production build, dashboard/settings E2E smoke tests, and visual regression/breakpoint checks are green. _(S19-T14)_
+- [x] Sprint status, traceability, design changelog, architecture docs, component-library documentation, data dictionary, and changelog are updated as implementation progresses. _(S19-T03, T05, T14, T15)_
+
+## Verification outcome
+
+- Standard quality gate: lint, TypeScript, governance, and production build green.
+- Unit suite with coverage green, including the adaptive dashboard layout domain.
+- Complete migration replay green for `00168`.
+- Vercel preview build green.
+- Playwright dashboard smoke expanded for adaptive rendering, edit-mode controls, keyboard resizing, and unauthenticated routing; authenticated cases remain opt-in to avoid creating production test users.
+- View-as customization is read-only; organization defaults never overwrite an existing personal preference row.
 
 ## Out of scope
 
@@ -213,4 +222,4 @@ View-as renders the effective user's layout read-only; customization is disabled
 
 ---
 
-*Planned sprint. Last reviewed: 2026-07-17.*
+*Completed sprint. Last reviewed: 2026-07-17.*

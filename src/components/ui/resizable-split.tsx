@@ -18,16 +18,22 @@ const KEYBOARD_STEP = 0.02
 /**
  * Two-column layout with a draggable divider. Below `lg` the columns stack and
  * the divider is hidden (CSS-only, no JS) so there is no hydration flash. The
- * chosen ratio is persisted per `storageKey` in localStorage.
+ * chosen ratio is persisted per `storageKey` by default.
  *
- * Panels are `min-w-0` so content (feeds, tables) can shrink and scroll inside
- * their track rather than forcing the whole layout wider.
+ * Controlled consumers keep a local transient ratio during pointer movement,
+ * then publish the final value through `onRatioCommit`. This gives durable
+ * dashboard preferences smooth drag feedback without regressing legacy
+ * localStorage-only surfaces.
  */
 export function ResizableSplit({
   storageKey,
   left,
   right,
   defaultRatio = 0.66,
+  ratio: controlledRatio,
+  onRatioChange,
+  onRatioCommit,
+  persistLocal = true,
   minRatio = DEFAULT_MIN_RATIO,
   maxRatio = DEFAULT_MAX_RATIO,
   handlePx,
@@ -39,50 +45,71 @@ export function ResizableSplit({
   left: ReactNode
   right: ReactNode
   defaultRatio?: number
+  ratio?: number
+  onRatioChange?: (ratio: number) => void
+  onRatioCommit?: (ratio: number) => void
+  persistLocal?: boolean
   minRatio?: number
   maxRatio?: number
   handlePx?: number
   className?: string
   ariaLabel?: string
-  /**
-   * 'gap' — a spaced divider with a pill handle (default, for card layouts).
-   * 'seam' — a thin full-height line, no gap, for seamless bordered containers
-   *          (e.g. the campus month grid) where a gap would break the border.
-   */
   variant?: 'gap' | 'seam'
 }) {
   const seam = variant === 'seam'
   const effectiveHandlePx = handlePx ?? (seam ? 9 : DEFAULT_HANDLE_PX)
   const containerRef = useRef<HTMLDivElement | null>(null)
-  const [ratio, setRatio] = useState(() => clampRatio(defaultRatio, minRatio, maxRatio))
+  const [internalRatio, setInternalRatio] = useState(() => clampRatio(controlledRatio ?? defaultRatio, minRatio, maxRatio))
   const [dragging, setDragging] = useState(false)
+  const controlled = controlledRatio !== undefined
+  const ratio = clampRatio(dragging ? internalRatio : controlledRatio ?? internalRatio, minRatio, maxRatio)
 
-  // Load the persisted ratio after mount (SSR renders the default — no mismatch).
   useEffect(() => {
+    if (!controlled || dragging) return
+    // Sync the local preview after a controlled value changes outside a drag.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setInternalRatio(clampRatio(controlledRatio, minRatio, maxRatio))
+  }, [controlled, controlledRatio, dragging, maxRatio, minRatio])
+
+  useEffect(() => {
+    if (controlled || !persistLocal) return
     try {
       const stored = parseStoredRatio(window.localStorage.getItem(storageKeyFor(storageKey)), minRatio, maxRatio)
-      // Read-after-mount is the SSR-safe initialization pattern here (server
-      // renders the default; client hydrates it, then adopts the stored value).
       // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (stored != null) setRatio(stored)
+      if (stored != null) setInternalRatio(stored)
     } catch {
       /* localStorage unavailable — keep the default */
     }
-  }, [storageKey, minRatio, maxRatio])
+  }, [controlled, maxRatio, minRatio, persistLocal, storageKey])
 
   const persist = useCallback(
     (value: number) => {
+      if (!persistLocal) return
       try {
         window.localStorage.setItem(storageKeyFor(storageKey), String(value))
       } catch {
         /* ignore */
       }
     },
-    [storageKey]
+    [persistLocal, storageKey],
   )
+
+  const change = (value: number) => {
+    const next = clampRatio(value, minRatio, maxRatio)
+    setInternalRatio(next)
+    onRatioChange?.(next)
+    return next
+  }
+
+  const commit = (value: number) => {
+    const next = clampRatio(value, minRatio, maxRatio)
+    persist(next)
+    onRatioCommit?.(next)
+  }
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     event.preventDefault()
+    setInternalRatio(ratio)
     event.currentTarget.setPointerCapture(event.pointerId)
     setDragging(true)
   }
@@ -90,18 +117,19 @@ export function ResizableSplit({
   const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging || !containerRef.current) return
     const rect = containerRef.current.getBoundingClientRect()
-    setRatio(ratioFromPointer(event.clientX, rect, minRatio, maxRatio))
+    change(ratioFromPointer(event.clientX, rect, minRatio, maxRatio))
   }
 
   const endDrag = (event: React.PointerEvent<HTMLDivElement>) => {
     if (!dragging) return
+    const finalRatio = internalRatio
     setDragging(false)
     try {
       event.currentTarget.releasePointerCapture(event.pointerId)
     } catch {
       /* not captured */
     }
-    persist(ratio)
+    commit(finalRatio)
   }
 
   const onKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
@@ -112,14 +140,13 @@ export function ResizableSplit({
     else if (event.key === 'End') next = maxRatio
     if (next == null) return
     event.preventDefault()
-    setRatio(next)
-    persist(next)
+    const changed = change(next)
+    commit(changed)
   }
 
   const reset = () => {
-    const value = clampRatio(defaultRatio, minRatio, maxRatio)
-    setRatio(value)
-    persist(value)
+    const next = change(defaultRatio)
+    commit(next)
   }
 
   const gapClass = seam ? 'gap-0' : 'gap-6 lg:gap-0'
@@ -145,22 +172,12 @@ export function ResizableSplit({
         onKeyDown={onKeyDown}
         onDoubleClick={reset}
         title="Drag to resize · double-click to reset"
-        className={`group hidden lg:flex lg:cursor-col-resize lg:items-center lg:justify-center lg:self-stretch ${
-          dragging ? 'touch-none' : ''
-        }`}
+        className={`group hidden lg:flex lg:cursor-col-resize lg:items-center lg:justify-center lg:self-stretch ${dragging ? 'touch-none' : ''}`}
       >
         {seam ? (
-          <span
-            className={`h-full w-px transition-colors ${
-              dragging ? 'bg-orange-500' : 'bg-neutral-200 group-hover:bg-orange-400 group-focus:bg-orange-400'
-            }`}
-          />
+          <span className={`h-full w-px transition-colors ${dragging ? 'bg-orange-500' : 'bg-neutral-200 group-hover:bg-orange-400 group-focus:bg-orange-400'}`} />
         ) : (
-          <span
-            className={`h-16 w-1 rounded-full transition-colors ${
-              dragging ? 'bg-orange-500' : 'bg-neutral-200 group-hover:bg-orange-400 group-focus:bg-orange-400'
-            }`}
-          />
+          <span className={`h-16 w-1 rounded-full transition-colors ${dragging ? 'bg-orange-500' : 'bg-neutral-200 group-hover:bg-orange-400 group-focus:bg-orange-400'}`} />
         )}
       </div>
       <div className="min-w-0 min-h-0">{right}</div>

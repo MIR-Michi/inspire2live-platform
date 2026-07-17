@@ -17,6 +17,7 @@
 | [MODULAR_COMPONENT_ARCHITECTURE.md](MODULAR_COMPONENT_ARCHITECTURE.md) | Kernel + component toolbox model, manifests, governance, AI levels (ADR-0009) |
 | [PLATFORM_SETTINGS_CONCEPT.md](PLATFORM_SETTINGS_CONCEPT.md) | Platform Settings space as the manifest-driven blueprint editor (ADR-0010) |
 | [ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md](ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md) | Sprint 19 concept for Campus-inspired two-zone dashboards, personal widget layouts, accessible drag/resize, persisted preferences, and purposeful motion |
+| [ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md](ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md) | Implemented desktop/tablet/mobile and edit-mode wireframe specification for Sprint 19 |
 | [PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md](PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md) | Organization-wide Design & Component Library panel, semantic tokens, live production component catalog, dashboard/motion defaults, and component-toolbox alignment |
 | [ROLE_PERMISSION_MODEL.md](ROLE_PERMISSION_MODEL.md) | Full role × space permission matrix, override logic |
 | [DATA_DICTIONARY.md](DATA_DICTIONARY.md) | Database schema reference, table descriptions, key relationships |
@@ -79,6 +80,7 @@
 | [0009](ADR/0009-modular-component-architecture.md) | Modular Component Architecture (kernel + components) | accepted | — |
 | [0010](ADR/0010-platform-settings-space.md) | Platform Settings Space | accepted | — |
 | [0011](ADR/0011-pr-based-trunk-with-sprints.md) | PR-Based Trunk Development with Sprint Cadence | accepted | 2026-07-17 |
+| [0012](ADR/0012-adaptive-dashboard-composition.md) | Adaptive Dashboard Composition and User Preferences | accepted | 2026-07-17 |
 
 ---
 

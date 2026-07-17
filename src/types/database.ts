@@ -3625,6 +3625,41 @@ export type Database = {
         ]
       }
       // ─── Added by migration 00022 (permission system) ──────────────────────
+      user_dashboard_preferences: {
+        Row: {
+          created_at: string
+          dashboard_id: string
+          layout: Json
+          layout_version: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          dashboard_id: string
+          layout?: Json
+          layout_version?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          dashboard_id?: string
+          layout?: Json
+          layout_version?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_dashboard_preferences_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_space_permissions: {
         Row: {
           id: string

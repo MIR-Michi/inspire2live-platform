@@ -2,14 +2,7 @@
  * kernel/shell/settings-nav.ts
  *
  * The section sub-nav for the Platform Settings space (ADR-0010 §4). Sections map
- * 1:1 to the ADR-0009 kernel/component split: *Access & Identity*, *Organization*,
- * and *Observability & Review* are kernel surfaces; *Capabilities*,
- * *Integrations*, and *Automation* are component surfaces. Existing admin pages
- * keep their `/app/admin/*` URLs and are unified into this tree; new panels live
- * under `/app/settings/*`. All routes are PlatformAdmin-gated.
- *
- * Feedback is intentionally KEPT IN, under *Observability & Review* (ADR-0010 §2)
- * — an admin monitoring/review surface, not moved out to its component.
+ * 1:1 to the ADR-0009 kernel/component split. All routes are PlatformAdmin-gated.
  */
 
 import type { NavIcon } from '@/kernel/rbac/role-access'
@@ -40,6 +33,7 @@ export const SETTINGS_SECTIONS: SettingsNavSection[] = [
     label: 'Organization',
     items: [
       { id: 'organization', label: 'Profile & Brand', href: '/app/settings/organization', icon: 'settings' },
+      { id: 'design-system', label: 'Design & Component Library', href: '/app/settings/design', icon: 'dashboard' },
     ],
   },
   {
