@@ -2,6 +2,10 @@
 
 > **Navigation hub for all project documentation.**  
 > Documents are organized by category for quick access. All paths are relative to `docs/`.
+>
+> 🧭 **New here (human or AI agent)? Start with [`../AGENTS.md`](../AGENTS.md)** — the
+> canonical one-page briefing (architecture, commands, guardrails, workflow, and how to
+> document your work). This index is the deep-dive map it points into.
 
 ---
 
@@ -24,7 +28,9 @@
 | [SDLC.md](SDLC.md) | Full software development lifecycle (CI/CD, branching, commit conventions) |
 | [TEST_STRATEGY.md](TEST_STRATEGY.md) | Test philosophy, coverage goals, risk-based test map |
 | [RELEASE_PROCESS.md](RELEASE_PROCESS.md) | Versioning, staging → production, hotfix, rollback |
-| [CLINE_WORKFLOW.md](CLINE_WORKFLOW.md) | AI assistant (Cline) git protocol and anti-hang rules |
+| [AI_INTEGRATION.md](AI_INTEGRATION.md) | How the app uses AI: config, shared wrapper, model policy (catalog in code), structured output, human-in-the-loop |
+| [changes/](changes/) | Change Records — standardised documentation for work done **outside a sprint** |
+| [CLINE_WORKFLOW.md](CLINE_WORKFLOW.md) | *(historical)* Cline git protocol — consolidated into `../AGENTS.md` + `IMPLEMENTATION_GUIDE.md` |
 | [TRACEABILITY.md](TRACEABILITY.md) | Requirement → ADR → code → test mapping |
 
 ## 📦 Product & Planning
@@ -64,7 +70,13 @@
 | [0002](ADR/0002-supabase-baas.md) | Supabase as Backend-as-a-Service | accepted | 2025-10-15 |
 | [0003](ADR/0003-nextjs-app-router.md) | Next.js App Router with RSC | accepted | 2025-10-15 |
 | [0004](ADR/0004-role-model-design.md) | Multi-Tier Role & Permission Model | accepted | 2025-11-20 |
-| [0005](ADR/0005-trunk-based-development.md) | Trunk-Based Development with AI Assist | accepted | 2025-10-20 |
+| [0005](ADR/0005-trunk-based-development.md) | Trunk-Based Development with AI Assist | superseded by 0011 | 2025-10-20 |
+| [0006](ADR/0006-communications-workspace.md) | Communications Workspace | accepted | — |
+| [0007](ADR/0007-unified-contact-identity.md) | Unified Contact Identity | accepted | — |
+| [0008](ADR/0008-unified-task-domain-layer.md) | Unified Task Domain Layer | accepted | — |
+| [0009](ADR/0009-modular-component-architecture.md) | Modular Component Architecture (kernel + components) | accepted | — |
+| [0010](ADR/0010-platform-settings-space.md) | Platform Settings Space | accepted | — |
+| [0011](ADR/0011-pr-based-trunk-with-sprints.md) | PR-Based Trunk Development with Sprint Cadence | accepted | 2026-07-17 |
 
 ---
 
@@ -72,10 +84,12 @@
 
 | File | Purpose |
 |------|---------|
+| [../AGENTS.md](../AGENTS.md) | **Canonical briefing** for humans & AI agents — start here |
+| [../CLAUDE.md](../CLAUDE.md) | Claude Code entry point (points to `AGENTS.md`) |
 | [../CHANGELOG.md](../CHANGELOG.md) | Release history (semver) |
 | [../README.md](../README.md) | Project overview and quick start |
 | [../.env.example](../.env.example) | Environment variable template |
 
 ---
 
-*Last updated: 2026-05-17 · Maintainer: Michael Wittinger*
+*Last updated: 2026-07-17 · Maintainer: Michael Wittinger*

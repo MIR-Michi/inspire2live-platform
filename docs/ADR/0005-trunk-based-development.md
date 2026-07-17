@@ -1,8 +1,14 @@
 # ADR-0005: Trunk-Based Development with AI-Assisted Workflow
 
-- **Status:** accepted
+- **Status:** superseded by [ADR-0011](0011-pr-based-trunk-with-sprints.md) (2026-07-17)
 - **Date:** 2025-10-20
 - **Owners:** Michael Wittinger
+
+> **Superseded.** This ADR described pure trunk-based development (commit directly to
+> `main`, no feature branches) for a single developer + AI assistant at Phase 0–1.
+> The project now uses **PR-based trunk development on a sprint cadence** — see
+> [ADR-0011](0011-pr-based-trunk-with-sprints.md). This document is kept as historical
+> record; do not follow its "commit directly to `main`" guidance.
 
 ## Context
 

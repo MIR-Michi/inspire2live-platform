@@ -1,11 +1,10 @@
-# Claude Code — Project Guidelines
+# CLAUDE.md
 
-## Branch naming
-When creating branches (not pre-assigned session branches), use descriptive, kebab-case names that make the purpose immediately clear:
+The canonical briefing for this repository — for both AI agents and humans — is
+[`AGENTS.md`](AGENTS.md). **Start there.**
 
-- `fix/<short-description>` — bug fixes (e.g. `fix/crm-email-classification`)
-- `feat/<short-description>` — new features (e.g. `feat/member-onboarding-cascade`)
-- `ci/<short-description>` — CI/workflow changes (e.g. `ci/db-migration-validation`)
-- `chore/<short-description>` — maintenance (e.g. `chore/seed-sql-syntax`)
+It covers architecture, the commands to run, the verify-before-commit gate, guardrails,
+git/branch/commit conventions, and how to document your work (inside sprints and out).
 
-Avoid generic names like `patch`, `update`, or auto-generated hashes.
+Claude Code reads this file automatically; there are no Claude-specific rules beyond
+what `AGENTS.md` defines.

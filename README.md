@@ -2,6 +2,9 @@
 
 A Next.js 16 application built with Supabase, Tailwind CSS v4, and deployed on Vercel.
 
+> **Contributing or working with an AI agent? Start with [`AGENTS.md`](AGENTS.md)** —
+> the canonical briefing (architecture, commands, guardrails, workflow, documentation standard).
+
 ---
 
 ## 🚀 Quick Start (Local Development)
