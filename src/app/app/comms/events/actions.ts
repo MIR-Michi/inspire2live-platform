@@ -18,6 +18,8 @@ import {
   supportsInternalParticipantSelection,
 } from '@/lib/comms-events'
 import { EVENT_STAGE_META, type EventStage } from '@/lib/comms-workflow'
+import { PODCAST_TASK_TEMPLATE } from '@/lib/podcast-tasks'
+import { notifyUser } from '@/lib/notify'
 
 function asText(value: FormDataEntryValue | null) {
   return typeof value === 'string' ? value.trim() : ''
@@ -326,11 +328,28 @@ export async function saveEventSection(formData: FormData) {
           asText(formData.get('podcast_recording_mode')) || 'remote'
         ),
         podcast_recording_link: asText(formData.get('podcast_recording_link')) || null,
-        podcast_preparation_notes: asText(formData.get('podcast_preparation_notes')) || null,
         event_image_url: asText(formData.get('event_image_url')) || null,
         presentation_asset_url: asText(formData.get('presentation_asset_url')) || null,
       }
       if (!payload.name || !payload.start_date) throw new Error('Event name and start date are required.')
+      break
+
+    // Podcast topic + notes (the right-hand panel of the podcast workspace):
+    // the episode angle/talking points, run of show, summary, follow-up notes,
+    // final publishing title, and distribution channels. Kept separate from the
+    // logistics form so the two panels save independently.
+    case 'podcast_notes':
+      payload = {
+        podcast_preparation_notes: asText(formData.get('podcast_preparation_notes')) || null,
+        podcast_run_of_show: asText(formData.get('podcast_run_of_show')) || null,
+        podcast_followup_notes: asText(formData.get('podcast_followup_notes')) || null,
+        presentation_summary: asText(formData.get('presentation_summary')) || null,
+        podcast_episode_title: asText(formData.get('podcast_episode_title')) || null,
+        podcast_distribution_channels: parsePodcastDistributionChannels(
+          formData.getAll('podcast_distribution_channels').map((v) => (typeof v === 'string' ? v : ''))
+        ),
+        notes: asText(formData.get('notes')) || null,
+      }
       break
 
     case 'podcast_run':
@@ -500,4 +519,170 @@ export async function unlinkEventPipeline(formData: FormData) {
   if (error) throw new Error(error.message)
 
   revalidateEventWorkspacePaths(eventId)
+}
+
+// ─── Event checklist (comms_tasks scoped to an event — podcast workspace) ─────
+
+type ChecklistResult = { ok: boolean; message?: string }
+
+const VALID_TASK_STATUSES = new Set(['not_started', 'in_progress', 'completed', 'skipped'])
+
+function isIsoDate(value: string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+}
+
+/**
+ * Seeds the standard podcast checklist as comms_tasks tied to an event. Each
+ * task defaults to the event's owner (falling back to the acting user) so it
+ * always has an owner and flows to that owner's personal dashboard. created_at
+ * is staggered by index so the checklist renders in template order. No-op if
+ * tasks already exist for the event.
+ */
+export async function seedEventChecklist(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const eventId = asText(formData.get('event_id'))
+    if (!eventId) return { ok: false, message: 'Event is required.' }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const db = supabase as any
+    const { count } = await db
+      .from('comms_tasks')
+      .select('id', { count: 'exact', head: true })
+      .eq('event_id', eventId)
+    if ((count ?? 0) > 0) return { ok: true }
+
+    const { data: event } = await db.from('events').select('owner_id').eq('id', eventId).maybeSingle()
+    const ownerId = (event?.owner_id as string | null) ?? user.id
+
+    const total = PODCAST_TASK_TEMPLATE.length
+    const base = Date.now()
+    const rows = PODCAST_TASK_TEMPLATE.map((task, index) => ({
+      title: task.title,
+      owner_id: ownerId,
+      status: 'not_started',
+      event_id: eventId,
+      created_by: user.id,
+      // Stagger into the recent past so the checklist renders in template order
+      // (the loader sorts by created_at asc) without dating tasks in the future.
+      created_at: new Date(base - (total - index) * 1000).toISOString(),
+    }))
+
+    const { error } = await db.from('comms_tasks').insert(rows)
+    if (error) return { ok: false, message: error.message }
+
+    revalidateEventWorkspacePaths(eventId)
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to set up checklist.' }
+  }
+}
+
+export async function createEventChecklistTask(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const eventId = asText(formData.get('event_id'))
+    const title = asText(formData.get('title'))
+    const ownerId = asText(formData.get('owner_id')) || null
+    const dueInput = asText(formData.get('due_date'))
+    const dueDate = isIsoDate(dueInput) ? dueInput : null
+
+    if (!eventId) return { ok: false, message: 'Event is required.' }
+    if (!title) return { ok: false, message: 'A task title is required.' }
+
+    const resolvedOwnerId = ownerId ?? user.id
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('comms_tasks').insert({
+      title: title.slice(0, 200),
+      owner_id: resolvedOwnerId,
+      due_date: dueDate,
+      status: 'not_started',
+      event_id: eventId,
+      created_by: user.id,
+    })
+    if (error) return { ok: false, message: error.message }
+
+    if (resolvedOwnerId !== user.id) {
+      await notifyUser({
+        recipientId: resolvedOwnerId,
+        event: 'task_assigned',
+        title: 'New podcast task assigned to you',
+        body: `You have been assigned a podcast task: "${title}"`,
+        linkUrl: `/app/comms/events/${eventId}`,
+      })
+    }
+
+    revalidateEventWorkspacePaths(eventId)
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to add task.' }
+  }
+}
+
+export async function updateEventChecklistTask(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase, user } = await requireCommsOperator()
+    const taskId = asText(formData.get('task_id'))
+    const eventId = asText(formData.get('event_id'))
+    if (!taskId) return { ok: false, message: 'Task is required.' }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const patch: Record<string, any> = { updated_at: new Date().toISOString() }
+
+    if (formData.has('title')) {
+      const title = asText(formData.get('title'))
+      if (!title) return { ok: false, message: 'A task title is required.' }
+      patch.title = title.slice(0, 200)
+    }
+    if (formData.has('owner_id')) {
+      patch.owner_id = asText(formData.get('owner_id')) || null
+    }
+    if (formData.has('status')) {
+      const status = asText(formData.get('status'))
+      if (!VALID_TASK_STATUSES.has(status)) return { ok: false, message: 'Invalid status.' }
+      patch.status = status
+    }
+    if (formData.has('due_date')) {
+      const dueInput = asText(formData.get('due_date'))
+      patch.due_date = isIsoDate(dueInput) ? dueInput : null
+    }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('comms_tasks').update(patch).eq('id', taskId)
+    if (error) return { ok: false, message: error.message }
+
+    // Notify a newly assigned owner (unless they assigned it to themselves).
+    if (patch.owner_id && patch.owner_id !== user.id) {
+      await notifyUser({
+        recipientId: patch.owner_id,
+        event: 'task_assigned',
+        title: 'A podcast task was assigned to you',
+        body: `You are now the owner of: "${asText(formData.get('task_title')) || 'a podcast task'}"`,
+        linkUrl: eventId ? `/app/comms/events/${eventId}` : '/app/comms/podcast',
+      })
+    }
+
+    revalidateEventWorkspacePaths(eventId || undefined)
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to update task.' }
+  }
+}
+
+export async function deleteEventChecklistTask(formData: FormData): Promise<ChecklistResult> {
+  try {
+    const { supabase } = await requireCommsOperator()
+    const taskId = asText(formData.get('task_id'))
+    const eventId = asText(formData.get('event_id'))
+    if (!taskId) return { ok: false, message: 'Task is required.' }
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { error } = await (supabase as any).from('comms_tasks').delete().eq('id', taskId)
+    if (error) return { ok: false, message: error.message }
+
+    revalidateEventWorkspacePaths(eventId || undefined)
+    return { ok: true }
+  } catch (error) {
+    return { ok: false, message: error instanceof Error ? error.message : 'Failed to delete task.' }
+  }
 }

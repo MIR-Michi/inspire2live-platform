@@ -4,30 +4,33 @@ import {
   linkEventInitiative,
   linkEventPipeline,
   saveEventSection,
-  togglePodcastWorkflowItem,
   unlinkEventInitiative,
   unlinkEventPipeline,
 } from '@/app/app/comms/events/actions'
 import { triggerEventTeamsStub } from '@/app/app/comms/integration-actions'
 import { EventStageSelect } from '@/components/comms/event-stage-select'
+import { EventTaskChecklist } from '@/components/comms/event-task-checklist'
 import { IntegrationStubForm } from '@/components/comms/integration-stub-form'
 import { OptionalField } from '@/components/comms/optional-field'
+import { CommsCrmPipelineBoard } from '@/components/comms/comms-crm-pipeline-board'
+import { CollapsibleCard } from '@/components/ui/collapsible-card'
+import { ResizableSplit } from '@/components/ui/resizable-split'
 import { StatusBadge } from '@/components/ui/status-badge'
 import {
   ATTENDANCE_KIND_OPTIONS,
   EVENT_TYPE_OPTIONS,
   PODCAST_DISTRIBUTION_CHANNEL_OPTIONS,
   PODCAST_RECORDING_MODE_OPTIONS,
-  PODCAST_WORKFLOW_SECTIONS,
   formatDelimitedList,
   formatTokenLabel,
   getEventSetupMode,
   getEventTypeLabel,
-  getPodcastWorkflowProgress,
   isI2LOwnedEvent,
   isPodcastEventType,
 } from '@/lib/comms-events'
 import { getIntegrationStubFlags } from '@/lib/comms-integrations'
+import { loadEventTasks, loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
+import { loadCrmDirectory, loadCrmPipelineDetail } from '@/lib/comms-crm-data'
 import { EVENT_STAGE_META, type EventStage } from '@/lib/comms-workflow'
 import { createClient } from '@/lib/supabase/server'
 
@@ -152,506 +155,288 @@ function formatDateRange(startDate: string, endDate: string | null) {
   return `${start} – ${fmt.format(new Date(endDate + 'T00:00:00'))}`
 }
 
-// ─── Sub-components (server) ─────────────────────────────────────────────────
-
-function ChecklistItem({
-  eventId,
-  field,
-  label,
-  done,
-}: {
-  eventId: string
-  field: string
-  label: string
-  done: boolean
-}) {
-  return (
-    <form action={togglePodcastWorkflowItem} className="flex items-center gap-3">
-      <input type="hidden" name="event_id" value={eventId} />
-      <input type="hidden" name="field" value={field} />
-      <input type="hidden" name="next_value" value={done ? 'false' : 'true'} />
-      <button
-        type="submit"
-        className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-sm transition hover:bg-neutral-50 ${
-          done ? 'text-emerald-700' : 'text-neutral-600'
-        }`}
-      >
-        <span
-          className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[11px] font-bold ${
-            done
-              ? 'border-emerald-400 bg-emerald-50 text-emerald-600'
-              : 'border-neutral-300 bg-white text-transparent'
-          }`}
-        >
-          ✓
-        </span>
-        <span className={done ? 'line-through opacity-60' : ''}>{label}</span>
-      </button>
-    </form>
-  )
-}
-
 const FIELD_CLS =
   'w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm focus:border-orange-400 focus:outline-none focus:ring-1 focus:ring-orange-400'
 const LABEL_CLS = 'block space-y-1.5'
 const LABEL_TEXT_CLS = 'text-xs font-semibold text-neutral-500 uppercase tracking-wide'
 
-// ─── Phase panels ─────────────────────────────────────────────────────────────
+// ─── Podcast panels ───────────────────────────────────────────────────────────
 
-function PodcastSetupPanel({
+/** Left column: episode logistics (name, dates, people, recording, assets). */
+function PodcastDetailsForm({
   event,
   profiles,
 }: {
   event: EventRecord
   profiles: { id: string; name: string | null; email: string }[]
 }) {
-  const setupItems = PODCAST_WORKFLOW_SECTIONS[0].items
-  const hasImage = Boolean(event.event_image_url)
-  const hasAsset = Boolean(event.presentation_asset_url)
-  const hasPrep = Boolean(event.podcast_preparation_notes)
-
   return (
-    <div className="space-y-6">
-      {/* Checklist */}
-      <div>
-        <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Checklist</p>
-        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
-          {setupItems.map((item) => (
-            <ChecklistItem
-              key={item.field}
-              eventId={event.id}
-              field={item.field}
-              label={item.label}
-              done={Boolean(event[item.field as keyof EventRecord])}
-            />
-          ))}
-        </div>
-      </div>
+    <form action={saveEventSection} className="space-y-5 border-t border-neutral-200 px-5 py-4">
+      <input type="hidden" name="event_id" value={event.id} />
+      <input type="hidden" name="section" value="podcast_setup" />
 
-      {/* Save form for all setup fields */}
-      <form action={saveEventSection} className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
-        <input type="hidden" name="event_id" value={event.id} />
-        <input type="hidden" name="section" value="podcast_setup" />
-
-        {/* Event basics */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={`${LABEL_CLS} col-span-full`}>
-            <span className={LABEL_TEXT_CLS}>Episode / event name</span>
-            <input name="name" defaultValue={event.name} required className={FIELD_CLS} />
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Date</span>
-            <input type="date" name="start_date" defaultValue={event.start_date} required className={FIELD_CLS} />
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>End date</span>
-            <input type="date" name="end_date" defaultValue={event.end_date ?? ''} className={FIELD_CLS} />
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>City</span>
-            <input name="location_city" defaultValue={event.location_city ?? ''} className={FIELD_CLS} />
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Country</span>
-            <input name="location_country" defaultValue={event.location_country ?? ''} className={FIELD_CLS} />
-          </label>
-          <label className={`${LABEL_CLS} col-span-full`}>
-            <span className={LABEL_TEXT_CLS}>Publishing partner</span>
-            <input
-              name="organiser"
-              defaultValue={event.organiser ?? ''}
-              placeholder="Studio, platform, or distribution partner"
-              className={FIELD_CLS}
-            />
-          </label>
-        </div>
-
-        <hr className="border-neutral-100" />
-
-        {/* People */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Owner</span>
-            <select name="owner_id" defaultValue={event.owner_id ?? ''} className={FIELD_CLS}>
-              <option value="">Unassigned</option>
-              {profiles.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name ?? p.email}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Series name</span>
-            <input
-              name="podcast_series_name"
-              defaultValue={event.podcast_series_name ?? ''}
-              placeholder="e.g. Inspire2Live Conversations"
-              className={FIELD_CLS}
-            />
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Host(s)</span>
-            <input
-              name="podcast_hosts"
-              defaultValue={formatDelimitedList(event.podcast_hosts)}
-              placeholder="Comma-separated"
-              className={FIELD_CLS}
-            />
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Guest(s)</span>
-            <input
-              name="podcast_guests"
-              defaultValue={formatDelimitedList(event.podcast_guests)}
-              placeholder="Comma-separated"
-              className={FIELD_CLS}
-            />
-          </label>
-        </div>
-
-        <hr className="border-neutral-100" />
-
-        {/* Recording */}
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Recording mode</span>
-            <select name="podcast_recording_mode" defaultValue={event.podcast_recording_mode} className={FIELD_CLS}>
-              {PODCAST_RECORDING_MODE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Recording room / link</span>
-            <input
-              type="url"
-              name="podcast_recording_link"
-              defaultValue={event.podcast_recording_link ?? ''}
-              placeholder="Riverside, Zoom, Teams…"
-              className={FIELD_CLS}
-            />
-          </label>
-        </div>
-
-        <hr className="border-neutral-100" />
-
-        {/* Optional fields */}
-        <div className="flex flex-wrap gap-4">
-          <label className={`${LABEL_CLS} ${hasImage ? 'w-full' : 'hidden'}`} id="field-image">
-            <span className={LABEL_TEXT_CLS}>Cover art / guest image</span>
-            <input type="url" name="event_image_url" defaultValue={event.event_image_url ?? ''} className={FIELD_CLS} />
-          </label>
-          {!hasImage && <input type="hidden" name="event_image_url" value="" />}
-
-          <label className={`${LABEL_CLS} ${hasAsset ? 'w-full' : 'hidden'}`} id="field-asset">
-            <span className={LABEL_TEXT_CLS}>Brief / script / asset link</span>
-            <input
-              type="url"
-              name="presentation_asset_url"
-              defaultValue={event.presentation_asset_url ?? ''}
-              className={FIELD_CLS}
-            />
-          </label>
-          {!hasAsset && <input type="hidden" name="presentation_asset_url" value="" />}
-
-          <label className={`${LABEL_CLS} ${hasPrep ? 'w-full' : 'hidden'}`} id="field-prep">
-            <span className={LABEL_TEXT_CLS}>Prep notes</span>
-            <textarea
-              name="podcast_preparation_notes"
-              rows={3}
-              defaultValue={event.podcast_preparation_notes ?? ''}
-              className={FIELD_CLS}
-            />
-          </label>
-          {!hasPrep && <input type="hidden" name="podcast_preparation_notes" value="" />}
-        </div>
-
-        {/* "+ Add" affordances for empty optional fields */}
-        <div className="flex flex-wrap gap-4">
-          {!hasImage && (
-            <OptionalField label="Add cover art" hasValue={false}>
-              <label className={`${LABEL_CLS} w-full`}>
-                <span className={LABEL_TEXT_CLS}>Cover art / guest image</span>
-                <input type="url" name="event_image_url" defaultValue="" className={FIELD_CLS} />
-              </label>
-            </OptionalField>
-          )}
-          {!hasAsset && (
-            <OptionalField label="Add brief / script link" hasValue={false}>
-              <label className={`${LABEL_CLS} w-full`}>
-                <span className={LABEL_TEXT_CLS}>Brief / script / asset link</span>
-                <input type="url" name="presentation_asset_url" defaultValue="" className={FIELD_CLS} />
-              </label>
-            </OptionalField>
-          )}
-          {!hasPrep && (
-            <OptionalField label="Add prep notes" hasValue={false}>
-              <label className={`${LABEL_CLS} w-full`}>
-                <span className={LABEL_TEXT_CLS}>Prep notes</span>
-                <textarea name="podcast_preparation_notes" rows={3} defaultValue="" className={FIELD_CLS} />
-              </label>
-            </OptionalField>
-          )}
-        </div>
-
-        <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-neutral-700">
-          <input
-            type="checkbox"
-            name="push_to_group_calendar"
-            value="true"
-            defaultChecked={event.push_to_group_calendar}
-            className="h-4 w-4 rounded accent-emerald-600"
-          />
-          Push to group calendar
+      {/* Episode basics */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className={`${LABEL_CLS} col-span-full`}>
+          <span className={LABEL_TEXT_CLS}>Episode / event name</span>
+          <input name="name" defaultValue={event.name} required className={FIELD_CLS} />
         </label>
-
-        <div className="flex justify-end pt-1">
-          <button
-            type="submit"
-            className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-          >
-            Save
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function PodcastRunPanel({ event }: { event: EventRecord }) {
-  const runItems = PODCAST_WORKFLOW_SECTIONS[1].items
-  const hasRunOfShow = Boolean(event.podcast_run_of_show)
-
-  return (
-    <div className="space-y-6">
-      {/* Checklist */}
-      <div>
-        <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Checklist</p>
-        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
-          {runItems.map((item) => (
-            <ChecklistItem
-              key={item.field}
-              eventId={event.id}
-              field={item.field}
-              label={item.label}
-              done={Boolean(event[item.field as keyof EventRecord])}
-            />
-          ))}
-        </div>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Date</span>
+          <input type="date" name="start_date" defaultValue={event.start_date} required className={FIELD_CLS} />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>End date</span>
+          <input type="date" name="end_date" defaultValue={event.end_date ?? ''} className={FIELD_CLS} />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>City</span>
+          <input name="location_city" defaultValue={event.location_city ?? ''} className={FIELD_CLS} />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Country</span>
+          <input name="location_country" defaultValue={event.location_country ?? ''} className={FIELD_CLS} />
+        </label>
+        <label className={`${LABEL_CLS} col-span-full`}>
+          <span className={LABEL_TEXT_CLS}>Publishing partner</span>
+          <input
+            name="organiser"
+            defaultValue={event.organiser ?? ''}
+            placeholder="Studio, platform, or distribution partner"
+            className={FIELD_CLS}
+          />
+        </label>
       </div>
 
-      {/* Quick-access recording link */}
-      {event.podcast_recording_link && (
-        <a
-          href={event.podcast_recording_link}
-          target="_blank"
-          rel="noreferrer"
-          className="flex items-center justify-between rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm font-semibold text-violet-700 hover:bg-violet-100"
-        >
-          Recording room ↗
-        </a>
-      )}
+      <hr className="border-neutral-100" />
 
-      {/* Save form */}
-      <form action={saveEventSection} className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5">
-        <input type="hidden" name="event_id" value={event.id} />
-        <input type="hidden" name="section" value="podcast_run" />
-
-        {hasRunOfShow ? (
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Run of show</span>
-            <textarea
-              name="podcast_run_of_show"
-              rows={5}
-              defaultValue={event.podcast_run_of_show ?? ''}
-              className={FIELD_CLS}
-            />
-          </label>
-        ) : (
-          <>
-            <input type="hidden" name="podcast_run_of_show" value="" />
-            <OptionalField label="Add run of show" hasValue={false}>
-              <label className={LABEL_CLS}>
-                <span className={LABEL_TEXT_CLS}>Run of show</span>
-                <textarea name="podcast_run_of_show" rows={5} defaultValue="" className={FIELD_CLS} />
-              </label>
-            </OptionalField>
-          </>
-        )}
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-          >
-            Save
-          </button>
-        </div>
-      </form>
-    </div>
-  )
-}
-
-function PodcastAfterPanel({ event }: { event: EventRecord }) {
-  const followupItems = PODCAST_WORKFLOW_SECTIONS[2].items
-  const podcastDistributionSet = new Set(event.podcast_distribution_channels)
-  const hasFollowupNotes = Boolean(event.podcast_followup_notes)
-  const hasSummary = Boolean(event.presentation_summary)
-
-  const OUTPUT_FIELDS = [
-    { field: 'output_report_drafted', label: 'Report drafted' },
-    { field: 'output_linkedin_published', label: 'LinkedIn published' },
-    { field: 'output_newsletter_mentioned', label: 'Newsletter mentioned' },
-    { field: 'output_media_stored', label: 'Media stored' },
-  ] as const
-
-  return (
-    <div className="space-y-6">
-      {/* Checklist */}
-      <div>
-        <p className="mb-1 px-3 text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Checklist</p>
-        <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-200 bg-white">
-          {followupItems.map((item) => (
-            <ChecklistItem
-              key={item.field}
-              eventId={event.id}
-              field={item.field}
-              label={item.label}
-              done={Boolean(event[item.field as keyof EventRecord])}
-            />
-          ))}
-        </div>
+      {/* People */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Owner</span>
+          <select name="owner_id" defaultValue={event.owner_id ?? ''} className={FIELD_CLS}>
+            <option value="">Unassigned</option>
+            {profiles.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.name ?? p.email}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Series name</span>
+          <input
+            name="podcast_series_name"
+            defaultValue={event.podcast_series_name ?? ''}
+            placeholder="e.g. Inspire2Live Conversations"
+            className={FIELD_CLS}
+          />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Host(s)</span>
+          <input
+            name="podcast_hosts"
+            defaultValue={formatDelimitedList(event.podcast_hosts)}
+            placeholder="Comma-separated"
+            className={FIELD_CLS}
+          />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Guest(s)</span>
+          <input
+            name="podcast_guests"
+            defaultValue={formatDelimitedList(event.podcast_guests)}
+            placeholder="Comma-separated"
+            className={FIELD_CLS}
+          />
+        </label>
       </div>
 
-      {/* Save form */}
-      <form action={saveEventSection} className="space-y-5 rounded-xl border border-neutral-200 bg-white p-5">
-        <input type="hidden" name="event_id" value={event.id} />
-        <input type="hidden" name="section" value="podcast_after" />
+      <hr className="border-neutral-100" />
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <label className={`${LABEL_CLS} col-span-full`}>
-            <span className={LABEL_TEXT_CLS}>Final episode title</span>
-            <input
-              name="podcast_episode_title"
-              defaultValue={event.podcast_episode_title ?? ''}
-              placeholder="Title used for publishing"
-              className={FIELD_CLS}
-            />
-          </label>
-        </div>
-
-        <fieldset>
-          <legend className={`mb-2 ${LABEL_TEXT_CLS}`}>Distribution channels</legend>
-          <div className="flex flex-wrap gap-2">
-            {PODCAST_DISTRIBUTION_CHANNEL_OPTIONS.map((opt) => (
-              <label
-                key={opt.value}
-                className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
-                  podcastDistributionSet.has(opt.value)
-                    ? 'border-violet-200 bg-violet-100 text-violet-800'
-                    : 'border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50'
-                }`}
-              >
-                <input
-                  type="checkbox"
-                  name="podcast_distribution_channels"
-                  value={opt.value}
-                  defaultChecked={podcastDistributionSet.has(opt.value)}
-                  className="sr-only"
-                />
+      {/* Recording */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Recording mode</span>
+          <select name="podcast_recording_mode" defaultValue={event.podcast_recording_mode} className={FIELD_CLS}>
+            {PODCAST_RECORDING_MODE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
                 {opt.label}
-              </label>
+              </option>
             ))}
-          </div>
-        </fieldset>
+          </select>
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Recording room / link</span>
+          <input
+            type="url"
+            name="podcast_recording_link"
+            defaultValue={event.podcast_recording_link ?? ''}
+            placeholder="Riverside, Zoom, Teams…"
+            className={FIELD_CLS}
+          />
+        </label>
+        <label className={`${LABEL_CLS} col-span-full`}>
+          <span className={LABEL_TEXT_CLS}>Episode page</span>
+          <input
+            type="url"
+            name="event_website_url"
+            defaultValue={event.event_website_url ?? ''}
+            placeholder="https://example.org/episode"
+            className={FIELD_CLS}
+          />
+        </label>
+      </div>
 
-        <hr className="border-neutral-100" />
+      <hr className="border-neutral-100" />
 
-        {/* Outputs */}
-        <div>
-          <p className={`mb-2 ${LABEL_TEXT_CLS}`}>Outputs</p>
-          <div className="divide-y divide-neutral-100 rounded-xl border border-neutral-100">
-            {OUTPUT_FIELDS.map((item) => (
-              <div key={item.field} className="flex items-center justify-between px-3 py-2.5">
-                <div className="flex items-center gap-2.5">
-                  <input
-                    type="checkbox"
-                    name={item.field}
-                    value="true"
-                    defaultChecked={Boolean(event[item.field as keyof EventRecord])}
-                    className="h-4 w-4 rounded accent-emerald-600"
-                  />
-                  <span className="text-sm text-neutral-700">{item.label}</span>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* Optional assets */}
+      <div className="grid gap-4 sm:grid-cols-2">
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Cover art / guest image</span>
+          <input type="url" name="event_image_url" defaultValue={event.event_image_url ?? ''} className={FIELD_CLS} />
+        </label>
+        <label className={LABEL_CLS}>
+          <span className={LABEL_TEXT_CLS}>Brief / script link</span>
+          <input
+            type="url"
+            name="presentation_asset_url"
+            defaultValue={event.presentation_asset_url ?? ''}
+            className={FIELD_CLS}
+          />
+        </label>
+      </div>
 
-        <hr className="border-neutral-100" />
+      <label className="flex cursor-pointer items-center gap-2 text-sm font-medium text-neutral-700">
+        <input
+          type="checkbox"
+          name="push_to_group_calendar"
+          value="true"
+          defaultChecked={event.push_to_group_calendar}
+          className="h-4 w-4 rounded accent-emerald-600"
+        />
+        Push to group calendar
+      </label>
 
-        {/* Optional fields */}
-        {hasSummary ? (
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Episode summary</span>
-            <textarea
-              name="presentation_summary"
-              rows={3}
-              defaultValue={event.presentation_summary ?? ''}
-              className={FIELD_CLS}
-            />
-          </label>
-        ) : (
-          <>
-            <input type="hidden" name="presentation_summary" value="" />
-            <OptionalField label="Add episode summary" hasValue={false}>
-              <label className={LABEL_CLS}>
-                <span className={LABEL_TEXT_CLS}>Episode summary</span>
-                <textarea name="presentation_summary" rows={3} defaultValue="" className={FIELD_CLS} />
-              </label>
-            </OptionalField>
-          </>
-        )}
-
-        {hasFollowupNotes ? (
-          <label className={LABEL_CLS}>
-            <span className={LABEL_TEXT_CLS}>Follow-up notes</span>
-            <textarea
-              name="podcast_followup_notes"
-              rows={3}
-              defaultValue={event.podcast_followup_notes ?? ''}
-              className={FIELD_CLS}
-            />
-          </label>
-        ) : (
-          <>
-            <input type="hidden" name="podcast_followup_notes" value="" />
-            <OptionalField label="Add follow-up notes" hasValue={false}>
-              <label className={LABEL_CLS}>
-                <span className={LABEL_TEXT_CLS}>Follow-up notes</span>
-                <textarea name="podcast_followup_notes" rows={3} defaultValue="" className={FIELD_CLS} />
-              </label>
-            </OptionalField>
-          </>
-        )}
-
-        <input type="hidden" name="notes" value={event.notes ?? ''} />
-
-        <div className="flex justify-end">
-          <button
-            type="submit"
-            className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700"
-          >
-            Save
-          </button>
-        </div>
-      </form>
-    </div>
+      <div className="flex justify-end pt-1">
+        <button
+          type="submit"
+          className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+        >
+          Save details
+        </button>
+      </div>
+    </form>
   )
 }
+
+/** Right column: the episode topic, notes, and publishing metadata. */
+function PodcastNotesForm({ event }: { event: EventRecord }) {
+  const distributionSet = new Set(event.podcast_distribution_channels)
+  return (
+    <form action={saveEventSection} className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5">
+      <input type="hidden" name="event_id" value={event.id} />
+      <input type="hidden" name="section" value="podcast_notes" />
+
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>Topic, angle & talking points</span>
+        <textarea
+          name="podcast_preparation_notes"
+          rows={5}
+          defaultValue={event.podcast_preparation_notes ?? ''}
+          placeholder="What is this episode about? Key questions, angle, and talking points…"
+          className={FIELD_CLS}
+        />
+      </label>
+
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>Run of show</span>
+        <textarea
+          name="podcast_run_of_show"
+          rows={4}
+          defaultValue={event.podcast_run_of_show ?? ''}
+          placeholder="Segment-by-segment plan for the recording…"
+          className={FIELD_CLS}
+        />
+      </label>
+
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>Episode summary</span>
+        <textarea
+          name="presentation_summary"
+          rows={3}
+          defaultValue={event.presentation_summary ?? ''}
+          className={FIELD_CLS}
+        />
+      </label>
+
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>Follow-up notes</span>
+        <textarea
+          name="podcast_followup_notes"
+          rows={3}
+          defaultValue={event.podcast_followup_notes ?? ''}
+          className={FIELD_CLS}
+        />
+      </label>
+
+      <hr className="border-neutral-100" />
+
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>Final episode title</span>
+        <input
+          name="podcast_episode_title"
+          defaultValue={event.podcast_episode_title ?? ''}
+          placeholder="Title used for publishing"
+          className={FIELD_CLS}
+        />
+      </label>
+
+      <fieldset>
+        <legend className={`mb-2 ${LABEL_TEXT_CLS}`}>Distribution channels</legend>
+        <div className="flex flex-wrap gap-2">
+          {PODCAST_DISTRIBUTION_CHANNEL_OPTIONS.map((opt) => (
+            <label
+              key={opt.value}
+              className={`flex cursor-pointer items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-semibold transition ${
+                distributionSet.has(opt.value)
+                  ? 'border-violet-200 bg-violet-100 text-violet-800'
+                  : 'border-neutral-200 bg-white text-neutral-500 hover:bg-neutral-50'
+              }`}
+            >
+              <input
+                type="checkbox"
+                name="podcast_distribution_channels"
+                value={opt.value}
+                defaultChecked={distributionSet.has(opt.value)}
+                className="sr-only"
+              />
+              {opt.label}
+            </label>
+          ))}
+        </div>
+      </fieldset>
+
+      <hr className="border-neutral-100" />
+
+      <label className={LABEL_CLS}>
+        <span className={LABEL_TEXT_CLS}>General notes</span>
+        <textarea name="notes" rows={3} defaultValue={event.notes ?? ''} className={FIELD_CLS} />
+      </label>
+
+      <div className="flex justify-end">
+        <button
+          type="submit"
+          className="rounded-lg bg-orange-600 px-5 py-2 text-sm font-semibold text-white hover:bg-orange-700"
+        >
+          Save notes
+        </button>
+      </div>
+    </form>
+  )
+}
+
+// ─── Conference panels ─────────────────────────────────────────────────────────
 
 function EventPreparePanel({
   event,
@@ -942,25 +727,205 @@ function EventAfterPanel({ event }: { event: EventRecord }) {
   )
 }
 
-// ─── Phase stepper ────────────────────────────────────────────────────────────
+// ─── Shared sidebar cards (initiatives · pipelines · links · integrations) ─────
+
+type LinkedInitiative = { id: string; title: string }
+type PipelineOption = { id: string; name: string }
+
+function InitiativesCard({
+  event,
+  initiatives,
+  linkedInitiatives,
+  linkedInitiativeSet,
+}: {
+  event: EventRecord
+  initiatives: LinkedInitiative[]
+  linkedInitiatives: LinkedInitiative[]
+  linkedInitiativeSet: Set<string>
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Initiatives</h3>
+      {linkedInitiatives.length > 0 ? (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {linkedInitiatives.map((initiative) => (
+            <span
+              key={initiative.id}
+              className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-violet-700"
+            >
+              {initiative.title}
+              <form action={unlinkEventInitiative} className="flex">
+                <input type="hidden" name="event_id" value={event.id} />
+                <input type="hidden" name="initiative_id" value={initiative.id} />
+                <button
+                  type="submit"
+                  aria-label={`Disconnect ${initiative.title}`}
+                  className="flex h-4 w-4 items-center justify-center rounded-full text-violet-400 transition hover:bg-violet-200 hover:text-violet-800"
+                >
+                  ×
+                </button>
+              </form>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-3 text-xs text-neutral-400">None linked yet.</p>
+      )}
+      {initiatives.some((i) => !linkedInitiativeSet.has(i.id)) && (
+        <form action={linkEventInitiative} className="flex gap-2">
+          <input type="hidden" name="event_id" value={event.id} />
+          <select name="initiative_id" className="min-w-0 flex-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs">
+            {initiatives
+              .filter((i) => !linkedInitiativeSet.has(i.id))
+              .map((i) => (
+                <option key={i.id} value={i.id}>
+                  {i.title}
+                </option>
+              ))}
+          </select>
+          <button
+            type="submit"
+            className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            Link
+          </button>
+        </form>
+      )}
+    </div>
+  )
+}
+
+function PipelinesCard({
+  event,
+  pipelineList,
+  linkedPipelines,
+  linkedPipelineSet,
+}: {
+  event: EventRecord
+  pipelineList: PipelineOption[]
+  linkedPipelines: PipelineOption[]
+  linkedPipelineSet: Set<string>
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Pipelines</h3>
+      {linkedPipelines.length > 0 ? (
+        <div className="mb-3 flex flex-wrap gap-1.5">
+          {linkedPipelines.map((pipeline) => (
+            <span
+              key={pipeline.id}
+              className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-blue-700"
+            >
+              {pipeline.name}
+              <form action={unlinkEventPipeline} className="flex">
+                <input type="hidden" name="event_id" value={event.id} />
+                <input type="hidden" name="pipeline_id" value={pipeline.id} />
+                <button
+                  type="submit"
+                  aria-label={`Disconnect ${pipeline.name}`}
+                  className="flex h-4 w-4 items-center justify-center rounded-full text-blue-400 transition hover:bg-blue-200 hover:text-blue-800"
+                >
+                  ×
+                </button>
+              </form>
+            </span>
+          ))}
+        </div>
+      ) : (
+        <p className="mb-3 text-xs text-neutral-400">None connected yet.</p>
+      )}
+      {pipelineList.some((p) => !linkedPipelineSet.has(p.id)) ? (
+        <form action={linkEventPipeline} className="flex gap-2">
+          <input type="hidden" name="event_id" value={event.id} />
+          <select name="pipeline_id" className="min-w-0 flex-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs">
+            {pipelineList
+              .filter((p) => !linkedPipelineSet.has(p.id))
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+          </select>
+          <button
+            type="submit"
+            className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            Connect
+          </button>
+        </form>
+      ) : (
+        pipelineList.length === 0 && (
+          <p className="text-xs text-neutral-400">
+            No pipelines exist yet.{' '}
+            <Link href="/app/comms/crm/pipelines" className="font-semibold text-orange-700 hover:underline">
+              Create one
+            </Link>
+          </p>
+        )
+      )}
+    </div>
+  )
+}
+
+function QuickLinksCard({ event, isPodcast }: { event: EventRecord; isPodcast: boolean }) {
+  if (!(event.event_website_url || event.presentation_asset_url || event.podcast_recording_link)) return null
+  return (
+    <div className="rounded-xl border border-neutral-200 bg-white p-4">
+      <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Links</h3>
+      <div className="space-y-1.5">
+        {event.event_website_url && (
+          <a
+            href={event.event_website_url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            {isPodcast ? 'Episode page' : 'Event website'}
+            <span className="text-neutral-400">↗</span>
+          </a>
+        )}
+        {event.podcast_recording_link && (
+          <a
+            href={event.podcast_recording_link}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-between rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100"
+          >
+            Recording room
+            <span>↗</span>
+          </a>
+        )}
+        {event.presentation_asset_url && (
+          <a
+            href={event.presentation_asset_url}
+            target="_blank"
+            rel="noreferrer"
+            className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            {isPodcast ? 'Brief / script' : 'Runbook / deck'}
+            <span className="text-neutral-400">↗</span>
+          </a>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ─── Phase stepper (conferences) ──────────────────────────────────────────────
 
 function PhaseStepper({
   phases,
   activePhase,
   eventId,
-  podcastProgress,
 }: {
-  phases: { key: string; label: string; done?: number; total?: number }[]
+  phases: { key: string; label: string }[]
   activePhase: string
   eventId: string
-  podcastProgress?: { bySection: { done: number; total: number }[] }
 }) {
   return (
     <nav className="flex items-center gap-1 rounded-xl border border-neutral-200 bg-white p-1">
-      {phases.map((phase, i) => {
+      {phases.map((phase) => {
         const isActive = phase.key === activePhase
-        const sectionProgress = podcastProgress?.bySection[i]
-        const allDone = sectionProgress ? sectionProgress.done === sectionProgress.total : false
         return (
           <Link
             key={phase.key}
@@ -971,19 +936,7 @@ function PhaseStepper({
                 : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-800'
             }`}
           >
-            {allDone && !isActive && (
-              <span className="text-emerald-500">✓</span>
-            )}
             {phase.label}
-            {sectionProgress && !allDone && (
-              <span
-                className={`rounded-full px-1.5 text-[11px] font-bold tabular-nums ${
-                  isActive ? 'bg-white/20 text-white' : 'bg-neutral-100 text-neutral-400'
-                }`}
-              >
-                {sectionProgress.done}/{sectionProgress.total}
-              </span>
-            )}
           </Link>
         )
       })}
@@ -1057,16 +1010,13 @@ export default async function CommsEventDetailPage({
     isI2lOrganised: event.is_i2l_organised,
     isAnnualCongress: event.is_annual_congress,
   })
-  const podcastProgress = getPodcastWorkflowProgress(event)
   const stageMeta = EVENT_STAGE_META[event.stage as EventStage]
   const stubFlags = getIntegrationStubFlags()
 
-  const profileMap = new Map(
-    (profiles ?? []).map((p) => [p.id, p.name ?? p.email ?? 'Unknown'])
-  )
+  const profileMap = new Map((profiles ?? []).map((p) => [p.id, p.name ?? p.email ?? 'Unknown']))
   const linkedInitiativeSet = new Set(event.initiative_ids ?? [])
   const linkedInitiatives = (initiatives ?? []).filter((i) => linkedInitiativeSet.has(i.id))
-  const pipelineList = (pipelines ?? []) as Array<{ id: string; name: string }>
+  const pipelineList = (pipelines ?? []) as PipelineOption[]
   const linkedPipelineSet = new Set(event.pipeline_ids ?? [])
   const linkedPipelines = pipelineList.filter((p) => linkedPipelineSet.has(p.id))
   const ownerName = event.owner_id ? profileMap.get(event.owner_id) ?? null : null
@@ -1074,38 +1024,201 @@ export default async function CommsEventDetailPage({
     .map((rid) => profileMap.get(rid))
     .filter(Boolean) as string[]
 
-  // Phase definitions per mode
+  const dateRange = formatDateRange(event.start_date, event.end_date)
+  const location = [event.location_city, event.location_country].filter(Boolean).join(', ')
+
+  // ── Podcast workspace ───────────────────────────────────────────────────────
+  if (isPodcast) {
+    const [eventTasks, teamMembers, directory, pipelineDetailResults] = await Promise.all([
+      loadEventTasks(supabase, event.id),
+      loadCommsTeamMembers(supabase),
+      linkedPipelines.length > 0 ? loadCrmDirectory(supabase) : Promise.resolve(null),
+      Promise.all(linkedPipelines.map((p) => loadCrmPipelineDetail(supabase, p.id))),
+    ])
+    const pipelineBoards = pipelineDetailResults.filter((p): p is NonNullable<typeof p> => Boolean(p))
+    const records = directory?.records ?? []
+    const completedTasks = eventTasks.filter((t) => t.status === 'completed').length
+    const totalTasks = eventTasks.length
+
+    return (
+      <div className="mx-auto max-w-6xl space-y-5 pb-16">
+        <Link
+          href="/app/comms/podcast"
+          className="inline-flex items-center gap-1.5 text-sm font-semibold text-orange-700 hover:text-orange-800"
+        >
+          ← Podcast
+        </Link>
+
+        {/* Page header */}
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap items-center gap-2">
+              {stageMeta && <StatusBadge label={stageMeta.label} tone={stageMeta.tone} />}
+              <StatusBadge label={getEventTypeLabel(event.event_type)} tone="blue" />
+            </div>
+            <h1 className="text-2xl font-semibold text-neutral-900">{event.name}</h1>
+            <p className="text-sm text-neutral-500">
+              {dateRange}
+              {location && <> · {location}</>}
+              {event.podcast_series_name ? <> · {event.podcast_series_name}</> : null}
+            </p>
+            {ownerName && <p className="text-sm font-medium text-emerald-700">Owner: {ownerName}</p>}
+            {totalTasks > 0 && (
+              <div className="flex items-center gap-2 pt-0.5">
+                <div className="flex gap-0.5">
+                  {Array.from({ length: totalTasks }).map((_, i) => (
+                    <span
+                      key={i}
+                      className={`h-1.5 w-1.5 rounded-full ${i < completedTasks ? 'bg-emerald-500' : 'bg-neutral-200'}`}
+                    />
+                  ))}
+                </div>
+                <span className="text-xs text-neutral-400">
+                  {completedTasks}/{totalTasks} tasks done
+                </span>
+              </div>
+            )}
+          </div>
+
+          {!event.is_annual_congress && (
+            <div className="flex flex-col items-end gap-1">
+              <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">Stage</span>
+              <EventStageSelect eventId={event.id} stage={event.stage} />
+            </div>
+          )}
+        </div>
+
+        {/* Resizable two-column workspace */}
+        <ResizableSplit
+          variant="seam"
+          storageKey="podcast-detail"
+          defaultRatio={0.6}
+          className="min-h-[560px] overflow-hidden rounded-xl border border-neutral-200 bg-white"
+          left={
+            <aside className="bg-white">
+              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-3">
+                <h2 className="text-base font-semibold text-neutral-900">Episode details</h2>
+              </div>
+              <div className="max-h-[760px] space-y-4 overflow-y-auto px-5 py-4">
+                <CollapsibleCard
+                  title="Tasks"
+                  storageKey={`podcast-checklist-${event.id}`}
+                  bodyClassName="px-0 pb-0"
+                  actions={
+                    totalTasks > 0 ? (
+                      <span className="rounded-full bg-orange-50 px-2 py-0.5 text-xs font-semibold text-orange-700">
+                        {completedTasks}/{totalTasks} done
+                      </span>
+                    ) : undefined
+                  }
+                >
+                  <EventTaskChecklist eventId={event.id} tasks={eventTasks} teamMembers={teamMembers} />
+                </CollapsibleCard>
+
+                <CollapsibleCard
+                  title="Logistics"
+                  storageKey={`podcast-logistics-${event.id}`}
+                  defaultCollapsed
+                  bodyClassName="px-0 pb-0"
+                >
+                  <PodcastDetailsForm event={event} profiles={profiles ?? []} />
+                </CollapsibleCard>
+              </div>
+            </aside>
+          }
+          right={
+            <section className="bg-white">
+              <div className="flex items-center justify-between border-b border-neutral-200 bg-neutral-50 px-5 py-3">
+                <h2 className="text-base font-semibold text-neutral-900">Topic &amp; notes</h2>
+              </div>
+              <div className="max-h-[760px] space-y-4 overflow-y-auto px-5 py-4">
+                <PodcastNotesForm event={event} />
+
+                <InitiativesCard
+                  event={event}
+                  initiatives={initiatives ?? []}
+                  linkedInitiatives={linkedInitiatives}
+                  linkedInitiativeSet={linkedInitiativeSet}
+                />
+
+                <PipelinesCard
+                  event={event}
+                  pipelineList={pipelineList}
+                  linkedPipelines={linkedPipelines}
+                  linkedPipelineSet={linkedPipelineSet}
+                />
+
+                <QuickLinksCard event={event} isPodcast />
+
+                {stubFlags.teams && (
+                  <div className="rounded-xl border border-neutral-200 bg-white p-4">
+                    <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Integrations</h3>
+                    <IntegrationStubForm
+                      action={triggerEventTeamsStub}
+                      entityId={event.id}
+                      buttonLabel="Create Teams meeting"
+                      className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
+                    />
+                  </div>
+                )}
+              </div>
+            </section>
+          }
+        />
+
+        {/* Embedded linked pipeline — full width, collapsible */}
+        <CollapsibleCard
+          title="Linked pipeline"
+          storageKey={`podcast-pipeline-${event.id}`}
+          tone="orange"
+          actions={
+            <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs font-semibold text-blue-700">
+              {pipelineBoards.length} connected
+            </span>
+          }
+        >
+          {pipelineBoards.length > 0 ? (
+            <div className="space-y-6">
+              {pipelineBoards.map((pipeline) => (
+                <div key={pipeline.id} className="space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <h4 className="text-sm font-semibold text-neutral-900">{pipeline.name}</h4>
+                    <Link
+                      href={`/app/comms/crm/pipelines?pipeline=${pipeline.id}`}
+                      className="text-xs font-semibold text-orange-700 hover:text-orange-800"
+                    >
+                      Open in CRM ↗
+                    </Link>
+                  </div>
+                  <CommsCrmPipelineBoard pipeline={pipeline} records={records} />
+                </div>
+              ))}
+            </div>
+          ) : (
+            <p className="rounded-lg border border-dashed border-neutral-300 py-8 text-center text-sm text-neutral-500">
+              No pipeline connected yet. Connect one from the “Pipelines” card to embed its board here.
+            </p>
+          )}
+        </CollapsibleCard>
+      </div>
+    )
+  }
+
+  // ── Conference / event workspace (phase-stepper layout) ─────────────────────
   type PhaseConfig = { key: string; label: string }
-  const phaseConfigs: PhaseConfig[] = isPodcast
-    ? [
-        { key: 'setup', label: 'Setup' },
-        { key: 'run', label: 'Run' },
-        { key: 'after', label: 'Follow-up' },
-      ]
-    : setupMode === 'i2l_owned'
-    ? [
-        { key: 'prepare', label: 'Preparing' },
-        { key: 'after', label: 'After' },
-      ]
-    : [
-        { key: 'attend', label: 'Attending' },
-        { key: 'after', label: 'After' },
-      ]
+  const phaseConfigs: PhaseConfig[] =
+    setupMode === 'i2l_owned'
+      ? [
+          { key: 'prepare', label: 'Preparing' },
+          { key: 'after', label: 'After' },
+        ]
+      : [
+          { key: 'attend', label: 'Attending' },
+          { key: 'after', label: 'After' },
+        ]
 
   const defaultPhase = phaseConfigs[0].key
   const activePhase = (typeof sp.phase === 'string' ? sp.phase : null) ?? defaultPhase
-
-  const podcastSectionProgress = isPodcast
-    ? {
-        bySection: PODCAST_WORKFLOW_SECTIONS.map((section) => ({
-          done: section.items.filter((item) => Boolean(event![item.field as keyof typeof event])).length,
-          total: section.items.length,
-        })),
-      }
-    : undefined
-
-  const dateRange = formatDateRange(event.start_date, event.end_date)
-  const location = [event.location_city, event.location_country].filter(Boolean).join(', ')
 
   return (
     <div className="mx-auto max-w-5xl space-y-5 pb-16">
@@ -1123,7 +1236,7 @@ export default async function CommsEventDetailPage({
           <div className="flex flex-wrap items-center gap-2">
             {stageMeta && <StatusBadge label={stageMeta.label} tone={stageMeta.tone} />}
             <StatusBadge label={getEventTypeLabel(event.event_type)} tone="blue" />
-            {effectiveOwned && !isPodcast && <StatusBadge label="I2L own" tone="green" />}
+            {effectiveOwned && <StatusBadge label="I2L own" tone="green" />}
             {event.is_annual_congress && <StatusBadge label="Annual Congress" tone="violet" />}
           </div>
           <h1 className="text-2xl font-semibold text-neutral-900">{event.name}</h1>
@@ -1139,23 +1252,6 @@ export default async function CommsEventDetailPage({
               {formatTokenLabel(event.attendance_kind ?? 'visitor')}: {attendeeNames.join(', ')}
             </p>
           )}
-          {isPodcast && (
-            <div className="flex items-center gap-2 pt-0.5">
-              <div className="flex gap-0.5">
-                {Array.from({ length: podcastProgress.total }).map((_, i) => (
-                  <span
-                    key={i}
-                    className={`h-1.5 w-1.5 rounded-full ${
-                      i < podcastProgress.completed ? 'bg-emerald-500' : 'bg-neutral-200'
-                    }`}
-                  />
-                ))}
-              </div>
-              <span className="text-xs text-neutral-400">
-                {podcastProgress.completed}/{podcastProgress.total} steps
-              </span>
-            </div>
-          )}
         </div>
 
         {/* Stage transition — inline, saves on change */}
@@ -1168,202 +1264,41 @@ export default async function CommsEventDetailPage({
       </div>
 
       {/* Phase stepper */}
-      <PhaseStepper
-        phases={phaseConfigs}
-        activePhase={activePhase}
-        eventId={event.id}
-        podcastProgress={podcastSectionProgress}
-      />
+      <PhaseStepper phases={phaseConfigs} activePhase={activePhase} eventId={event.id} />
 
       {/* Main two-column layout */}
       <div className="grid gap-6 lg:grid-cols-[1fr_300px]">
-
         {/* ── Left: active phase content ─────────────────────── */}
         <div>
-          {isPodcast && activePhase === 'setup' && (
-            <PodcastSetupPanel event={event} profiles={profiles ?? []} />
-          )}
-          {isPodcast && activePhase === 'run' && (
-            <PodcastRunPanel event={event} />
-          )}
-          {isPodcast && activePhase === 'after' && (
-            <PodcastAfterPanel event={event} />
-          )}
-          {!isPodcast && (activePhase === 'prepare' || activePhase === 'attend') && (
+          {activePhase === 'after' ? (
+            <EventAfterPanel event={event} />
+          ) : (
             <EventPreparePanel
               event={event}
               profiles={profiles ?? []}
               section={setupMode === 'attendance' ? 'event_attend' : 'event_prepare'}
             />
           )}
-          {!isPodcast && activePhase === 'after' && (
-            <EventAfterPanel event={event} />
-          )}
         </div>
 
         {/* ── Right: sidebar ─────────────────────────────────── */}
         <div className="space-y-4">
+          <QuickLinksCard event={event} isPodcast={false} />
 
-          {/* Quick links */}
-          {(event.event_website_url || event.presentation_asset_url || event.podcast_recording_link) && (
-            <div className="rounded-xl border border-neutral-200 bg-white p-4">
-              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Links</h3>
-              <div className="space-y-1.5">
-                {event.event_website_url && (
-                  <a
-                    href={event.event_website_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-                  >
-                    {isPodcast ? 'Episode page' : 'Event website'}
-                    <span className="text-neutral-400">↗</span>
-                  </a>
-                )}
-                {event.podcast_recording_link && (
-                  <a
-                    href={event.podcast_recording_link}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between rounded-lg border border-violet-200 bg-violet-50 px-3 py-2 text-sm font-semibold text-violet-700 hover:bg-violet-100"
-                  >
-                    Recording room
-                    <span>↗</span>
-                  </a>
-                )}
-                {event.presentation_asset_url && (
-                  <a
-                    href={event.presentation_asset_url}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="flex items-center justify-between rounded-lg border border-neutral-200 px-3 py-2 text-sm font-semibold text-neutral-700 hover:bg-neutral-50"
-                  >
-                    {isPodcast ? 'Brief / script' : 'Runbook / deck'}
-                    <span className="text-neutral-400">↗</span>
-                  </a>
-                )}
-              </div>
-            </div>
-          )}
+          <InitiativesCard
+            event={event}
+            initiatives={initiatives ?? []}
+            linkedInitiatives={linkedInitiatives}
+            linkedInitiativeSet={linkedInitiativeSet}
+          />
 
-          {/* Initiatives */}
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Initiatives</h3>
-            {linkedInitiatives.length > 0 ? (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {linkedInitiatives.map((initiative) => (
-                  <span
-                    key={initiative.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-violet-700"
-                  >
-                    {initiative.title}
-                    <form action={unlinkEventInitiative} className="flex">
-                      <input type="hidden" name="event_id" value={event.id} />
-                      <input type="hidden" name="initiative_id" value={initiative.id} />
-                      <button
-                        type="submit"
-                        aria-label={`Disconnect ${initiative.title}`}
-                        className="flex h-4 w-4 items-center justify-center rounded-full text-violet-400 transition hover:bg-violet-200 hover:text-violet-800"
-                      >
-                        ×
-                      </button>
-                    </form>
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mb-3 text-xs text-neutral-400">None linked yet.</p>
-            )}
-            {(initiatives ?? []).some((i) => !linkedInitiativeSet.has(i.id)) && (
-              <form action={linkEventInitiative} className="flex gap-2">
-                <input type="hidden" name="event_id" value={event.id} />
-                <select
-                  name="initiative_id"
-                  className="min-w-0 flex-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
-                >
-                  {(initiatives ?? [])
-                    .filter((i) => !linkedInitiativeSet.has(i.id))
-                    .map((i) => (
-                      <option key={i.id} value={i.id}>
-                        {i.title}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  type="submit"
-                  className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                >
-                  Link
-                </button>
-              </form>
-            )}
-          </div>
+          <PipelinesCard
+            event={event}
+            pipelineList={pipelineList}
+            linkedPipelines={linkedPipelines}
+            linkedPipelineSet={linkedPipelineSet}
+          />
 
-          {/* Pipelines */}
-          <div className="rounded-xl border border-neutral-200 bg-white p-4">
-            <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Pipelines</h3>
-            {linkedPipelines.length > 0 ? (
-              <div className="mb-3 flex flex-wrap gap-1.5">
-                {linkedPipelines.map((pipeline) => (
-                  <span
-                    key={pipeline.id}
-                    className="inline-flex items-center gap-1 rounded-full border border-blue-200 bg-blue-50 py-0.5 pl-2.5 pr-1 text-xs font-semibold text-blue-700"
-                  >
-                    <Link href={`/app/comms/crm/pipelines/${pipeline.id}`} className="hover:underline">
-                      {pipeline.name}
-                    </Link>
-                    <form action={unlinkEventPipeline} className="flex">
-                      <input type="hidden" name="event_id" value={event.id} />
-                      <input type="hidden" name="pipeline_id" value={pipeline.id} />
-                      <button
-                        type="submit"
-                        aria-label={`Disconnect ${pipeline.name}`}
-                        className="flex h-4 w-4 items-center justify-center rounded-full text-blue-400 transition hover:bg-blue-200 hover:text-blue-800"
-                      >
-                        ×
-                      </button>
-                    </form>
-                  </span>
-                ))}
-              </div>
-            ) : (
-              <p className="mb-3 text-xs text-neutral-400">None connected yet.</p>
-            )}
-            {pipelineList.some((p) => !linkedPipelineSet.has(p.id)) ? (
-              <form action={linkEventPipeline} className="flex gap-2">
-                <input type="hidden" name="event_id" value={event.id} />
-                <select
-                  name="pipeline_id"
-                  className="min-w-0 flex-1 rounded-lg border border-neutral-200 px-2.5 py-1.5 text-xs"
-                >
-                  {pipelineList
-                    .filter((p) => !linkedPipelineSet.has(p.id))
-                    .map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.name}
-                      </option>
-                    ))}
-                </select>
-                <button
-                  type="submit"
-                  className="shrink-0 rounded-lg border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
-                >
-                  Connect
-                </button>
-              </form>
-            ) : (
-              pipelineList.length === 0 && (
-                <p className="text-xs text-neutral-400">
-                  No pipelines exist yet.{' '}
-                  <Link href="/app/comms/crm/pipelines" className="font-semibold text-orange-700 hover:underline">
-                    Create one
-                  </Link>
-                </p>
-              )
-            )}
-          </div>
-
-          {/* Teams stub */}
           {stubFlags.teams && (
             <div className="rounded-xl border border-neutral-200 bg-white p-4">
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Integrations</h3>
@@ -1376,7 +1311,6 @@ export default async function CommsEventDetailPage({
             </div>
           )}
 
-          {/* Calendar entries */}
           {(linkedCalendar ?? []).length > 0 && (
             <div className="rounded-xl border border-neutral-200 bg-white p-4">
               <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-neutral-400">Calendar entries</h3>

@@ -67,11 +67,35 @@ export default async function CommsPodcastPage({
 
   const people = (profiles ?? []).map((p) => ({ id: p.id, label: p.name ?? p.email ?? 'Unknown' }))
 
+  // Open-task counts come from the editable episode checklist (comms_tasks tied
+  // to the event). Episodes whose checklist has not been seeded yet fall back to
+  // the built-in workflow progress so their tile still shows meaningful counts.
+  const eventIds = (events ?? []).map((event) => event.id)
+  // event_id is not in the generated Database types for comms_tasks yet.
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any
+  const { data: taskRows } = eventIds.length
+    ? await db.from('comms_tasks').select('event_id, status').in('event_id', eventIds)
+    : { data: [] as Array<{ event_id: string; status: string }> }
+
+  const openTaskByEvent = new Map<string, number>()
+  const hasTasksByEvent = new Set<string>()
+  for (const row of (taskRows ?? []) as Array<{ event_id: string | null; status: string }>) {
+    if (!row.event_id) continue
+    hasTasksByEvent.add(row.event_id)
+    if (row.status !== 'completed' && row.status !== 'skipped') {
+      openTaskByEvent.set(row.event_id, (openTaskByEvent.get(row.event_id) ?? 0) + 1)
+    }
+  }
+
   const episodes: Episode[] = (events ?? []).map((event) => {
     const guests = event.podcast_guests ?? []
     const hosts = event.podcast_hosts ?? []
     const guestLabel = guests.length > 0 ? guests.join(', ') : hosts.length > 0 ? hosts.join(', ') : null
     const { completed, total } = getPodcastWorkflowProgress(event)
+    const openTasks = hasTasksByEvent.has(event.id)
+      ? openTaskByEvent.get(event.id) ?? 0
+      : Math.max(total - completed, 0)
     return {
       id: event.id,
       title: event.podcast_episode_title || event.name,
@@ -81,7 +105,7 @@ export default async function CommsPodcastPage({
       guestLabel,
       imageUrl: event.event_image_url ?? null,
       published: Boolean(event.podcast_published),
-      openTasks: Math.max(total - completed, 0),
+      openTasks,
     }
   })
 

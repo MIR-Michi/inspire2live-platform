@@ -691,6 +691,57 @@ export async function loadCampusMeetingTasks(
 }
 
 /**
+ * Loads the checklist tasks tied to a single event — the podcast workspace's
+ * editable task list (comms_tasks seeded with this event's `event_id`).
+ * Returns them in creation order with resolved owner labels/roles so the page
+ * can show status and reassign the owner. Mirrors {@link loadCampusMeetingTasks}.
+ */
+export async function loadEventTasks(
+  supabase: SupabaseClient,
+  eventId: string
+): Promise<CommsTaskRecord[]> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const db = supabase as any
+
+  const [{ data: profilesData }, { data: taskData }] = await Promise.all([
+    supabase.from('profiles').select('id, name, email, role'),
+    db
+      .from('comms_tasks')
+      .select('id, title, description, owner_id, due_date, status, agenda_item_id')
+      .eq('event_id', eventId)
+      .order('created_at', { ascending: true })
+      .limit(100),
+  ])
+
+  const profiles = (profilesData ?? []) as Array<{ id: string; name: string | null; email: string | null; role: string | null }>
+  const profileMap = new Map(profiles.map((p) => [p.id, p]))
+  const labelFor = (id: string | null) =>
+    id ? profileMap.get(id)?.name ?? profileMap.get(id)?.email ?? 'Unknown' : null
+  const roleFor = (id: string | null) => (id ? profileMap.get(id)?.role ?? null : null)
+
+  return ((taskData ?? []) as Array<{
+    id: string
+    title: string
+    description: string | null
+    owner_id: string | null
+    due_date: string | null
+    status: string
+    agenda_item_id: string | null
+  }>).map((row) => ({
+    id: row.id,
+    title: row.title,
+    description: row.description,
+    ownerId: row.owner_id,
+    ownerLabel: labelFor(row.owner_id),
+    ownerRole: roleFor(row.owner_id),
+    dueDate: row.due_date,
+    status: normalizeCommsTaskStatus(row.status),
+    agendaItemId: row.agenda_item_id,
+    agendaItemTitle: null,
+  }))
+}
+
+/**
  * Comms-workspace members, for assigning task owners outside the full team
  * dashboard load (e.g. the monthly campus meeting agenda).
  */
