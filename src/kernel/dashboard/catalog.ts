@@ -24,7 +24,7 @@ export const DASHBOARD_CATALOG: Record<DashboardId, DashboardDefinition> = {
     defaultSplitRatio: 0.66,
     widgets: [
       { id: 'team-tasks', title: 'Team tasks', defaultZone: 'primary', defaultSize: 'wide', allowedSizes: STANDARD_WIDE, required: true },
-      { id: 'meeting-agenda', title: 'Bi-weekly meeting', defaultZone: 'primary', defaultSize: 'standard', allowedSizes: STANDARD_WIDE },
+      { id: 'meeting-agenda', title: 'Team Meetings', defaultZone: 'primary', defaultSize: 'standard', allowedSizes: STANDARD_WIDE },
       { id: 'field-newsfeed', title: 'Field Newsfeed', defaultZone: 'supporting', defaultSize: 'standard', allowedSizes: STANDARD_WIDE },
       { id: 'new-members', title: 'New members', defaultZone: 'supporting', defaultSize: 'standard', allowedSizes: STANDARD_WIDE },
       { id: 'events', title: 'Events', defaultZone: 'primary', defaultSize: 'standard', allowedSizes: STANDARD_WIDE, defaultCollapsed: true },
