@@ -39,6 +39,20 @@ export default defineConfig({
         'src/modules/content/domain/comms-digest.ts',
         'src/modules/content/domain/comms-integration-intents.ts',
         'src/modules/content/domain/comms-integrations.ts',
+        // Sprint 20 (ADR-0013): same rule. The two new components keep every
+        // decision in pure, fully covered domain files (scoring, stages,
+        // connection strength, affiliation overlap, fatigue, guest import);
+        // these are their Supabase query/write layers, their settings resolvers,
+        // and their row-shape declarations.
+        'src/modules/network/domain/repository.ts',
+        'src/modules/network/domain/actions.ts',
+        'src/modules/network/domain/routes.ts',
+        'src/modules/network/domain/config.ts',
+        'src/modules/network/domain/schema.ts',
+        'src/modules/podcast-planning/domain/repository.ts',
+        'src/modules/podcast-planning/domain/actions.ts',
+        'src/modules/podcast-planning/domain/config.ts',
+        'src/modules/podcast-planning/domain/schema.ts',
         // External API / email dispatch wrappers — no unit-test value.
         'src/modules/intake/domain/whatsapp-send.ts',
         'src/modules/intake/domain/whatsapp-media.ts',

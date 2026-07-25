@@ -1,9 +1,9 @@
 # Data Dictionary — Inspire2Live Platform
 
 > **Purpose:** Human-readable database schema reference. Table descriptions, key columns, relationships.  
-> **Source of truth:** `supabase/migrations/` (00001–00169) and `src/types/database.ts`  
+> **Source of truth:** `supabase/migrations/` (00001–00172) and `src/types/database.ts`  
 > **Audience:** Developers writing queries, new team members understanding the data model.  
-> **Last reviewed:** 2026-07-17
+> **Last reviewed:** 2026-07-25
 
 ---
 
@@ -368,4 +368,51 @@ RLS and the settings resolver are unchanged. Platform Admin and Superadmin users
 
 ---
 
-*Last updated: 2026-07-17 · Maintainer: Michael Wittinger*
+## 12 · Podcast Opportunity Engine (Sprint 20)
+
+Two components, split along the reuse seam (ADR-0013). Concept:
+`docs/PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md`.
+
+### `network` — the relationship graph (migration `00171`)
+
+Generic advocacy infrastructure: no podcast vocabulary, no dependency beyond the kernel and the
+identity spine. Designed to be extractable into a second platform.
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `network_people` | People the organisation could reach out to. **Professional information only** (concept §16). | `full_name`, `role_title`, `organisation`, `topic_tags`, `podcast_appearances` (jsonb), `institutional_friction`, `origin` (`past_guest`/`member`/`crm_contact`/`external`), `crm_contact_id` → `comms_crm_contacts`, `profile_id` → `profiles`, `source_attribution` (jsonb, per field), `objection_received`, `last_activity_at` |
+| `network_person_affiliations` | Publicly stated affiliations of a directory person, each with its source. | `person_id`, `kind`, `name`, `from_year`, `to_year`, `source_url` |
+| `network_member_affiliations` | A member's **opt-in, item-by-item, revocable** declared contexts. Members tick contexts; they never upload contacts. | `profile_id`, `kind`, `name`, `from_year`, `to_year`, `visibility` (`network`/`private`) |
+| `network_connections` | One row per known or *suspected* connection. Strength is derived from `connection_type` at write time. | `from_type`/`from_id`, `to_type`/`to_id` (polymorphic: `profile`/`person`), `connection_type`, `strength` (0–1), `evidence` (jsonb), `status` (`suggested`/`confirmed`/`rejected`), `confirmed_by` |
+| `network_connection_checks` | The five-second map question. Commits nobody, moves no card. | `profile_id`, `person_id`, `context_note`, `answer` (`knows_well`/`knows_a_little`/`knows_someone`/`no`/`rather_not`) |
+| `network_introduction_requests` | The favour — only after a connection is confirmed. Generic context pointer instead of a cross-component FK. | `context_type`, `context_id`, `introducer_profile_id`, `person_id`, `connection_id`, `response` (`yes`/`use_my_name`/`declined`/`no_reply`), `intro_sent_at`, `outcome` |
+| `network_people_public` *(view)* | The published read contract (`security_invoker = true`). **Excludes people who have objected**, so no consumer can forget the rule. | — |
+
+**RLS:** comms team / admin for the directory and the graph. Members additionally own their own
+`network_member_affiliations` rows (read/write/delete) and can read and answer the
+`network_connection_checks` and `network_introduction_requests` addressed to them.
+
+### `podcast-planning` — questions and the board (migration `00172`)
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `podcast_questions` | What the podcast is asking. Lives for months; survives refusals. | `question`, `why_now` + `why_now_source_urls` + `why_now_at`, `anchor_date`, `independent_sources`, `ask_type`, `ask_destination_url`, `ask_verified_at`, `format`, `initiative_id`, `on_advocacy_agenda`, `patient_relevance`, `question_pull`, `ask_conversion_prior`, `amplification`, `status` (`draft`/`live`/`retired`) |
+| `podcast_question_candidates` | One card per person per question — the thing that moves through the six stages. | `question_id`, **`person_id` (uuid, deliberately no FK — see below)**, `angle`, `stage`, `stage_entered_at`, `is_anchor` (unique per question), `route`, `recent_appearance`, `good_moment`, `practicalities`, `prior_refusal`, `guest_audience`, `chance_of_yes`, `score_total`, `wake_date`, `closed_reason`, `override_by`/`override_reason`, `recording_date`, `consent_confirmed`, `seats_filled`, `content_calendar_id` |
+| `podcast_candidate_scores` | Versioned score snapshots, so a weight change stays auditable and any number ever shown can be reproduced. | `candidate_id`, `weights_version`, the six part scores, `total`, `explanation` (jsonb) |
+| `podcast_invitations` | Every attempt to reach one person for one question. | `candidate_id`, `kind` (`introduction`/`direct`), `introduction_request_id` (soft ref), `sent_at`, `message_text`, `nudged_at`, `response`, `recall_date` |
+
+**RLS:** comms team / admin, mirroring the rest of the Comms space.
+
+> **`person_id` has no foreign key, on purpose.** People are owned by the `network` component and
+> resolved through `network_people_public`; writes go through `network`'s domain actions
+> (ADR-0009 §9 rules 2–4, ADR-0013 §2). This is what keeps `network` extractable. A card whose
+> person cannot be resolved renders as *repairable*, never as a crash — the board surfaces the count.
+
+**Not created in Phase A:** `podcast_signals`, `podcast_topic_groups` and `podcast_episode_results`
+are specified in the concept (Radar and Results) and deliberately deferred to Phase B — a table with
+no reader is an orphan under ADR-0009 §10.
+
+---
+
+*Last updated: 2026-07-25 · Maintainer: Michael Wittinger*
+
