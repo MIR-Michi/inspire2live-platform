@@ -19,6 +19,8 @@ import { manifest as tasks } from '@/modules/tasks/manifest'
 import { manifest as onboarding } from '@/modules/onboarding/manifest'
 import { manifest as feedback } from '@/modules/feedback/manifest'
 import { manifest as aiFeatures } from '@/modules/ai-features/manifest'
+import { manifest as network } from '@/modules/network/manifest'
+import { manifest as podcastPlanning } from '@/modules/podcast-planning/manifest'
 
 export const componentManifests: ComponentManifest[] = [
   contacts,
@@ -30,4 +32,6 @@ export const componentManifests: ComponentManifest[] = [
   onboarding,
   feedback,
   aiFeatures,
+  network,
+  podcastPlanning,
 ]

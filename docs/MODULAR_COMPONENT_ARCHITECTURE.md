@@ -296,6 +296,8 @@ site was a candidate here but has since been retired entirely — migration `001
 | **onboarding** | `member_onboarding*` | `member-onboarding` | comms |
 | **feedback** | `feedback_items` | `feedback` | all |
 | **ai-features** | `ai_settings`, `ai_usage_log`, `org_feed*`, `meeting_*`, `news_feed_items` | `lib/ai/*` | all |
+| **network** *(Sprint 20)* | `network_people`, `network_*_affiliations`, `network_connections`, `network_connection_checks`, `network_introduction_requests` + `network_people_public` view | `modules/network/domain/*` | comms, all |
+| **podcast-planning** *(Sprint 20)* | `podcast_questions`, `podcast_question_candidates`, `podcast_candidate_scores`, `podcast_invitations` | `modules/podcast-planning/domain/*` | comms |
 
 **Not components** (retired by Sprint 15, tables pending a forward-migration drop, referenced only by
 admin cascade-cleanup): the **Network** space (`hubs`, `hub_*`), the **Resources** space (`resources`),
@@ -307,6 +309,18 @@ The **events** component is still intentionally heterogeneous (external conferen
 campus sessions, and the congress guest-attend surface have accreted separately). Writing its manifest is
 expected to split it further — the useful, live boundary question, now that the retired internal congress
 *workspace* is out of the picture.
+
+**Sprint 20 added the first two components designed for extraction rather than inherited from history**
+(ADR-0013). `network` is the reusable half of the Podcast Opportunity Engine — a relationship graph and a
+two-step introduction protocol that any advocacy organisation would want — and depends only on the kernel
+and the identity spine. `podcast-planning` is the editorial half and consumes `network` through its
+published contract. Two rules from §6 and §9 are exercised for real there for the first time: the
+cross-component reference (`podcast_question_candidates.person_id`) is a **soft reference with no foreign
+key**, read through the `security_invoker` view `network_people_public` and written only through
+`network`'s domain actions; and every operator-tunable threshold lives in manifest `config` rather than in
+a function body, which is what makes the components parameterisable by a future blueprint at no extra
+cost. Notably, neither was added to `events` — the podcast *episode* stays there, and the planner feeds
+the content calendar rather than duplicating it.
 
 ---
 
@@ -479,4 +493,8 @@ levels are only as good as the composition they sit on.
 - ADR-0006 — Communications Workspace
 - `docs/PLATFORM_CONCEPT_UPDATE_v1.md` — the concept this extends
 - `docs/TRACEABILITY.md` — requirement traceability, now scoped per component
+- ADR-0013 — The Podcast Opportunity Engine ships as two toolbox components (the first components
+  designed for extraction rather than inherited from history)
 - `sprints/sprint-16-modular-component-foundation/` — Stage 1 delivery
+- `sprints/sprint-20-podcast-opportunity-engine/` — `network` + `podcast-planning`, the first real use
+  of the §6 read-view contract between two components

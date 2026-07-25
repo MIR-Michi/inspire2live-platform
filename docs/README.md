@@ -18,6 +18,7 @@
 | [PLATFORM_SETTINGS_CONCEPT.md](PLATFORM_SETTINGS_CONCEPT.md) | Platform Settings space as the manifest-driven blueprint editor (ADR-0010) |
 | [ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md](ADAPTIVE_DASHBOARD_DESIGN_CONCEPT.md) | Sprint 19 concept for Campus-inspired two-zone dashboards, personal widget layouts, accessible drag/resize, persisted preferences, and purposeful motion |
 | [ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md](ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md) | Implemented desktop/tablet/mobile and edit-mode wireframe specification for Sprint 19 |
+| [PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md](PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md) | Sprint 20 concept: the Planning & Strategy planner that replaces the podcast Guests tab — questions, a six-stage board, the chance-of-a-yes model, and a relationship map built without scraping (ADR-0013) |
 | [PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md](PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md) | Organization-wide Design & Component Library panel, semantic tokens, live production component catalog, dashboard/motion defaults, and component-toolbox alignment |
 | [ROLE_PERMISSION_MODEL.md](ROLE_PERMISSION_MODEL.md) | Full role × space permission matrix, override logic |
 | [DATA_DICTIONARY.md](DATA_DICTIONARY.md) | Database schema reference, table descriptions, key relationships |
@@ -81,6 +82,7 @@
 | [0010](ADR/0010-platform-settings-space.md) | Platform Settings Space | accepted | — |
 | [0011](ADR/0011-pr-based-trunk-with-sprints.md) | PR-Based Trunk Development with Sprint Cadence | accepted | 2026-07-17 |
 | [0012](ADR/0012-adaptive-dashboard-composition.md) | Adaptive Dashboard Composition and User Preferences | accepted | 2026-07-17 |
+| [0013](ADR/0013-opportunity-engine-components.md) | The Podcast Opportunity Engine ships as two toolbox components | accepted | 2026-07-25 |
 
 ---
 
