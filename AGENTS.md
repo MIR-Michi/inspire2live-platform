@@ -209,5 +209,70 @@ source of truth for which models and effort levels exist. Do not hardcode model 
 
 ---
 
+## Cursor Cloud specific instructions
+
+Standard commands live in §3/§5 and [`README.md`](README.md); this section only captures the
+non-obvious bits of running the app in a Cloud Agent VM. Dependencies (`pnpm install` + the
+Supabase CLI binary) are refreshed by the environment update script — do not re-run those by hand.
+
+**Services & ports.** App = `pnpm dev` (http://localhost:3000). The Supabase local stack
+(Postgres `54322`, API `54321`, Studio `54323`, Mailpit `54324`) runs in Docker and backs auth +
+every data page. The app boots without it but all `/app/*` pages redirect to `/login`, so start
+Supabase before doing anything meaningful.
+
+**Docker is required and must be started per session** (it is preinstalled in the environment image
+with the `fuse-overlayfs` storage driver and the containerd snapshotter disabled — needed for this
+Firecracker VM). Start it once per boot, then open the socket for the `ubuntu` user:
+
+```bash
+sudo dockerd > /tmp/dockerd.log 2>&1 &
+sudo chmod 666 /var/run/docker.sock
+```
+
+**Start Supabase and write `.env.local`** (points the app at the local stack; keys come straight
+from the CLI so they never drift):
+
+```bash
+node_modules/.bin/supabase start          # applies all migrations + supabase/seed.sql
+node_modules/.bin/supabase status -o env  # ANON_KEY / SERVICE_ROLE_KEY for .env.local
+```
+
+`.env.local` needs `NEXT_PUBLIC_SUPABASE_URL=http://127.0.0.1:54321`, the `ANON_KEY` and
+`SERVICE_ROLE_KEY` from `status -o env`, `NEXT_PUBLIC_APP_URL=http://localhost:3000`, and a dummy
+`CRON_SECRET`. Resend/Anthropic/WhatsApp keys are optional locally.
+
+**Local login is not obvious — email/password and magic-link logins are disabled in the local
+stack** (`supabase/config.toml` → `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`). To authenticate for
+manual/e2e testing, mint a session with the service-role admin endpoint and hand the token to the
+app's own callback (the `/auth/confirm` → `/auth/callback` `verifyOtp` path):
+
+```bash
+SRK=$(node_modules/.bin/supabase status -o env | sed -n 's/^SERVICE_ROLE_KEY="\(.*\)"$/\1/p')
+TOKEN=$(curl -s -X POST http://127.0.0.1:54321/auth/v1/admin/generate_link \
+  -H "apikey: $SRK" -H "Authorization: Bearer $SRK" -H 'Content-Type: application/json' \
+  -d '{"type":"magiclink","email":"lina@example.com"}' \
+  | sed -n 's/.*"hashed_token":"\([^"]*\)".*/\1/p')
+# open in a browser to land logged-in:
+echo "http://localhost:3000/auth/confirm?token_hash=$TOKEN&type=magiclink&next=/app/comms/intake"
+```
+
+The seeded `auth.users` rows are inserted directly by `supabase/seed.sql`, so before auth works you
+must, once per fresh DB, set `aud`/`role` to `'authenticated'`, set `instance_id`, coalesce the NULL
+GoTrue token columns (`confirmation_token`, `recovery_token`, `email_change*`,
+`reauthentication_token`, …) to `''`, and — to skip the setup-password/onboarding detours — set
+`raw_user_meta_data.password_set=true` and `public.profiles.onboarding_completed=true` for the user
+you log in as. (`generate_link` returns `Database error finding user` until the NULL token columns
+are fixed.)
+
+**Roles gate the workspace.** The Communications Workspace (`/app/comms/*`) requires role `Comms`,
+`PlatformAdmin`, or `Superadmin` (`src/lib/comms-access.ts`); a `HubCoordinator` is bounced to the
+dashboard. `lina@example.com` is the seeded `Comms` persona — use it for Intake/Calendar testing.
+
+**Stale demo layer.** `supabase/demo/world-campus-whatsapp-seed.sql` references a dropped `user_type`
+column and fails to apply — do not depend on it. Use the Intake "New intake item" form
+(`/app/comms/intake/new`) to create test content instead.
+
+---
+
 *Canonical agent/contributor briefing. Last reviewed: 2026-07-17.
 Claude Code reads [`CLAUDE.md`](CLAUDE.md), which points here.*
