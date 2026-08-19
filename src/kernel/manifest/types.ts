@@ -44,6 +44,14 @@ export type ComponentProvides = {
   /** Mountable UI surfaces (component names). */
   ui?: string[]
   /**
+   * Source types this component can be published from (ADR-0014). Each entry is
+   * a `sourceType` served by a `SourceProvider` this component exports through
+   * its `index.ts` (e.g. `campus_session`). The source-reconciliation governance
+   * check keeps this in sync with the providers registered in
+   * `src/modules/publishing-registry.ts` and with each provider's `ownedBy`.
+   */
+  sources?: string[]
+  /**
    * True when this component exposes an editable settings panel in the Platform
    * Settings space (ADR-0010). It is rendered from `config`'s typed fields — no
    * bespoke form code. The settings governance check asserts this stays in sync

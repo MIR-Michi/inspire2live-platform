@@ -36,6 +36,7 @@ export type AiWorkloadId =
   | 'conference_detail'
   | 'personal_monitoring'
   | 'lightweight_backfill'
+  | 'channel_post_draft'
 
 export type AiWorkloadPolicy = {
   id: AiWorkloadId
@@ -213,6 +214,17 @@ export const AI_WORKLOAD_POLICIES: readonly AiWorkloadPolicy[] = [
     recommendedModel: 'claude-haiku-4-5',
     recommendedEffort: 'none',
     recommendation: 'Haiku keeps backfill costs low; use Batch API where possible for additional savings.',
+  },
+  {
+    id: 'channel_post_draft',
+    section: 'Publishing',
+    label: 'Channel post drafting',
+    description:
+      'Drafts channel-ready post variants (LinkedIn first) from a curated source payload or an uploaded screenshot, with every factual claim mapped to the source field it came from.',
+    recommendedModel: 'claude-sonnet-5',
+    recommendedEffort: 'medium',
+    recommendation:
+      'Short, well-bounded copywriting with a human reviewing every word does not warrant the most expensive reasoning tier. Sonnet 5 reads image input (screenshot sources) and keeps grounded structured output reliable at Sonnet cost; override per workload if calibration shows the drafts drifting.',
   },
 ] as const
 

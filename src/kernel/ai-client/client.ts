@@ -41,9 +41,20 @@ export type AiStructuredFormat = {
   schema: Record<string, unknown>
 }
 
+/**
+ * A single content block inside a message. Text stays the common case; the
+ * image block is what lets a workload read a screenshot (ADR-0014 §9). Images
+ * must be read from private storage and base64-encoded server-side — never
+ * round-tripped through the browser.
+ */
+export type AiContentBlock =
+  | { type: 'text'; text: string }
+  | { type: 'image'; source: { type: 'base64'; media_type: string; data: string } }
+
 export type AiMessage = {
   role: 'user' | 'assistant'
-  content: string
+  /** A plain string (unchanged behaviour) or an array of content blocks. */
+  content: string | AiContentBlock[]
 }
 
 export type RunAiMessageInput = {

@@ -20,6 +20,7 @@
 | [ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md](ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md) | Implemented desktop/tablet/mobile and edit-mode wireframe specification for Sprint 19 |
 | [PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md](PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md) | Sprint 20 concept: the Planning & Strategy planner that replaces the podcast Guests tab — questions, a six-stage board, the chance-of-a-yes model, and a relationship map built without scraping (ADR-0013) |
 | [PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md](PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md) | Organization-wide Design & Component Library panel, semantic tokens, live production component catalog, dashboard/motion defaults, and component-toolbox alignment |
+| [PUBLISHING_SPACE_CONCEPT.md](PUBLISHING_SPACE_CONCEPT.md) | Sprint 21 concept: the **Publishing** space — a platform record *or* a dropped screenshot becomes channel-ready copy (LinkedIn first), a generic `publishing` component with per-component source providers as the extension point, human-approved drafts handed to the content calendar (ADR-0014) |
 | [ROLE_PERMISSION_MODEL.md](ROLE_PERMISSION_MODEL.md) | Full role × space permission matrix, override logic |
 | [DATA_DICTIONARY.md](DATA_DICTIONARY.md) | Database schema reference, table descriptions, key relationships |
 | [DESIGN_CHANGELOG.md](DESIGN_CHANGELOG.md) | History of UI/UX design decisions and deviations |
@@ -83,6 +84,7 @@
 | [0011](ADR/0011-pr-based-trunk-with-sprints.md) | PR-Based Trunk Development with Sprint Cadence | accepted | 2026-07-17 |
 | [0012](ADR/0012-adaptive-dashboard-composition.md) | Adaptive Dashboard Composition and User Preferences | accepted | 2026-07-17 |
 | [0013](ADR/0013-opportunity-engine-components.md) | The Podcast Opportunity Engine ships as two toolbox components | accepted | 2026-07-25 |
+| [0014](ADR/0014-publishing-space.md) | Publishing is a component with a source-provider extension point, not a per-channel feature | accepted | 2026-08-19 |
 
 ---
 
@@ -98,4 +100,4 @@
 
 ---
 
-*Last updated: 2026-07-17 · Maintainer: Michael Wittinger*
+*Last updated: 2026-08-19 · Maintainer: Michael Wittinger*

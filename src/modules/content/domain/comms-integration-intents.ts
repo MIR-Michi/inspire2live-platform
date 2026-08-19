@@ -10,6 +10,7 @@ type IntegrationEntityType =
   | 'campus_sessions'
   | 'media_assets'
   | 'media_recovery_requests'
+  | 'publishing_drafts'
 
 export async function logIntegrationIntent(
   supabase: AppSupabaseClient,

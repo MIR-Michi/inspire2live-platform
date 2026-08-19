@@ -88,6 +88,7 @@ export type NavIcon =
   | 'events'
   | 'network'
   | 'library'
+  | 'publishing'
   | 'resources'
   | 'admin'
   | 'feedback'
@@ -142,7 +143,8 @@ export const MASTER_NAV: NavSection[] = [
   {
     label: 'Content',
     items: [
-      { id: 'comms-library', label: 'Library',   href: '/app/comms/library', space: 'comms', icon: 'library' },
+      { id: 'comms-library',    label: 'Library',    href: '/app/comms/library',    space: 'comms', icon: 'library' },
+      { id: 'comms-publishing', label: 'Publishing', href: '/app/comms/publishing', space: 'comms', icon: 'publishing' },
     ],
   },
   {
@@ -188,7 +190,8 @@ const COMMS_NAV_SECTIONS: NavSection[] = [
   {
     label: 'Content',
     items: [
-      { id: 'comms-library', label: 'Library', href: '/app/comms/library', space: 'comms', icon: 'library' },
+      { id: 'comms-library',    label: 'Library',    href: '/app/comms/library',    space: 'comms', icon: 'library' },
+      { id: 'comms-publishing', label: 'Publishing', href: '/app/comms/publishing', space: 'comms', icon: 'publishing' },
     ],
   },
 ]

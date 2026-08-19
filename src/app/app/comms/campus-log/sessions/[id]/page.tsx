@@ -9,6 +9,7 @@ import { loadCampusSessionTranscript } from '@/lib/comms-meeting-transcripts'
 import { loadCommsTeamMembers } from '@/lib/comms-dashboard-data'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import { createClient } from '@/lib/supabase/server'
+import { PublishFromHere } from '@/modules/publishing'
 
 const CAMPUS_SESSION_DETAIL_SELECT =
   'id, session_date, theme, summary, decisions_for_publication, action_items_for_publication, recording_url, slides_media_id, participating_hub_ids, initiative_ids, published_outputs'
@@ -54,10 +55,13 @@ export default async function CampusSessionDetailPage({ params }: { params: Prom
         ← Back to campus sessions
       </Link>
 
-      <div className="space-y-2">
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">World Campus session</p>
-        <h1 className="text-3xl font-semibold text-neutral-900">{session.theme || 'Untitled session'}</h1>
-        <p className="text-sm text-neutral-500">{formatDate(session.session_date)}</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div className="space-y-2">
+          <p className="text-xs font-semibold uppercase tracking-[0.14em] text-orange-700">World Campus session</p>
+          <h1 className="text-3xl font-semibold text-neutral-900">{session.theme || 'Untitled session'}</h1>
+          <p className="text-sm text-neutral-500">{formatDate(session.session_date)}</p>
+        </div>
+        <PublishFromHere sourceType="campus_session" sourceId={session.id} />
       </div>
 
       <section className="space-y-2">
