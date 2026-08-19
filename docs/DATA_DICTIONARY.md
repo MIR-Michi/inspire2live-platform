@@ -1,9 +1,9 @@
 # Data Dictionary — Inspire2Live Platform
 
 > **Purpose:** Human-readable database schema reference. Table descriptions, key columns, relationships.  
-> **Source of truth:** `supabase/migrations/` (00001–00172) and `src/types/database.ts`  
+> **Source of truth:** `supabase/migrations/` (00001–00173) and `src/types/database.ts`  
 > **Audience:** Developers writing queries, new team members understanding the data model.  
-> **Last reviewed:** 2026-07-25
+> **Last reviewed:** 2026-08-19
 
 ---
 
@@ -274,6 +274,7 @@ Admin-configurable defaults per role (replaces hardcoded defaults).
 |--------|---------|--------|
 | `avatars` | User profile photos | Public read, owner write |
 | `evidence` | Initiative evidence documents | RLS: initiative members |
+| `publishing-uploads` | Ad-hoc publishing sources — the dropped screenshot behind a post (migration `00173`) | Private. Comms team / admin via `is_comms_team_or_admin()` on read, write and delete; reads go through signed URLs. 25MB ceiling, MIME allow-list `image/png`, `image/jpeg`, `image/webp` |
 
 ---
 
@@ -286,6 +287,7 @@ Admin-configurable defaults per role (replaces hardcoded defaults).
 | `congress_members_unique` | congress_members | Unique on `(congress_id, user_id)` |
 | `invitations_unique_pending` | invitations | Prevents duplicate pending invitations |
 | `uq_comms_crm_contacts_normalized_email` | comms_crm_contacts | Partial unique on `normalized_email` (the contact identity match key) |
+| `idx_publishing_drafts_one_pending_run` | publishing_drafts | Partial unique on `(source_type, source_id, channel, variant_index)` where `status = 'pending'` — at most one live pending run per source and channel |
 
 ---
 
@@ -414,5 +416,41 @@ no reader is an orphan under ADR-0009 §10.
 
 ---
 
-*Last updated: 2026-07-25 · Maintainer: Michael Wittinger*
+## 13 · Publishing Space (Sprint 21)
+
+One component turning a platform record **or** an uploaded screenshot into channel-ready copy
+(ADR-0014). Concept: `docs/PUBLISHING_SPACE_CONCEPT.md`. Migration `00173`.
+
+### `publishing` — sources and drafts (migration `00173`)
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `publishing_sources` | Ad-hoc sources only: the material with **no owning platform record** — a screenshot plus one line of context and a rights answer. Linked sources are never copied here; they stay with the component that owns them. | `title` (optional, derived from `description` when absent), `description`, `images` (jsonb: `bucket`, `storagePath`, `mediaType`, `alt`, `bytes`), `rights_status` (`internal_only`/`approved_for_publication`/`needs_clearance`), `occurred_at`, `public_url`, `created_by` → `profiles` |
+| `publishing_drafts` | One row per generated variant, for **every** source kind. `body` carries human edits; `ai_body` is the untouched model output kept for calibration and is never overwritten. | `source_type`, **`source_id` (uuid, deliberately no FK — see below)**, `source_fingerprint`, `source_fields` (jsonb — exactly what was sent to the model), `channel` (the `CalendarChannel` vocabulary), `run_id`, `variant_index`, `angle`, `body`, `ai_body`, `hashtags`, `claims` (jsonb: `text`, `sourceFieldKey`), `image_ref`, `image_description` (the model's own reading of the image), `omitted`, `status` (`pending`/`approved`/`dismissed`/`superseded`/`published`), `workload`/`model`/`effort`/`prompt_version`/`raw_response`, `content_calendar_id` (soft link, set at handover), `created_by`, `approved_by`, `approved_at` |
+
+**RLS:** comms team / admin on both tables via `is_comms_team_or_admin()`, mirroring the rest of the
+Comms space. The same predicate gates the `publishing-uploads` bucket (§7), so neither the rows nor
+the images are reachable by the UI alone.
+
+> **`source_id` has no foreign key, on purpose.** It points at whichever component owns the source —
+> `publishing_sources.id` for `adhoc`, `campus_sessions.id` for `campus_session` — resolved through
+> the `SourceProvider` contract rather than a join (ADR-0009 §9 rule 4, ADR-0014 §7). This is what
+> lets a new source kind arrive without a migration. FKs into the identity spine (`profiles`) remain
+> ordinary foreign keys.
+
+**One live pending run per source and channel** is enforced by a partial unique index (§8) rather
+than by application code: variants within a run take distinct `variant_index` slots, so a second
+pending run collides on slot 0. Regeneration must supersede the previous run first.
+
+**`comms_integration_intents.entity_type` gains `publishing_drafts`,** so a delivery intent can point
+at the draft it came from. The table itself stays owned by `content` — the constraint is widened, not
+the ownership.
+
+**Approval is not a setting.** `status` may only reach `published` through the domain layer's
+handover, which refuses an unapproved draft and refuses a source whose `rights_status` is anything
+other than `approved_for_publication`. Every other tunable in this component is manifest `config`.
+
+---
+
+*Last updated: 2026-08-19 · Maintainer: Michael Wittinger*
 

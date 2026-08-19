@@ -155,6 +155,28 @@ codebase. Its value compounds — it is simultaneously (a) documentation, (b) th
 import-boundary linter, (c) the catalog entry the AI wizard reads, and (d) the composition unit the
 generator assembles.
 
+### `provides.sources` — offering material to a consuming component
+
+`provides` carries one further optional key, `sources?: string[]` (Sprint 21, ADR-0014). A component
+that owns records worth publishing declares the **source kinds** it offers — `events` declares
+`['campus_session']` — and exports a matching `SourceProvider` from its `index.ts`. The kernel
+defines the contract (`PublishableSource`, `SourceProvider`); the declaration is what makes the offer
+discoverable without anybody importing anybody.
+
+Three properties make this an extension point rather than a dependency:
+
+- **A source is a curated payload, never a page read.** The provider decides which
+  publication-intended fields leave the component. A consumer cannot reach past it into the owner's
+  tables, so a transcript or an attendee list simply never travels.
+- **Neither side imports the other.** `publishing` imports no source owner and `events` imports
+  nothing from `publishing`. Composition happens in one top-level file,
+  `src/modules/publishing-registry.ts` — the `settings-registry.ts` pattern.
+- **The declaration is reconciled in CI.** A governance gate fails on a source declared in a manifest
+  but not registered, a provider registered but not declared, and a provider whose `ownedBy` names
+  the wrong component — so the manifest cannot drift from the wiring.
+
+`validateManifest` accepts the field as optional, so no existing manifest changes meaning.
+
 ---
 
 ## 5. Repo Structure
@@ -298,6 +320,7 @@ site was a candidate here but has since been retired entirely — migration `001
 | **ai-features** | `ai_settings`, `ai_usage_log`, `org_feed*`, `meeting_*`, `news_feed_items` | `lib/ai/*` | all |
 | **network** *(Sprint 20)* | `network_people`, `network_*_affiliations`, `network_connections`, `network_connection_checks`, `network_introduction_requests` + `network_people_public` view | `modules/network/domain/*` | comms, all |
 | **podcast-planning** *(Sprint 20)* | `podcast_questions`, `podcast_question_candidates`, `podcast_candidate_scores`, `podcast_invitations` | `modules/podcast-planning/domain/*` | comms |
+| **publishing** *(Sprint 21)* | `publishing_drafts`, `publishing_sources` + the private `publishing-uploads` bucket | `modules/publishing/domain/*` | comms |
 
 **Not components** (retired by Sprint 15, tables pending a forward-migration drop, referenced only by
 admin cascade-cleanup): the **Network** space (`hubs`, `hub_*`), the **Resources** space (`resources`),
@@ -321,6 +344,17 @@ key**, read through the `security_invoker` view `network_people_public` and writ
 a function body, which is what makes the components parameterisable by a future blueprint at no extra
 cost. Notably, neither was added to `events` — the podcast *episode* stays there, and the planner feeds
 the content calendar rather than duplicating it.
+
+**Sprint 21 added `publishing`, the first component defined by an extension point rather than by the
+records it owns** (ADR-0014). It turns a source into channel-ready copy and knows nothing about where
+that source came from: `events` declares `campus_session` through `provides.sources` (§4) and
+`publishing` declares `adhoc` for the screenshot case, so an uploaded image is a source rather than a
+second code path. The composition lives in `src/modules/publishing-registry.ts`, which is the only
+file allowed to see both sides — `publishing` depends on `content@^1` and the kernel alone. This is
+also the sprint where a channel became **data**: profiles keyed by the existing `CalendarChannel`
+vocabulary, with LinkedIn enabled and newsletter and `wordpress` declared-but-unavailable, so there is
+no `linkedin` module and no second channel vocabulary to reconcile later. `events` paid down
+Stage-1 debt in passing — its `index.ts` was manifest-only until it had a contract to export.
 
 ---
 

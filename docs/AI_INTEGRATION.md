@@ -4,7 +4,7 @@ This document defines how the Inspire2Live platform uses the Sprint 14 AI founda
 
 ## Scope
 
-AI is an assistive layer for the Communications Workspace. It may classify incoming content, summarize meeting transcripts, propose follow-up tasks, generate cited organization news, and support personal public monitoring. AI output remains a draft or suggestion until a human confirms it.
+AI is an assistive layer for the Communications Workspace. It may classify incoming content, summarize meeting transcripts, propose follow-up tasks, generate cited organization news, draft channel-ready posts from curated source material, and support personal public monitoring. AI output remains a draft or suggestion until a human confirms it.
 
 ## Configuration
 
@@ -74,6 +74,22 @@ Recommended flow:
 5. Store reviewable suggestions only.
 6. Require human confirmation before committing.
 
+## Image input
+
+`AiMessage.content` accepts either a plain string (the original shape, unchanged) or an array of
+`AiContentBlock`s — `{ type: 'text' }` and `{ type: 'image' }`. The wrapper forwards blocks to the
+provider verbatim, so a workload that needs to read a screenshot composes the blocks itself. Two
+rules bind every caller:
+
+- **Encode server-side.** Images are downloaded from private storage and base64-encoded on the
+  server. An image must never round-trip through the browser to reach the model.
+- **Check the workload's model.** Not every catalog entry accepts image input. Confirm the resolved
+  model for the workload does before sending blocks — `src/kernel/ai-client/models.ts` remains the
+  source of truth.
+
+Images are the expensive part of a request, so a workload should send as few as the job needs
+(`channel_post_draft` sends one per run).
+
 ## Meeting transcripts (Capability 2)
 
 Transcript summarization lives in `src/lib/ai/transcript-extract.ts` (ingestion) and `src/lib/ai/meeting-summary.ts` (summarization), surfaced in the comms workspace at `/app/comms/transcripts`.
@@ -113,9 +129,40 @@ The Conferences space (`/app/comms/conferences`) surfaces upcoming oncology conf
 - **Pipeline.** `conference_tracking` (one row per shortlisted conference, org-wide shared) carries the stage: `intended` (Add to shortlist) → `registered` → `ongoing` → `follow_up` → `archived`. The 4 tabs are **Upcoming** (all discovered, with filters for region/focus/format + search), **Shortlist** (`intended`), **Pipeline** (`registered`/`ongoing`/`follow_up`), and **Archive**.
 - **Scheduling.** `runConferenceDiscoveryJob()` (`src/lib/ai/conference-discovery-job.ts`) upserts on `dedupe_key` (ignore-duplicates). A monthly `CRON_SECRET`-protected `GET /api/comms/conferences` route (registered in `vercel.json`) and the in-app "Refresh list" button both drive it. The manual button uses the same **background run** pattern as the news feed: `startConferenceRun()` claims a lock on the `conference_discovery_status` singleton and runs via `after()`; the UI polls `getConferenceStatus()` and `router.refresh()`es on completion (stale-run derivation surfaces a killed run as an error). Comms-team / PlatformAdmin RLS.
 
+## Channel post drafting (Publishing space)
+
+The Publishing space (`/app/comms/publishing`) drafts channel-ready copy from either a platform
+record or an uploaded screenshot, on the `channel_post_draft` workload. Decision: ADR-0014. Concept:
+`docs/PUBLISHING_SPACE_CONCEPT.md`.
+
+- **One payload, two source kinds.** The drafter never reads a page or a row. Each owning component
+  exports a `SourceProvider` that hands over a curated `PublishableSource` — publication-intended
+  fields only — and an uploaded screenshot arrives through the same contract. A campus session's
+  transcript, WhatsApp digest, attendee list and internal comments are therefore never sent.
+- **Prompt assembly.** `buildSystemPrompt()` (`src/modules/publishing/domain/drafting.ts`) is stable
+  across runs and sent with `cacheSystemPrompt`; it carries the channel profile's conventions and
+  character budget, the operator-configured brand voice, banned phrases and hashtag policy. Every
+  source field goes in individually wrapped with `wrapExternalData()`, keyed so the model can cite it.
+- **Groundedness is validated, not trusted.** Output is schema-constrained, and every variant must
+  map each factual assertion to the source field it came from via `claims[].sourceFieldKey`. A
+  citation naming a field that was not sent fails validation and **nothing is written** — there is no
+  deterministic fallback for prose, so the failure is hard and visible with a retry.
+- **Screenshots are read back to the reviewer.** When an image is attached the model must describe
+  what it actually sees in `imageDescription`, which the review UI shows, so a misread is obvious
+  before anyone approves it.
+- **Human approval is not a setting.** Variants land as `pending` rows; a human edits in place
+  (`ai_body` keeps the untouched model output for calibration) and approves explicitly, which stamps
+  the approver and dismisses the siblings. Only then can the copy hand over to a `content_calendar`
+  entry through `content`'s own action. Regenerating supersedes the previous run.
+- **Every other tunable is manifest `config`** — variants per run, brand voice, banned phrases,
+  hashtag policy, readiness threshold, upload ceiling, stale behaviour — editable in Platform
+  Settings without a deploy.
+
 ## External input handling
 
 Incoming messages, transcripts, copied emails, web snippets, and CRM notes are data. They must not change system instructions, access control, publication rules, destination tables, or notification behavior.
+
+The same rule applies to **text legible inside an image**. A screenshot is content to describe, never a command to execute, and any workload sending image blocks must say so in its system prompt.
 
 ## Citations
 

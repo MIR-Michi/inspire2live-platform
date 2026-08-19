@@ -1,6 +1,7 @@
 # Sprint 21 — Publishing space (LinkedIn first)
 
-> **Status:** Not started — see `tasks.md`.
+> **Status:** Implemented; static gates green. **Not closed** — the end-to-end run against a live
+> database (both source kinds) is still outstanding. See the sprint outcome in `tasks.md`.
 > **Theme:** A **Publishing** space in the Communications workspace that turns either a platform
 > record **or** a dropped screenshot plus one line of context into a channel-ready post, drafted by
 > the platform's own AI layer and approved by a human. LinkedIn is the first channel; newsletter and
@@ -82,42 +83,48 @@ this sprint mostly connects things the platform already has.
 
 ## Acceptance criteria
 
-- [ ] ADR-0014 accepted; concept in `docs/`; both referenced from `docs/README.md`.
-- [ ] `publishing` exists as a component with a valid manifest, is in `src/modules/registry.ts`, and
+Unchecked boxes below are the ones that need a **live database and a live model** to honour — they
+are covered by unit tests, but nobody has watched them happen. See the sprint outcome in `tasks.md`.
+
+- [x] ADR-0014 accepted; concept in `docs/`; both referenced from `docs/README.md`.
+- [x] `publishing` exists as a component with a valid manifest, is in `src/modules/registry.ts`, and
       owns every table it creates.
-- [ ] One migration (≥ `00173`) creates `publishing_drafts` and `publishing_sources` with RLS on both,
+- [x] One migration (≥ `00173`) creates `publishing_drafts` and `publishing_sources` with RLS on both,
       creates the private `publishing-uploads` bucket with comms-gated storage policies, and extends the
       `comms_integration_intents.entity_type` check constraint.
-- [ ] `provides.sources` exists on `ComponentProvides`, `validateManifest` covers it, and the new
+- [x] `provides.sources` exists on `ComponentProvides`, `validateManifest` covers it, and the new
       source-reconciliation gate fails on a declared-but-unregistered source, an unregistered-but-declared
       provider, and a wrong `ownedBy`.
-- [ ] `publishing` imports the kernel and `@/modules/content` only — no source-owner import, verified by
+- [x] `publishing` imports the kernel and `@/modules/content` only — no source-owner import, verified by
       the import-boundary gate. `events` imports nothing from `publishing`.
-- [ ] `/app/comms/publishing` is reachable from the comms nav for `Comms`, `PlatformAdmin` and
+- [x] `/app/comms/publishing` is reachable from the comms nav for `Comms`, `PlatformAdmin` and
       `Superadmin`, has an `error.tsx`, and renders nothing but an explanation when the AI flag is off.
 - [ ] A World Campus session can be picked from the source list and produces variants grounded only in
       publication-intended fields — no transcript, WhatsApp digest, attendee list or internal comment is
-      ever sent to the model.
+      ever sent to the model. *(Provider unit-tested; not yet observed against a live session.)*
 - [ ] A screenshot can be dropped, described in one line, given a rights answer, and produces variants;
-      the model's reading of the image is shown in the review.
-- [ ] A source with too little material returns the readiness message instead of a draft, in the
+      the model's reading of the image is shown in the review. *(Upload validation and the review
+      surface are built; not yet driven against live storage and a live model.)*
+- [x] A source with too little material returns the readiness message instead of a draft, in the
       source's own terms.
-- [ ] A variant citing a source field that was not sent is rejected by the validator; claims are shown
+- [x] A variant citing a source field that was not sent is rejected by the validator; claims are shown
       beside their source field in the review UI.
-- [ ] Editing, approving, dismissing and regenerating behave as specified: `ai_body` untouched,
+- [x] Editing, approving, dismissing and regenerating behave as specified: `ai_body` untouched,
       siblings dismissed on approval, previous run superseded on regenerate, at most one live pending run
       per source and channel.
-- [ ] Handover is impossible without approval and impossible when rights are not cleared, enforced in
+- [x] Handover is impossible without approval and impossible when rights are not cleared, enforced in
       the domain layer and unit-tested — not only in the UI.
 - [ ] After handover: a `content_calendar` entry exists with the approved text, the entry id is on
-      `campus_sessions.published_outputs` for a campus source, and an intent row is logged.
-- [ ] `AiMessage.content` accepts content blocks; every existing caller still compiles; an image is
+      `campus_sessions.published_outputs` for a campus source, and an intent row is logged. *(Needs the
+      live run.)*
+- [x] `AiMessage.content` accepts content blocks; every existing caller still compiles; an image is
       encoded server-side and never round-trips through the browser.
-- [ ] Newsletter and website appear as channels and are visibly unavailable — no half-working path.
-- [ ] `publishing` config renders in Platform Settings; the settings governance gate is green.
+- [x] Newsletter and website appear as channels and are visibly unavailable — no half-working path.
+- [x] `publishing` config renders in Platform Settings; the settings governance gate is green.
 - [ ] `pnpm typecheck && pnpm lint && pnpm test && pnpm governance && pnpm build` all green, and the
-      space has been driven end to end against a real database (both source kinds).
-- [ ] Doc trail complete: CHANGELOG, TRACEABILITY (`REQ-PUB-*` → `done`), DATA_DICTIONARY,
+      space has been driven end to end against a real database (both source kinds). *(Gates green; the
+      end-to-end run is the outstanding half.)*
+- [x] Doc trail complete: CHANGELOG, TRACEABILITY (`REQ-PUB-*` → `done`), DATA_DICTIONARY,
       AI_INTEGRATION (new workload + image input), MODULAR_COMPONENT_ARCHITECTURE §8 row, docs index,
       sprints README.
 
