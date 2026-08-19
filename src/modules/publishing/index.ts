@@ -16,12 +16,17 @@ export type {
   ActionResult,
   DraftClaim,
   DraftStatus,
+  PostImageRef,
+  PostStatus,
   PublishingConfig,
   PublishingDraft,
+  PublishingPost,
 } from '@/modules/publishing/domain/types'
 export {
   DEFAULT_PUBLISHING_CONFIG,
   DRAFT_STATUS_META,
+  POST_STATUS_META,
+  POST_STATUSES,
   RIGHTS_META,
   RIGHTS_STATUSES,
 } from '@/modules/publishing/domain/types'
@@ -47,9 +52,16 @@ export {
   canApproveDraft,
   canDismissDraft,
   canEditDraft,
-  handoverBlockReason,
   rightsAllowHandover,
+  rightsBlockReason,
 } from '@/modules/publishing/domain/rights'
+export {
+  canEditPost,
+  canTransitionPost,
+  nextPostStatuses,
+  postDisplayTitle,
+  postTransitionBlockReason,
+} from '@/modules/publishing/domain/post-status'
 
 // ─── configuration ────────────────────────────────────────────────────────────
 export { resolvePublishingConfig } from '@/modules/publishing/domain/config'
@@ -64,7 +76,16 @@ export {
 } from '@/modules/publishing/domain/adhoc-source'
 
 // ─── reads ────────────────────────────────────────────────────────────────────
-export { loadDraft, loadDrafts, loadRecentDrafts } from '@/modules/publishing/domain/repository'
+export {
+  loadDraft,
+  loadDrafts,
+  loadPost,
+  loadPostOwnerOptions,
+  loadPosts,
+  loadPostsForDrafts,
+  loadRecentDrafts,
+  signPostImages,
+} from '@/modules/publishing/domain/repository'
 
 // ─── drafting + lifecycle (server) ────────────────────────────────────────────
 export { generateDrafts } from '@/modules/publishing/domain/drafting'
@@ -72,8 +93,20 @@ export {
   approveDraft,
   dismissDraft,
   editDraft,
-  handOverApprovedDraft,
 } from '@/modules/publishing/domain/lifecycle'
+
+// ─── saved posts (server) ─────────────────────────────────────────────────────
+export {
+  attachPostImage,
+  deletePost,
+  handOverPost,
+  postRights,
+  removePostImage,
+  savePostFromDraft,
+  setPostOwner,
+  setPostStatus,
+  updatePost,
+} from '@/modules/publishing/domain/posts'
 
 // ─── ui ───────────────────────────────────────────────────────────────────────
 export { PublishingShell } from '@/modules/publishing/ui/publishing-shell'
@@ -85,3 +118,7 @@ export type {
   PublishingShellSource,
 } from '@/modules/publishing/ui/publishing-shell'
 export { PublishFromHere } from '@/modules/publishing/ui/publish-from-here'
+export { PostBoard } from '@/modules/publishing/ui/post-board'
+export type { PostBoardProps } from '@/modules/publishing/ui/post-board'
+export { PostEditor } from '@/modules/publishing/ui/post-editor'
+export type { PostEditorActions, PostEditorProps } from '@/modules/publishing/ui/post-editor'

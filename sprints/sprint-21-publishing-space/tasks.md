@@ -31,6 +31,7 @@
 | S21-T20 | **Unit tests.** Readiness, channel budget, claims validation (including a fabricated `sourceFieldKey`), fingerprint staleness, source reconciliation (three failure modes), upload validation, the rights gate, approval-before-handover, supersede-on-regenerate, and `buildMessageRequest` with both content shapes. | TBD | Completed | `src/test/unit/publishing-*.test.ts`. |
 | S21-T21 | **Doc trail.** CHANGELOG, `REQ-PUB-*` traceability rows to `done`, DATA_DICTIONARY (two tables + bucket), AI_INTEGRATION (workload + image input), MODULAR_COMPONENT_ARCHITECTURE §8 decomposition row, docs index, sprints README. | TBD | Completed | Same PR as the behaviour it documents (AGENTS.md §8). DATA_DICTIONARY §7/§8/§13, AI_INTEGRATION (image input + the drafting capability) and MODULAR_COMPONENT_ARCHITECTURE §4.1/§8 were written after the implementation commits, before the PR to `main`. |
 | S21-T22 | **Verification.** `pnpm typecheck && pnpm lint && pnpm test && pnpm governance && pnpm build`, plus driving both source kinds end to end against a real database: campus session → draft → edit → approve → calendar entry → `published_outputs`; screenshot → draft → approve → copy. | TBD | In Progress | Static gates green. The space now runs against a live local database up to the drafting call: RLS, the source registry, the field-exposure limit and the readiness gate are **observed**, not just tested (see below). Everything downstream of the model call is still unexercised. |
+| S21-T23 | **Saved posts (added scope, [ADR-0015](../../docs/ADR/0015-saved-posts.md)).** Migration `00174` `publishing_posts`; the `draft · ready to publish · published` status machine and its pure guards; save-from-variant, edit, picture attach/replace/remove, owner reassignment; the tile board on the space landing and the `/app/comms/publishing/posts/[id]` editor; handover moved from the draft to the post so the calendar receives post-approval edits. | TBD | Completed | Raised from use after T22's live run: the wizard could not be left half-finished, nothing stayed visible afterwards, approved copy could not be changed or pictured, and no one owned it. `publishing_drafts` stays the frozen calibration record — ADR-0015 §1. Static gates green; not yet driven against a live database, so it inherits T22's gap. |
 
 ## Sprint outcome
 
@@ -38,14 +39,20 @@ Every task above is implemented. The static verification gates are green, and th
 driven against a live local database up to — but not including — the drafting call. The sprint should
 not be called closed until a real model call and the handover write-back have been watched happening.
 
+That live run also produced the sprint's one piece of added scope, T23: a wizard with no saved artifact
+behind it cannot be left half-finished, and approved copy that cannot be edited, pictured or owned is
+not what the work actually needs. `publishing_posts` (ADR-0015) answers that without touching what makes
+`publishing_drafts` an honest calibration record. Its verification is static only — see the gap below,
+which it shares.
+
 ### Verification table
 
 | Gate | Result | Note |
 |---|---|---|
 | `pnpm typecheck` | Pass | A stale `.next/types/validator.ts` from an earlier build reports phantom errors for deleted routes — clear `.next` before trusting a local run. |
 | `pnpm lint` | Pass | One pre-existing warning in `comms/conferences/actions.ts` (`notifyConferenceContact` unused), unrelated to this sprint. |
-| `pnpm test` | Pass — 679 tests | Two failures appear **on Windows in a non-UTC timezone only**, both pre-existing and unrelated to this sprint: `conferences.test.ts > toIsoDate` (`toIsoDate` formats a locally-parsed date with `toISOString()`, so UTC+2 slips a day) and `governance-dead-code.test.ts` (the scan builds `'@/' + relative(...)`, which yields backslashes on Windows and flags every component as an orphan). Both pass on Linux/UTC, which is what CI runs. |
-| `pnpm governance` | Pass | Includes the new `governance-publishing-sources` reconciliation gate. Same Windows caveat for the dead-code check. |
+| `pnpm test` | Pass — 695 tests after T23 (679 at T22) | The Windows-only `governance-dead-code.test.ts` failure recorded at T22 — the scan built `'@/' + relative(...)`, which yields backslash paths that match no import and flagged every file under `lib`/`components` as an orphan — was **fixed** in T23 by normalising to POSIX separators, so the gate now runs on Windows too. The `conferences.test.ts > toIsoDate` failure also recorded at T22 no longer reproduces on the same machine (`Date.parse('September 2026')` resolves as UTC in V8, so there is nothing timezone-dependent left to slip); the whole suite is green locally on Windows/UTC+2. |
+| `pnpm governance` | Pass | Includes the new `governance-publishing-sources` reconciliation gate. |
 | `pnpm build` | Pass | `/app/comms/publishing` present in the route table. |
 | Coverage thresholds | Pass — 64.06% lines, 63.8% functions against a 60% floor | `publishing`'s own domain sits at 61.32% statements / 55% functions and is what consumes most of the headroom. Its Supabase query and config layers were **not** added to the coverage exclusions the way Sprint 20's equivalents were — worth revisiting rather than letting the global number drift toward the floor. |
 | Migration `00173` | Applies cleanly per CI | Validated by the `db-migrations` workflow against a throwaway Postgres. No numbering conflict: `main` ends at `00172`. |

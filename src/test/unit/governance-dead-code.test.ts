@@ -11,13 +11,22 @@
  */
 
 import { describe, it, expect } from 'vitest'
-import { resolve, relative } from 'node:path'
+import { resolve, relative, sep } from 'node:path'
 import { listSourceFiles, scanImports } from '@/kernel/governance/scan'
 
 const SRC = resolve(__dirname, '../../../src')
 
 function stem(file: string): string {
   return file.replace(/\.(ts|tsx)$/, '')
+}
+
+/**
+ * Import specifiers are always `/`-separated; `path.relative` is not. Without
+ * this the scan builds `@/lib\notify` on Windows, matches nothing, and reports
+ * every file in the scope as dead.
+ */
+function toPosix(p: string): string {
+  return p.split(sep).join('/')
 }
 
 describe('dead-code scan (lib + components)', () => {
@@ -37,7 +46,7 @@ describe('dead-code scan (lib + components)', () => {
     const importEndings = new Set(imports.map((p) => p.replace(/^.*\//, ''))) // last segment
 
     const orphans = candidates.filter((file) => {
-      const rel = relative(SRC, stem(file)) // e.g. lib/notify  or  components/ui/button
+      const rel = toPosix(relative(SRC, stem(file))) // e.g. lib/notify  or  components/ui/button
       const alias = '@/' + rel
       if (aliasPaths.has(alias)) return false
       const base = rel.replace(/^.*\//, '')
@@ -45,7 +54,7 @@ describe('dead-code scan (lib + components)', () => {
       return true
     })
 
-    const msg = orphans.map((f) => relative(SRC, f)).sort().join('\n')
+    const msg = orphans.map((f) => toPosix(relative(SRC, f))).sort().join('\n')
     expect(orphans, `zero-reference files (dead code — remove or wire up):\n${msg}`).toEqual([])
   })
 })

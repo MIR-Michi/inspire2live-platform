@@ -320,7 +320,7 @@ site was a candidate here but has since been retired entirely — migration `001
 | **ai-features** | `ai_settings`, `ai_usage_log`, `org_feed*`, `meeting_*`, `news_feed_items` | `lib/ai/*` | all |
 | **network** *(Sprint 20)* | `network_people`, `network_*_affiliations`, `network_connections`, `network_connection_checks`, `network_introduction_requests` + `network_people_public` view | `modules/network/domain/*` | comms, all |
 | **podcast-planning** *(Sprint 20)* | `podcast_questions`, `podcast_question_candidates`, `podcast_candidate_scores`, `podcast_invitations` | `modules/podcast-planning/domain/*` | comms |
-| **publishing** *(Sprint 21)* | `publishing_drafts`, `publishing_sources` + the private `publishing-uploads` bucket | `modules/publishing/domain/*` | comms |
+| **publishing** *(Sprint 21)* | `publishing_drafts`, `publishing_sources`, `publishing_posts` + the private `publishing-uploads` bucket | `modules/publishing/domain/*` | comms |
 
 **Not components** (retired by Sprint 15, tables pending a forward-migration drop, referenced only by
 admin cascade-cleanup): the **Network** space (`hubs`, `hub_*`), the **Resources** space (`resources`),
