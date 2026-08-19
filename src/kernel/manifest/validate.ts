@@ -89,7 +89,7 @@ export function validateManifest(input: unknown): ValidationResult {
     if (!isRecord(m.provides)) {
       at(id, '`provides` must be an object when present')
     } else {
-      for (const k of ['api', 'events', 'ui'] as const) {
+      for (const k of ['api', 'events', 'ui', 'sources'] as const) {
         if (m.provides[k] !== undefined && !isStringArray(m.provides[k])) {
           at(id, `\`provides.${k}\` must be an array of strings when present`)
         }
