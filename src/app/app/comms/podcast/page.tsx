@@ -148,7 +148,7 @@ export default async function CommsPodcastPage({
           </div>
         ) : (
           <p className="rounded-xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
-            No podcast episodes yet. Use “+ New episode” to create the first one.
+            No episodes yet — start with “+ New episode”.
           </p>
         )}
 
@@ -235,15 +235,24 @@ function PodcastHeader({
       <nav className="flex gap-4 border-b border-neutral-200">
         <Link
           href="/app/comms/podcast"
-          className={`border-b-2 px-4 py-3 text-sm font-semibold ${activeTab === 'episodes' ? 'border-orange-600 text-orange-700' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
+          className={`inline-flex items-center gap-1.5 border-b-2 px-4 py-3 text-sm font-semibold ${activeTab === 'episodes' ? 'border-orange-600 text-orange-700' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
         >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
+            <rect x="9" y="2" width="6" height="12" rx="3" />
+            <path d="M5 10a7 7 0 0 0 14 0" />
+            <path d="M12 19v3" />
+          </svg>
           Episodes
         </Link>
         <Link
           href="/app/comms/podcast?tab=planning"
-          className={`border-b-2 px-4 py-3 text-sm font-semibold ${activeTab === 'planning' ? 'border-orange-600 text-orange-700' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
+          className={`inline-flex items-center gap-1.5 border-b-2 px-4 py-3 text-sm font-semibold ${activeTab === 'planning' ? 'border-orange-600 text-orange-700' : 'border-transparent text-neutral-500 hover:text-neutral-900'}`}
         >
-          Planning &amp; Strategy
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
+            <rect x="3" y="3" width="18" height="18" rx="2" />
+            <path d="M9 3v18M15 3v18" />
+          </svg>
+          Planning
         </Link>
       </nav>
     </>

@@ -10,6 +10,13 @@
 > **Source:** *Planning & Strategy: Podcast Opportunity Engine*, concept v0.2 (July 2026).
 > **Decision record:** [ADR-0013](ADR/0013-opportunity-engine-components.md).
 
+> **Presentation amended (2026-08-20).** The screens in §4 were re-cut for visual navigation:
+> explanatory sentences became icons, check-chips and single-word labels, the drawer leads with a
+> stage stepper and **one primary next-move button** (derived from the same `canAdvance` gate), and
+> the board gained a "Next up" strip surfacing what `boardAgenda` says needs a decision. Every gate,
+> stage, screen and rule below is unchanged — only how it is *shown*. See
+> `docs/changes/2026-08-20-podcast-planner-visual-ux.md`.
+
 ---
 
 ## Table of contents

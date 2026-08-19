@@ -2,8 +2,9 @@
  * podcast-planning/ui/planning-strategy-shell.tsx — the Planning & Strategy tab.
  *
  * Concept §4. Four screens in Phase A (Board · Questions · People ·
- * Introductions); Radar and Results arrive with Phase B and are named here as
- * planned rather than shown as empty tabs — an empty screen teaches nothing.
+ * Introductions), navigated by an icon pill row — since the 2026-08 UX pass the
+ * screens explain themselves visually instead of carrying a blurb, and Phase
+ * B's Radar/Results are not named at all: an empty tab teaches nothing.
  *
  * This is the composition point between the two components: it loads the board
  * from `podcast-planning` and the people/routes/introductions from `network`'s
@@ -38,17 +39,25 @@ import { OpportunityBoard } from '@/modules/podcast-planning/ui/opportunity-boar
 import { QuestionsScreen } from '@/modules/podcast-planning/ui/questions-screen'
 import { CandidateDrawer } from '@/modules/podcast-planning/ui/candidate-drawer'
 import { GuestImportButton } from '@/modules/podcast-planning/ui/guest-import-button'
+import {
+  IconBoard,
+  IconHandshake,
+  IconPeople,
+  IconQuestion,
+} from '@/modules/podcast-planning/ui/icons'
 
 export type PlanningScreen = 'board' | 'questions' | 'people' | 'introductions'
 
-const SCREENS: Array<{ id: PlanningScreen; label: string; blurb: string }> = [
-  { id: 'board', label: 'Board', blurb: 'One card per person, in six stages, grouped by question.' },
-  { id: 'questions', label: 'Questions', blurb: 'What the podcast is asking, and whether each question is ready for names.' },
-  { id: 'people', label: 'People', blurb: 'Everyone the podcast could plausibly invite.' },
-  { id: 'introductions', label: 'Introductions', blurb: 'Open and answered introduction requests, by person.' },
+const SCREENS: Array<{
+  id: PlanningScreen
+  label: string
+  icon: (props: { className?: string }) => React.JSX.Element
+}> = [
+  { id: 'board', label: 'Board', icon: IconBoard },
+  { id: 'questions', label: 'Questions', icon: IconQuestion },
+  { id: 'people', label: 'People', icon: IconPeople },
+  { id: 'introductions', label: 'Introductions', icon: IconHandshake },
 ]
-
-const PLANNED = ['Radar', 'Results']
 
 export async function PlanningStrategyShell({
   screen = 'board',
@@ -65,38 +74,32 @@ export async function PlanningStrategyShell({
   } = await supabase.auth.getUser()
 
   const nav = (
-    <nav className="flex flex-wrap gap-1 border-b border-neutral-200">
-      {SCREENS.map((item) => (
-        <Link
-          key={item.id}
-          href={`${basePath}&screen=${item.id}`}
-          className={`border-b-2 px-3 py-2 text-sm font-semibold transition-colors ${
-            screen === item.id
-              ? 'border-orange-600 text-orange-700'
-              : 'border-transparent text-neutral-500 hover:text-neutral-900'
-          }`}
-        >
-          {item.label}
-        </Link>
-      ))}
-      {PLANNED.map((label) => (
-        <span
-          key={label}
-          title="Phase B — signal collection and results measurement"
-          className="cursor-default border-b-2 border-transparent px-3 py-2 text-sm font-semibold text-neutral-300"
-        >
-          {label}
-        </span>
-      ))}
+    <nav className="inline-flex flex-wrap gap-1 rounded-xl border border-neutral-200 bg-white p-1">
+      {SCREENS.map((item) => {
+        const Icon = item.icon
+        const active = screen === item.id
+        return (
+          <Link
+            key={item.id}
+            href={`${basePath}&screen=${item.id}`}
+            aria-current={active ? 'page' : undefined}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-semibold transition-colors ${
+              active
+                ? 'bg-neutral-900 text-white'
+                : 'text-neutral-500 hover:bg-neutral-50 hover:text-neutral-900'
+            }`}
+          >
+            <Icon className="h-4 w-4" />
+            {item.label}
+          </Link>
+        )
+      })}
     </nav>
   )
-
-  const blurb = SCREENS.find((s) => s.id === screen)?.blurb
 
   return (
     <section className="space-y-4">
       {nav}
-      {blurb && <p className="text-sm text-neutral-500">{blurb}</p>}
 
       {screen === 'board' && <BoardScreen basePath={basePath} cardId={cardId} />}
       {screen === 'questions' && <QuestionsTab />}
@@ -193,7 +196,7 @@ async function PeopleTab({ profileId }: { profileId: string | null }) {
         </div>
         <PeopleDirectory
           people={people}
-          emptyHint="Nobody in the list yet. Import the past podcast guests to start — they are the strongest introducers available."
+          emptyHint="Nobody yet — import the past guests to start."
         />
       </section>
 
@@ -235,8 +238,7 @@ async function IntroductionsTab({ profileId }: { profileId: string | null }) {
     <div className="space-y-6">
       {mine.length > 0 && (
         <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm text-blue-900">
-          {mine.length} introduction request{mine.length === 1 ? '' : 's'} waiting on you. A no is
-          completely fine and carries no consequence.
+          {mine.length} waiting on you — a no is completely fine.
         </p>
       )}
       <IntroductionsBoard
