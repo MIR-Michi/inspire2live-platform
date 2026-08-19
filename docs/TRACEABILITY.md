@@ -278,14 +278,16 @@ Concept: `docs/PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md` · Decision: ADR-0013.
 
 ---
 
-## Channel Syndication (proposed — not implemented)
+## Sprint 21 — Publishing space (planned)
 
-Concept: `docs/CHANNEL_SYNDICATION_CONCEPT.md` · Decision: ADR-0014 (to be written if accepted).
-Rows are `planned` and carry no code location until a sprint picks the work up.
+Concept: `docs/PUBLISHING_SPACE_CONCEPT.md` · Decision: ADR-0014 · Delivery:
+`sprints/sprint-21-publishing-space/`. Rows are `planned` and carry no code location until the sprint
+starts.
 
 | Requirement ID | Description | Design Ref | Status | Code Location | Last Verified | Notes |
 |---|---|---|---|---|---|---|
-| REQ-SYN-001 | One button on an entity page drafts a channel post from that record — three variants, character budget per channel, every factual claim mapped to the source field it came from, and a readiness gate that refuses to draft from a title alone | Concept §7, §9 | `planned` | — | — | First adopter: World Campus session. Hard, visible failure — no deterministic fallback for prose |
-| REQ-SYN-002 | Drafting is a generic component, sources are an extension point — kernel `PublishableSource`/`SourceProvider` contract, new optional `provides.sources` manifest field reconciled in CI, composition in one top-level registry file so `syndication` depends on no source owner | Concept §4, §5 · ADR-0009 §9 | `planned` | — | — | Acid test is Stage 3: a second source and a second channel must need no `syndication` code |
-| REQ-SYN-003 | Human approval is unconditional and auditable — draft lifecycle `pending → approved → published` with supersede-on-regenerate, untouched `ai_body` kept beside the edited text, `approved_by`/`approved_at` recorded, and no setting that can disable the gate | Concept §4.4, §6 | `planned` | — | — | Mirrors `intake_ai_suggestions`; handover impossible without approval, enforced in the domain layer |
-| REQ-SYN-004 | The source payload is curated, not scraped — only publication-intended fields leave the owning component, named individuals need `public` or `granted` consent, ingested text is delimited with `wrapExternalData()`, and approved text hands over to `content_calendar` through `content`'s own action with provenance written back through the provider | Concept §5, §8 | `planned` | — | — | No transcript, WhatsApp digest, attendee list or internal comment is ever sent to the model |
+| REQ-PUB-001 | A Publishing space at `/app/comms/publishing` — three steps on one screen (source · draft · approve), two equally weighted ways in, LinkedIn enabled with newsletter and website visibly not yet available, guided by design rather than instructions and with every degraded state designed | Concept §9 | `planned` | — | — | One decision visible at a time; one- or two-word labels; no half-working channel |
+| REQ-PUB-002 | Copy drafted through the kernel AI client — variants with an angle, a channel character budget, hashtags, every factual claim mapped to the source field it came from, the model's reading of an uploaded image shown, and a readiness gate that refuses to draft from too little material | Concept §7 · ADR-0014 §9 | `planned` | — | — | Hard visible failure — no deterministic fallback for prose. Injection rule stated for text **and** for text inside images |
+| REQ-PUB-003 | Sources are a declared extension point — kernel `PublishableSource`/`SourceProvider` contract, new optional `provides.sources` manifest field reconciled by a governance gate, composition in one top-level registry file so `publishing` depends on no source owner, and a channel is data rather than a module | Concept §4, §5 · ADR-0014 §1–§5 · ADR-0009 §9 | `planned` | — | — | Acid test is Stage 2: a second source and a second channel must need no `publishing` code |
+| REQ-PUB-004 | An uploaded screenshot is a source, not a second code path — private bucket upload with size/MIME validation, one-line description, a `rights_status` answer that blocks handover when not cleared, served by a provider implementing the same contract | Concept §5, §8 · ADR-0014 §3 | `planned` | — | — | Gets the readiness, groundedness and approval gates for free |
+| REQ-PUB-005 | Human approval is unconditional and auditable, and approved copy hands over rather than dead-ends — `pending → approved → published` with supersede-on-regenerate, untouched `ai_body` kept beside the edited text, `approved_by`/`approved_at` recorded, no setting able to disable the gate, and handover through `content`'s own calendar action with provenance written back by the provider | Concept §4.4, §6 · ADR-0014 §6, §8 | `planned` | — | — | Mirrors `intake_ai_suggestions`; only publication-intended fields ever leave the owning component |
