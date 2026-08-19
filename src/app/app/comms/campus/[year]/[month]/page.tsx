@@ -17,6 +17,7 @@ import { isAiEnabled } from '@/lib/ai/feature-flag'
 import type { CampusBriefing } from '@/lib/ai/campus-briefing'
 import { isPlatformAdmin } from '@/lib/role-access'
 import { createClient } from '@/lib/supabase/server'
+import { PublishFromHere } from '@/modules/publishing'
 
 function monthBounds(year: string, month: string) {
   const numericYear = Number(year)
@@ -204,6 +205,7 @@ async function CampusMonthView({ params, searchParams }: CampusMonthPageProps) {
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {primarySession && <PublishFromHere sourceType="campus_session" sourceId={primarySession.id} compact />}
           <Link href="/app/comms/intake" className="rounded-lg border border-blue-900 px-4 py-2 text-sm font-semibold text-blue-900 hover:bg-blue-50">
             View raw feed
           </Link>

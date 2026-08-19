@@ -66,7 +66,7 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
 
   it('gives Comms its exact curated blueprint — not a permission-expanded menu', () => {
     const sections = getSideNavSections('Comms', spacesFor('Comms'))
-    // Comms shows ONLY its blueprint: comms workspace items + active event types + library.
+    // Comms shows ONLY its blueprint: comms workspace items + active event types + content.
     expect(labelsIn('Comms')).toEqual([
       'Dashboard',
       'Planner',
@@ -76,6 +76,7 @@ describe('getSideNavSections — Comms blueprint + permission-driven tree', () =
       'Conferences',
       'Podcast',
       'Library',
+      'Publishing',
     ])
     // Even though Comms *can* access these spaces, they must NOT clutter its menu.
     expect(labelsIn('Comms')).not.toContain('Initiatives')
