@@ -1,7 +1,9 @@
 # Sprint 21 — Publishing space (LinkedIn first)
 
-> **Status:** Implemented; static gates green. **Not closed** — the end-to-end run against a live
-> database (both source kinds) is still outstanding. See the sprint outcome in `tasks.md`.
+> **Status:** Implemented; static gates green; verified against a live local database up to the drafting
+> call (RLS, source registry, field-exposure limit and readiness gate all observed in a browser).
+> **Not closed** — the model call and everything downstream of it, plus the whole ad-hoc screenshot
+> path, are still unexercised. See the sprint outcome in `tasks.md`.
 > **Theme:** A **Publishing** space in the Communications workspace that turns either a platform
 > record **or** a dropped screenshot plus one line of context into a channel-ready post, drafted by
 > the platform's own AI layer and approved by a human. LinkedIn is the first channel; newsletter and
@@ -83,15 +85,17 @@ this sprint mostly connects things the platform already has.
 
 ## Acceptance criteria
 
-Unchecked boxes below are the ones that need a **live database and a live model** to honour — they
-are covered by unit tests, but nobody has watched them happen. See the sprint outcome in `tasks.md`.
+The live database is now available, so the remaining unchecked boxes are the ones that need a **live
+model call** to honour. They are covered by unit tests, but nobody has watched them happen. See the
+sprint outcome in `tasks.md` for what has since been observed directly.
 
 - [x] ADR-0014 accepted; concept in `docs/`; both referenced from `docs/README.md`.
 - [x] `publishing` exists as a component with a valid manifest, is in `src/modules/registry.ts`, and
       owns every table it creates.
 - [x] One migration (≥ `00173`) creates `publishing_drafts` and `publishing_sources` with RLS on both,
       creates the private `publishing-uploads` bucket with comms-gated storage policies, and extends the
-      `comms_integration_intents.entity_type` check constraint.
+      `comms_integration_intents.entity_type` check constraint. *(Applied to a live local database and the
+      RLS proved from both sides: a `Comms` claim reads and writes, a `Clinician` claim is refused.)*
 - [x] `provides.sources` exists on `ComponentProvides`, `validateManifest` covers it, and the new
       source-reconciliation gate fails on a declared-but-unregistered source, an unregistered-but-declared
       provider, and a wrong `ownedBy`.
@@ -101,12 +105,14 @@ are covered by unit tests, but nobody has watched them happen. See the sprint ou
       `Superadmin`, has an `error.tsx`, and renders nothing but an explanation when the AI flag is off.
 - [ ] A World Campus session can be picked from the source list and produces variants grounded only in
       publication-intended fields — no transcript, WhatsApp digest, attendee list or internal comment is
-      ever sent to the model. *(Provider unit-tested; not yet observed against a live session.)*
+      ever sent to the model. *(Picking is observed against a live session, and the rendered source card
+      exposes only the five publication-intended fields; producing variants awaits a live model call.)*
 - [ ] A screenshot can be dropped, described in one line, given a rights answer, and produces variants;
       the model's reading of the image is shown in the review. *(Upload validation and the review
       surface are built; not yet driven against live storage and a live model.)*
 - [x] A source with too little material returns the readiness message instead of a draft, in the
-      source's own terms.
+      source's own terms. *(Observed live: a 37-character session names its own shortfall against the
+      120-character threshold and offers no Draft button.)*
 - [x] A variant citing a source field that was not sent is rejected by the validator; claims are shown
       beside their source field in the review UI.
 - [x] Editing, approving, dismissing and regenerating behave as specified: `ai_body` untouched,

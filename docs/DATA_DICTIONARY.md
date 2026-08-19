@@ -274,7 +274,7 @@ Admin-configurable defaults per role (replaces hardcoded defaults).
 |--------|---------|--------|
 | `avatars` | User profile photos | Public read, owner write |
 | `evidence` | Initiative evidence documents | RLS: initiative members |
-| `publishing-uploads` | Ad-hoc publishing sources — the dropped screenshot behind a post (migration `00173`) | Private. Comms team / admin via `is_comms_team_or_admin()` on read, write and delete; reads go through signed URLs. 25MB ceiling, MIME allow-list `image/png`, `image/jpeg`, `image/webp` |
+| `publishing-uploads` | Ad-hoc publishing sources — the dropped screenshot behind a post (migration `00173`) | Private. Comms team / admin via `is_comms_team_or_admin()` on read, write and delete; reads go through signed URLs. 25MB bucket hard ceiling, MIME allow-list `image/png`, `image/jpeg`, `image/webp`. The ceiling users actually meet is the component's `maxUploadMegabytes` setting (default 10MB, capped at the bucket's 25MB) |
 
 ---
 

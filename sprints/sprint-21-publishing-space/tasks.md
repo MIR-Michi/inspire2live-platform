@@ -30,12 +30,13 @@
 | S21-T19 | **Manifest, config and settings panel.** `publishing` manifest with typed `config` (variants, brand voice, banned phrases, hashtag policy, source link, readiness threshold, upload ceiling, stale behaviour), `settingsPanel: true`, registry entry, `resolvePublishingConfig`, README; reword `content`'s manifest summary so "publishing" is unambiguous. | TBD | Completed | No setting may disable the approval gate. |
 | S21-T20 | **Unit tests.** Readiness, channel budget, claims validation (including a fabricated `sourceFieldKey`), fingerprint staleness, source reconciliation (three failure modes), upload validation, the rights gate, approval-before-handover, supersede-on-regenerate, and `buildMessageRequest` with both content shapes. | TBD | Completed | `src/test/unit/publishing-*.test.ts`. |
 | S21-T21 | **Doc trail.** CHANGELOG, `REQ-PUB-*` traceability rows to `done`, DATA_DICTIONARY (two tables + bucket), AI_INTEGRATION (workload + image input), MODULAR_COMPONENT_ARCHITECTURE §8 decomposition row, docs index, sprints README. | TBD | Completed | Same PR as the behaviour it documents (AGENTS.md §8). DATA_DICTIONARY §7/§8/§13, AI_INTEGRATION (image input + the drafting capability) and MODULAR_COMPONENT_ARCHITECTURE §4.1/§8 were written after the implementation commits, before the PR to `main`. |
-| S21-T22 | **Verification.** `pnpm typecheck && pnpm lint && pnpm test && pnpm governance && pnpm build`, plus driving both source kinds end to end against a real database: campus session → draft → edit → approve → calendar entry → `published_outputs`; screenshot → draft → approve → copy. | TBD | In Progress | Static gates green (see below). **The live-database run has not happened yet** — the honest gap. |
+| S21-T22 | **Verification.** `pnpm typecheck && pnpm lint && pnpm test && pnpm governance && pnpm build`, plus driving both source kinds end to end against a real database: campus session → draft → edit → approve → calendar entry → `published_outputs`; screenshot → draft → approve → copy. | TBD | In Progress | Static gates green. The space now runs against a live local database up to the drafting call: RLS, the source registry, the field-exposure limit and the readiness gate are **observed**, not just tested (see below). Everything downstream of the model call is still unexercised. |
 
 ## Sprint outcome
 
-Every task above is implemented. The static verification gates are green; the end-to-end run against
-a live database is **not** done, and the sprint should not be called closed until it is.
+Every task above is implemented. The static verification gates are green, and the space has now been
+driven against a live local database up to — but not including — the drafting call. The sprint should
+not be called closed until a real model call and the handover write-back have been watched happening.
 
 ### Verification table
 
@@ -49,17 +50,35 @@ a live database is **not** done, and the sprint should not be called closed unti
 | Coverage thresholds | Pass — 64.06% lines, 63.8% functions against a 60% floor | `publishing`'s own domain sits at 61.32% statements / 55% functions and is what consumes most of the headroom. Its Supabase query and config layers were **not** added to the coverage exclusions the way Sprint 20's equivalents were — worth revisiting rather than letting the global number drift toward the floor. |
 | Migration `00173` | Applies cleanly per CI | Validated by the `db-migrations` workflow against a throwaway Postgres. No numbering conflict: `main` ends at `00172`. |
 
+### Observed against a live database
+
+A local Supabase stack (all 173 migrations applied from scratch, seed included) was driven through the
+space in a real browser, signed in as a `Comms` profile. What was **watched happening**, rather than
+asserted in a unit test:
+
+| Claim | How it was observed |
+|---|---|
+| Migration `00173` applies to a real database | `supabase db reset` from empty; both tables, the partial unique index and the private bucket present afterwards |
+| RLS is the enforcement, not the UI | Impersonating `authenticated` with a `Comms` claim: insert and select succeed. Same statements with a `Clinician` claim: select returns zero rows, insert fails with `new row violates row-level security policy`. As `anon`: zero rows. All inside a transaction that was rolled back |
+| The rights vocabulary is enforced in the database | An invented `rights_status` is refused by `publishing_sources_rights_status_check` |
+| The source registry resolves a linked source | The picker lists the campus session with its provider label ("World Campus session") and date; selecting it routes to `?sourceType=campus_session&sourceId=…` |
+| Only publication-intended fields reach the space | The source card lists exactly Theme, Session summary, Decisions for publication, Action items for publication, Participating hubs. No transcript, attendee list or WhatsApp digest appears anywhere in the rendered page |
+| The readiness gate refuses rather than invents | A session carrying 37 characters shows "Not enough to work with yet … but only 37 characters of material (needs 120)" with an *Add material* link, and **no Draft button at all**. The 491-character session offers Draft |
+| Channel availability is real | LinkedIn is lit and selectable; Newsletter and Website render disabled |
+
 ### The honest gap
 
-**Neither source kind has been driven end to end against a real database.** The campus session path
-(session → draft → edit → approve → `content_calendar` entry → `published_outputs`) and the ad-hoc
-path (screenshot → draft → approve → copy) are covered by unit tests at the domain layer and by a
-successful build, but nobody has watched a row appear. Until that run happens, the approval gate, the
-rights gate and the handover write-back are verified by test rather than by observation.
+**Everything downstream of the drafting call is still unexercised**, because the model call has not been
+made against a live key. That leaves untested by observation: draft generation itself, prompt quality,
+the groundedness validator on real output, image reading for a real screenshot, the edit and approval
+gates, the rights gate at handover, and the write-back into `content_calendar` / `published_outputs`.
+The ad-hoc screenshot path has not been driven at all — no file has been through the private bucket.
 
-A second thing CI cannot see: the drafting call has never been made against the live model, so prompt
-quality, the groundedness validator's behaviour on real output, and the image reading for a real
-screenshot are all unexercised.
+Two local-environment notes for whoever picks this up. `supabase/config.toml` sets
+`auth.email.enable_signup = false`, and the CLI maps that to `GOTRUE_EXTERNAL_EMAIL_ENABLED=false`,
+which disables **all** email logins locally — password *and* magic link — so signing in against a local
+stack requires flipping it temporarily. On Windows the analytics container also needs the Docker daemon
+on TCP 2375, or `supabase start` never reaches a healthy state.
 
 ### Note on delivery
 
