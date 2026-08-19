@@ -3,7 +3,7 @@
 Maps design requirements to implementation status and code locations.  
 **Source of truth for requirement IDs:** `docs/IMPLEMENTATION_GUIDE.md` §5  
 **Benchmark:** `PLATFORM_DESIGN_DOCUMENT.md` v2.0  
-**Last updated:** 2026-07-17
+**Last updated:** 2026-08-19
 
 ---
 
@@ -275,3 +275,17 @@ Concept: `docs/PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md` · Decision: ADR-0013.
 | REQ-POD-002 | Six-stage board with gates — question readiness (no names researched without a listener action), angle+route+score before Ask, date+consent+seats before Booked, six open asks across all questions, derived waiting days (nudge 7 / silence 14 / stall 21), Not now with a wake date, Closed with a reason | Concept §3 | `done` | `src/modules/podcast-planning/domain/stages.ts`, `src/modules/podcast-planning/domain/actions.ts`, `src/test/unit/podcast-planning-stages.test.ts` | 2026-07-25 | Gates enforced in the server action, not only in the form (29 unit tests) |
 | REQ-POD-003 | Explainable 100-point score — chance of a yes 25 · reach 20 · timeliness 20 · follow-up 15 · mission 15 · format 5, breakdown always returned, timeliness decayed by half-life, override recorded rather than hidden, snapshot per computation with `weights_version` | Concept §7, §10 | `done` | `src/modules/podcast-planning/domain/scoring.ts`, `supabase/migrations/00172_podcast_planning_component.sql` (`podcast_candidate_scores`), `src/test/unit/podcast-planning-scoring.test.ts` | 2026-07-25 | Plain arithmetic over stored fields — reproducible, never a model call (25 unit tests) |
 | REQ-POD-004 | Operator-tunable thresholds, not constants — ask ceiling, live-question ceiling, nudge/silence/stall days, timeliness half-life, route floor, routes shown, two-step multiplier, introducer cooldown — all manifest `config`, rendered as Platform Settings panels | ADR-0013 §3 | `done` | `src/modules/podcast-planning/manifest.ts`, `src/modules/network/manifest.ts`, `src/modules/*/domain/config.ts`, `/app/settings/components/[id]` | 2026-07-25 | The fields a blueprint would set per tenant; settings governance gate green |
+
+---
+
+## Channel Syndication (proposed — not implemented)
+
+Concept: `docs/CHANNEL_SYNDICATION_CONCEPT.md` · Decision: ADR-0014 (to be written if accepted).
+Rows are `planned` and carry no code location until a sprint picks the work up.
+
+| Requirement ID | Description | Design Ref | Status | Code Location | Last Verified | Notes |
+|---|---|---|---|---|---|---|
+| REQ-SYN-001 | One button on an entity page drafts a channel post from that record — three variants, character budget per channel, every factual claim mapped to the source field it came from, and a readiness gate that refuses to draft from a title alone | Concept §7, §9 | `planned` | — | — | First adopter: World Campus session. Hard, visible failure — no deterministic fallback for prose |
+| REQ-SYN-002 | Drafting is a generic component, sources are an extension point — kernel `PublishableSource`/`SourceProvider` contract, new optional `provides.sources` manifest field reconciled in CI, composition in one top-level registry file so `syndication` depends on no source owner | Concept §4, §5 · ADR-0009 §9 | `planned` | — | — | Acid test is Stage 3: a second source and a second channel must need no `syndication` code |
+| REQ-SYN-003 | Human approval is unconditional and auditable — draft lifecycle `pending → approved → published` with supersede-on-regenerate, untouched `ai_body` kept beside the edited text, `approved_by`/`approved_at` recorded, and no setting that can disable the gate | Concept §4.4, §6 | `planned` | — | — | Mirrors `intake_ai_suggestions`; handover impossible without approval, enforced in the domain layer |
+| REQ-SYN-004 | The source payload is curated, not scraped — only publication-intended fields leave the owning component, named individuals need `public` or `granted` consent, ingested text is delimited with `wrapExternalData()`, and approved text hands over to `content_calendar` through `content`'s own action with provenance written back through the provider | Concept §5, §8 | `planned` | — | — | No transcript, WhatsApp digest, attendee list or internal comment is ever sent to the model |

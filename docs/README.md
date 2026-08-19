@@ -20,6 +20,7 @@
 | [ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md](ADAPTIVE_DASHBOARD_WIREFRAME_SPEC.md) | Implemented desktop/tablet/mobile and edit-mode wireframe specification for Sprint 19 |
 | [PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md](PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md) | Sprint 20 concept: the Planning & Strategy planner that replaces the podcast Guests tab — questions, a six-stage board, the chance-of-a-yes model, and a relationship map built without scraping (ADR-0013) |
 | [PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md](PLATFORM_SETTINGS_DESIGN_PANEL_CONCEPT.md) | Organization-wide Design & Component Library panel, semantic tokens, live production component catalog, dashboard/motion defaults, and component-toolbox alignment |
+| [CHANNEL_SYNDICATION_CONCEPT.md](CHANNEL_SYNDICATION_CONCEPT.md) | *(proposal)* One button on an entity page drafts a channel post (LinkedIn first, World Campus session first) — a generic `syndication` component, per-component source providers as the extension point, human-approved drafts handed to the content calendar (proposed ADR-0014) |
 | [ROLE_PERMISSION_MODEL.md](ROLE_PERMISSION_MODEL.md) | Full role × space permission matrix, override logic |
 | [DATA_DICTIONARY.md](DATA_DICTIONARY.md) | Database schema reference, table descriptions, key relationships |
 | [DESIGN_CHANGELOG.md](DESIGN_CHANGELOG.md) | History of UI/UX design decisions and deviations |
@@ -98,4 +99,4 @@
 
 ---
 
-*Last updated: 2026-07-17 · Maintainer: Michael Wittinger*
+*Last updated: 2026-08-19 · Maintainer: Michael Wittinger*
