@@ -3,13 +3,11 @@
 /**
  * podcast-planning/ui/question-composer.tsx — defining a question.
  *
- * Concept §2: "A question is not opened until four things are written down. This
- * takes about twenty minutes and it determines everything downstream."
- *
- * The form is written to slow that down rather than speed it up: each field
- * carries the reason it exists, and the listener action is asked for *before*
- * any name is on the page, because deciding it first shapes how the episode is
- * framed.
+ * Concept §2: a question is not opened until four things are written down.
+ * Since the 2026-08 UX pass the form teaches by example (the placeholders show
+ * what a good answer looks like) rather than by explanation — the readiness
+ * chips on the Questions screen show what is still missing, so the form does
+ * not have to argue for its own fields.
  */
 
 import { useState, useTransition } from 'react'
@@ -74,7 +72,7 @@ export function QuestionComposer({ owners }: { owners: Array<{ id: string; label
   }
 
   return (
-    <section className="space-y-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
+    <section className="w-full space-y-4 rounded-xl border border-neutral-200 bg-white p-5 shadow-sm">
       {error && (
         <p role="alert" className="rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-900">
           {error}
@@ -87,13 +85,9 @@ export function QuestionComposer({ owners }: { owners: Array<{ id: string; label
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           rows={2}
-          placeholder="Why is a proven diagnostic still unreimbursed three years after parliament heard the case?"
+          placeholder="One sentence somebody could disagree with — “Why is a proven diagnostic still unreimbursed three years after parliament heard the case?”"
           className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
         />
-        <span className="text-xs text-neutral-500">
-          One sentence somebody could disagree with. Subject areas do not travel and do not persuade
-          anyone to give up an hour; arguable questions do both.
-        </span>
       </label>
 
       <div className="grid gap-4 sm:grid-cols-[minmax(0,1fr)_180px]">
@@ -105,9 +99,6 @@ export function QuestionComposer({ owners }: { owners: Array<{ id: string; label
             placeholder="A ruling, an approval, a congress, a consultation deadline, a public row"
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
           />
-          <span className="text-xs text-neutral-500">
-            Timeliness is the biggest single reason people accept, and the biggest driver of listens.
-          </span>
         </label>
         <label className="block space-y-1">
           <span className="text-sm font-semibold text-neutral-800">When it happened</span>
@@ -117,29 +108,24 @@ export function QuestionComposer({ owners }: { owners: Array<{ id: string; label
             onChange={(e) => setWhyNowAt(e.target.value)}
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
           />
-          <span className="text-xs text-neutral-500">Undated reasons decay immediately.</span>
         </label>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2">
         <label className="block space-y-1">
-          <span className="text-sm font-semibold text-neutral-800">The ask</span>
+          <span className="text-sm font-semibold text-neutral-800">Listener action</span>
           <select
             value={askType}
             onChange={(e) => setAskType(e.target.value as AskType | '')}
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
           >
-            <option value="">Choose what a listener should do…</option>
+            <option value="">What should a listener do…</option>
             {ASKS.map((a) => (
               <option key={a} value={a}>
                 {ASK_META[a].label}
               </option>
             ))}
           </select>
-          <span className="text-xs text-neutral-500">
-            Decided now, before any name is researched — follow-up traffic does not happen by
-            accident, and this shapes how the episode is framed.
-          </span>
         </label>
 
         <label className="block space-y-1">
@@ -150,14 +136,11 @@ export function QuestionComposer({ owners }: { owners: Array<{ id: string; label
             placeholder={askType ? ASK_META[askType].pointsAt : 'https://…'}
             className="w-full rounded-lg border border-neutral-200 px-3 py-2 text-sm"
           />
-          <span className="text-xs text-neutral-500">
-            You will be asked to confirm the page actually works before it earns any points.
-          </span>
         </label>
       </div>
 
       <label className="block space-y-1">
-        <span className="text-sm font-semibold text-neutral-800">The shape</span>
+        <span className="text-sm font-semibold text-neutral-800">Format</span>
         <select
           value={format}
           onChange={(e) => setFormat(e.target.value as EpisodeFormat | '')}
@@ -170,11 +153,9 @@ export function QuestionComposer({ owners }: { owners: Array<{ id: string; label
             </option>
           ))}
         </select>
-        <span className="text-xs text-neutral-500">
-          {format
-            ? `${FORMAT_META[format].shape} ${FORMAT_META[format].guestSeats > 1 ? 'Two guests must be secured before the card can be booked.' : ''}`
-            : 'A question that fits no format is either reframed or dropped.'}
-        </span>
+        {format && FORMAT_META[format].guestSeats > 1 && (
+          <span className="text-xs text-amber-800">Needs {FORMAT_META[format].guestSeats} guests booked.</span>
+        )}
       </label>
 
       <div className="flex flex-wrap items-end justify-between gap-3 border-t border-neutral-100 pt-4">

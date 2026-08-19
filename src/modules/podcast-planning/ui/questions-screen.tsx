@@ -1,19 +1,63 @@
 /**
  * podcast-planning/ui/questions-screen.tsx — the Questions screen.
  *
- * Concept §2 and §4. A question is not opened until four things are written
- * down, and this screen is where that happens. It shows the readiness gate
- * openly — "still missing: the listener action" — rather than silently refusing
- * a move on the board later, because the twenty minutes spent here is what
- * determines everything downstream.
+ * Concept §2 and §4, re-cut in the 2026-08 UX pass. A question is not opened
+ * until four things are written down; instead of explaining that in prose, the
+ * card shows the gate as five check-chips — what is done is green, what is
+ * missing is an empty circle, and a question that is not ready wears one amber
+ * pill. Filling the checks *is* the twenty minutes that determines everything
+ * downstream.
  */
 
 import { StatusBadge } from '@/kernel/ui'
 import { ASK_META, FORMAT_META } from '@/modules/podcast-planning/domain/types'
-import { questionReadiness } from '@/modules/podcast-planning/domain/stages'
-import type { PlanningConfig } from '@/modules/podcast-planning/domain/types'
+import type { PodcastQuestion, PlanningConfig } from '@/modules/podcast-planning/domain/types'
 import type { QuestionSummary } from '@/modules/podcast-planning/domain/question-summary'
 import { QuestionComposer } from '@/modules/podcast-planning/ui/question-composer'
+import { IconCheck, IconStar } from '@/modules/podcast-planning/ui/icons'
+
+/** The readiness gate, one chip per requirement. Mirrors `questionReadiness`. */
+function ReadinessChips({ question }: { question: PodcastQuestion }) {
+  const checks: Array<{ label: string; done: boolean }> = [
+    { label: 'Question', done: Boolean(question.question?.trim()) },
+    { label: 'Why now', done: Boolean(question.whyNow?.trim()) },
+    { label: 'Action', done: Boolean(question.askType) },
+    { label: 'Link', done: Boolean(question.askDestinationUrl?.trim()) },
+    { label: 'Format', done: Boolean(question.format) },
+  ]
+
+  return (
+    <ul className="flex flex-wrap gap-1.5">
+      {checks.map(({ label, done }) => (
+        <li
+          key={label}
+          className={[
+            'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[11px] font-semibold',
+            done
+              ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+              : 'border-neutral-200 bg-white text-neutral-400',
+          ].join(' ')}
+        >
+          {done ? (
+            <IconCheck className="h-3 w-3" />
+          ) : (
+            <span className="h-2.5 w-2.5 rounded-full border-2 border-dashed border-neutral-300" />
+          )}
+          {label}
+        </li>
+      ))}
+    </ul>
+  )
+}
+
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1 text-sm">
+      <span className="font-semibold text-neutral-900">{value}</span>
+      <span className="text-xs text-neutral-400">{label}</span>
+    </span>
+  )
+}
 
 export function QuestionsScreen({
   summaries,
@@ -27,22 +71,13 @@ export function QuestionsScreen({
   const liveCount = summaries.filter((s) => s.question.status === 'live').length
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-xl border border-neutral-200 bg-white p-4">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 className="text-base font-semibold text-neutral-900">Live questions</h2>
-          <p className="text-xs text-neutral-500">
-            {liveCount} of {config.liveQuestionLimit} live
-          </p>
-        </div>
-        <p className="mt-1 max-w-3xl text-sm leading-6 text-neutral-600">
-          A question is the thing the podcast is asking — one sentence somebody could disagree with,
-          not a subject area. It lives for months and survives any number of people saying no, which
-          is why the card that moves on the board is the <em>person</em>, not the question.
-        </p>
-      </section>
-
-      <QuestionComposer owners={owners} />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600">
+          {liveCount}/{config.liveQuestionLimit} live
+        </span>
+        <QuestionComposer owners={owners} />
+      </div>
 
       {summaries.length === 0 ? (
         <p className="rounded-xl border border-dashed border-neutral-300 bg-white py-12 text-center text-sm text-neutral-500">
@@ -51,19 +86,22 @@ export function QuestionsScreen({
       ) : (
         <ul className="space-y-3">
           {summaries.map(({ question, wishlistSize, inPlay, episodes, anchorSecured }) => {
-            const readiness = questionReadiness(question)
+            const ready =
+              Boolean(question.question?.trim()) &&
+              Boolean(question.whyNow?.trim()) &&
+              Boolean(question.askType) &&
+              Boolean(question.askDestinationUrl?.trim()) &&
+              Boolean(question.format)
             return (
               <li
                 key={question.id}
-                className="rounded-xl border border-neutral-200 bg-white px-5 py-4 shadow-sm"
+                className="space-y-3 rounded-xl border border-neutral-200 bg-white px-5 py-4 shadow-sm"
               >
                 <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
                     <h3 className="text-base font-semibold text-neutral-900">{question.question}</h3>
                     {question.whyNow && (
-                      <p className="mt-1 text-sm text-neutral-600">
-                        <span className="font-medium text-neutral-700">Why now:</span> {question.whyNow}
-                      </p>
+                      <p className="mt-0.5 truncate text-xs text-neutral-400">{question.whyNow}</p>
                     )}
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-1.5">
@@ -71,60 +109,39 @@ export function QuestionsScreen({
                       label={question.status}
                       tone={question.status === 'live' ? 'green' : question.status === 'draft' ? 'amber' : 'neutral'}
                     />
-                    {anchorSecured && <StatusBadge label="Anchor secured" tone="violet" />}
+                    {!ready && <StatusBadge label="Not ready" tone="amber" />}
+                    {anchorSecured && (
+                      <span className="inline-flex items-center gap-1 rounded-full border border-violet-200 bg-violet-50 px-2 py-0.5 text-[11px] font-semibold text-violet-700">
+                        <IconStar filled className="h-3 w-3" />
+                        Anchor
+                      </span>
+                    )}
                   </div>
                 </div>
 
-                <dl className="mt-3 grid gap-3 text-sm sm:grid-cols-4">
-                  <div>
-                    <dt className="text-xs uppercase tracking-wide text-neutral-400">Wishlist</dt>
-                    <dd className="font-semibold text-neutral-900">{wishlistSize}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase tracking-wide text-neutral-400">In play</dt>
-                    <dd className="font-semibold text-neutral-900">{inPlay}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase tracking-wide text-neutral-400">Episodes</dt>
-                    <dd className="font-semibold text-neutral-900">{episodes}</dd>
-                  </div>
-                  <div>
-                    <dt className="text-xs uppercase tracking-wide text-neutral-400">Format</dt>
-                    <dd className="font-semibold text-neutral-900">
-                      {question.format ? FORMAT_META[question.format].label : '—'}
-                    </dd>
-                  </div>
-                </dl>
+                <ReadinessChips question={question} />
 
-                <div className="mt-3 border-t border-neutral-100 pt-3 text-sm">
-                  {readiness.ready ? (
-                    <p className="text-neutral-600">
-                      <span className="font-medium text-neutral-800">The ask:</span>{' '}
-                      {question.askType ? ASK_META[question.askType].label : ''} →{' '}
-                      <span className="break-all text-neutral-500">{question.askDestinationUrl}</span>
+                <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-neutral-100 pt-3">
+                  <Stat value={wishlistSize} label="wishlist" />
+                  <Stat value={inPlay} label="in play" />
+                  <Stat value={episodes} label="episodes" />
+                  {question.format && (
+                    <span className="text-xs font-medium text-neutral-500">
+                      {FORMAT_META[question.format].label}
+                    </span>
+                  )}
+                  {ready && question.askType && (
+                    <span className="ml-auto inline-flex min-w-0 items-center gap-1.5 text-xs text-neutral-500">
+                      {ASK_META[question.askType].label} →
+                      <span className="max-w-[14rem] truncate">{question.askDestinationUrl}</span>
                       {question.askVerifiedAt ? (
-                        <StatusBadge label="Destination checked" tone="green" />
+                        <IconCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                       ) : (
-                        <span className="ml-2 text-amber-800">
-                          not checked — an ask pointing at a broken page wastes the episode
-                        </span>
+                        <StatusBadge label="Unchecked" tone="amber" />
                       )}
-                    </p>
-                  ) : (
-                    <p className="text-amber-900">
-                      <span className="font-semibold">Not ready for names.</span> Still missing:{' '}
-                      {readiness.missing.join(', ')}. No candidate on this question can leave the
-                      wishlist until it is complete.
-                    </p>
+                    </span>
                   )}
                 </div>
-
-                {wishlistSize < 5 && readiness.ready && (
-                  <p className="mt-2 text-xs text-neutral-500">
-                    Most invitations fail. Ten to twenty names on a question makes a no an
-                    inconvenience rather than a restart.
-                  </p>
-                )}
               </li>
             )
           })}
