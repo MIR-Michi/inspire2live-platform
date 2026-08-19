@@ -155,6 +155,45 @@ export async function loadMeetingTranscriptsByDate(
   return result
 }
 
+/**
+ * The publication blurb alone, for the publishing source provider.
+ *
+ * Deliberately narrower than `loadCampusSessionTranscript`: the drafter needs
+ * one publication-oriented paragraph, so `extracted_text` is never selected and
+ * the raw transcript stays in the database. Chooses the same summary the
+ * transcript panel shows — the latest pending or saved one.
+ */
+export async function loadCampusSessionPublicationBlurb(
+  supabase: SupabaseClient,
+  campusSessionId: string
+): Promise<string | null> {
+  try {
+    const db = supabase as unknown as { from: (table: string) => LooseSelect }
+    const { data: transcriptData } = await db
+      .from('meeting_transcripts')
+      .select('id, created_at')
+      .eq('campus_session_id', campusSessionId)
+      .order('created_at', { ascending: false })
+
+    const latest = (transcriptData ?? [])[0]
+    if (!latest) return null
+
+    const { data: summaryData } = await db
+      .from('meeting_summaries')
+      .select('publication_blurb, status, created_at')
+      .eq('transcript_id', String(latest.id))
+      .order('created_at', { ascending: false })
+
+    const summary = (summaryData ?? []).find(
+      (row) => row.status === 'pending' || row.status === 'saved'
+    )
+    return (summary?.publication_blurb as string | null) ?? null
+  } catch (error) {
+    console.error('[transcripts] loadCampusSessionPublicationBlurb failed', error)
+    return null
+  }
+}
+
 /** Load the latest transcript view attached to a campus session. */
 export async function loadCampusSessionTranscript(
   supabase: SupabaseClient,

@@ -66,6 +66,17 @@ asserted in a unit test:
 | The readiness gate refuses rather than invents | A session carrying 37 characters shows "Not enough to work with yet … but only 37 characters of material (needs 120)" with an *Add material* link, and **no Draft button at all**. The 491-character session offers Draft |
 | Channel availability is real | LinkedIn is lit and selectable; Newsletter and Website render disabled |
 
+Watching the dev-server query log during that run caught something no unit test would have: the campus
+provider reached the publication blurb through `loadCampusSessionTranscript`, whose select carries
+`extracted_text`, so **the full raw transcript was being read into the publishing page's render** to
+obtain one field it does not even come from. Nothing leaked — the raw text never entered the payload,
+so it could not reach a model — but the curation only held at the payload, not at the query. Replaced
+with a narrow `loadCampusSessionPublicationBlurb` that selects `id, created_at` from the transcript and
+`publication_blurb` from the summary, mirroring the panel's choice of the latest pending-or-saved
+summary. Confirmed in the query log: the publishing render now issues
+`meeting_transcripts?select=id,created_at` and no `extracted_text` at all. The wider loader stays where
+the full view is genuinely needed — the campus month and session detail pages.
+
 ### The honest gap
 
 **Everything downstream of the drafting call is still unexercised**, because the model call has not been

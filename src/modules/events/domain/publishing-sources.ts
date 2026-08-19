@@ -22,7 +22,7 @@ import {
   type SourceContext,
   type SourceProvider,
 } from '@/kernel/publishing'
-import { loadCampusSessionTranscript } from '@/modules/events/domain/comms-meeting-transcripts'
+import { loadCampusSessionPublicationBlurb } from '@/modules/events/domain/comms-meeting-transcripts'
 
 export const CAMPUS_SESSION_SOURCE_TYPE = 'campus_session'
 
@@ -109,12 +109,15 @@ async function loadCampusSessionSource(
 
   // The AI meeting summary's publication blurb is already publication-oriented
   // material; the rest of the summary (internal decisions/actions) stays out.
+  // The narrow loader never selects `extracted_text`, so the raw transcript is
+  // not even read into this render — the curation holds at the query, not just
+  // at the payload.
   try {
-    const transcript = await loadCampusSessionTranscript(ctx.supabase, session.id)
+    const publicationBlurb = await loadCampusSessionPublicationBlurb(ctx.supabase, session.id)
     pushField(fields, {
       key: 'publication_blurb',
       label: 'Publication blurb',
-      value: transcript?.summary?.publicationBlurb ?? '',
+      value: publicationBlurb ?? '',
       intent: 'copy',
     })
   } catch {
