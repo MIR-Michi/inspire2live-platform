@@ -3,7 +3,11 @@ import { createClient } from '@/lib/supabase/server'
 import { createEvent } from '@/app/app/comms/events/actions'
 import { PresenterAvatar } from '@/components/comms/presenter-avatar'
 import { getPodcastWorkflowProgress } from '@/lib/comms-events'
-import { PlanningStrategyShell, type PlanningScreen } from '@/modules/podcast-planning'
+import {
+  PlanningStrategyShell,
+  PodcastOnboardingTour,
+  type PlanningScreen,
+} from '@/modules/podcast-planning'
 
 function formatEpisodeDate(value: string) {
   return new Intl.DateTimeFormat('en-GB', {
@@ -198,7 +202,9 @@ function PodcastHeader({
     <>
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-neutral-200 pb-3">
         <h1 className="text-2xl font-semibold text-neutral-900">Podcast</h1>
-        {people && (
+        <div className="flex flex-wrap items-center gap-2">
+          <PodcastOnboardingTour />
+          {people && (
           <details className="relative">
             <summary className="list-none rounded-xl bg-orange-600 px-4 py-2 text-sm font-semibold text-white hover:bg-orange-700">
               + New episode
@@ -229,7 +235,8 @@ function PodcastHeader({
               </button>
             </form>
           </details>
-        )}
+          )}
+        </div>
       </header>
 
       <nav className="flex gap-4 border-b border-neutral-200">

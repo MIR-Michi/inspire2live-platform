@@ -76,7 +76,13 @@ export const manifest = defineManifest({
       'loadScoreHistory',
     ],
     events: ['podcast.candidate.booked', 'podcast.candidate.recorded'],
-    ui: ['PlanningStrategyShell', 'OpportunityBoard', 'QuestionsScreen', 'CandidateDrawer'],
+    ui: [
+      'PlanningStrategyShell',
+      'OpportunityBoard',
+      'QuestionsScreen',
+      'CandidateDrawer',
+      'PodcastOnboardingTour',
+    ],
     settingsPanel: true,
   },
   dependsOn: {
