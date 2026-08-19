@@ -21,8 +21,12 @@ export const manifest = defineManifest({
     tables: ["events", "conferences", "conference_contact_assignments", "conference_discovery_status", "conference_prep", "conference_tracking", "conference_guest_tokens", "conference_guest_access_requests", "conference_guest_files", "conference_guest_notes", "conference_guest_submissions", "conference_guest_invites", "campus_sessions", "session_attendees", "world_campus_sessions", "hubs", "comms_weekly_agenda_items", "congress_events", "congress_assignments", "congress_members", "congress_activity_log"],
   },
   provides: {
-    api: ["loadEventPipeline", "loadConference"],
+    api: ["loadEventPipeline", "loadConference", "campusSessionSourceProvider"],
     ui: ["EventsPipelineShell"],
+    // The World Campus session can be published from (ADR-0014). The provider is
+    // exported through index.ts; the source-reconciliation gate keeps this in
+    // sync with src/modules/publishing-registry.ts.
+    sources: ["campus_session"],
     settingsPanel: true,
   },
   // Operator-tunable conference-discovery settings, rendered as a panel in the
@@ -82,7 +86,7 @@ export const manifest = defineManifest({
     },
   },
   dependsOn: {
-    kernel: ["identity", "rbac", "notifications", "ai-client"],
+    kernel: ["identity", "rbac", "notifications", "ai-client", "publishing"],
     components: ["contacts@^1"],
   },
   featureFlag: "comms_team",

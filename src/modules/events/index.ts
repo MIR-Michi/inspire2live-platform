@@ -7,3 +7,9 @@
  */
 
 export { manifest } from '@/modules/events/manifest'
+
+// The World Campus session as a publishable source (ADR-0014): a curated,
+// publication-intended payload shaped by the kernel `SourceProvider` contract.
+// Composed with the publishing space in `src/modules/publishing-registry.ts`;
+// `events` itself imports nothing from `publishing`.
+export { campusSessionSourceProvider } from '@/modules/events/domain/publishing-sources'
