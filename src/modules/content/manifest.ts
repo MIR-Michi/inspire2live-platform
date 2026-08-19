@@ -12,14 +12,18 @@ export const manifest = defineManifest({
   id: "content",
   version: '1.0.0',
   title: "Content & Media",
-  summary: "Content calendar, media library and outbound publishing/integration intents.",
+  // Reworded in Sprint 21 so "publishing" is unambiguous: `content` owns the
+  // editorial calendar, the media library and the integration-intent log — the
+  // *destination* for approved copy. Composing copy and gating its approval is
+  // the `publishing` component (ADR-0014).
+  summary: "Editorial content calendar, media library and the outbound integration-intent log — the destination approved content lands in.",
   surface: "internal",
   data: {
     schema: "content",
     tables: ["content_calendar", "media_assets", "media_recovery_offers", "media_recovery_requests", "comms_integration_intents", "comms_digest_runs"],
   },
   provides: {
-    api: ["loadContentCalendar", "loadMediaLibrary"],
+    api: ["loadContentCalendar", "loadMediaLibrary", "createCalendarEntry", "logIntegrationIntent"],
     ui: ["ContentCalendar", "MediaLibrary"],
   },
   dependsOn: {
