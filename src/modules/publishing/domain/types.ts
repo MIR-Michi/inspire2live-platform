@@ -20,6 +20,14 @@ export type DraftClaim = {
   sourceFieldKey: string
 }
 
+/** The image travelling with a draft or a post (a pointer into private storage). */
+export type PostImageRef = {
+  bucket: string
+  storagePath: string
+  mediaType: string
+  alt: string
+}
+
 export type PublishingDraft = {
   id: string
   sourceType: string
@@ -35,7 +43,7 @@ export type PublishingDraft = {
   aiBody: string
   hashtags: string[]
   claims: DraftClaim[]
-  imageRef: { bucket: string; storagePath: string; mediaType: string; alt: string } | null
+  imageRef: PostImageRef | null
   imageDescription: string | null
   omitted: string[]
   status: DraftStatus
@@ -93,4 +101,42 @@ export const DRAFT_STATUS_META: Record<DraftStatus, { label: string; tone: 'neut
   dismissed: { label: 'Dismissed', tone: 'neutral' },
   superseded: { label: 'Superseded', tone: 'neutral' },
   published: { label: 'Handed over', tone: 'blue' },
+}
+
+/**
+ * A saved post's own lifecycle (ADR-0015) — three states a person recognises,
+ * unlike `DraftStatus`, which is the mechanics of a generation run.
+ * `published` is a human statement that the copy went out: nothing in the
+ * platform posts to a channel by itself.
+ */
+export type PostStatus = 'draft' | 'ready_to_publish' | 'published'
+
+export const POST_STATUSES: readonly PostStatus[] = ['draft', 'ready_to_publish', 'published']
+
+export const POST_STATUS_META: Record<PostStatus, { label: string; tone: 'neutral' | 'green' | 'amber' | 'red' | 'blue' | 'violet' }> = {
+  draft: { label: 'Draft', tone: 'neutral' },
+  ready_to_publish: { label: 'Ready to publish', tone: 'green' },
+  published: { label: 'Published', tone: 'blue' },
+}
+
+export type PublishingPost = {
+  id: string
+  title: string | null
+  sourceType: string
+  sourceId: string
+  /** The variant it was saved from, when it came from a generation run. */
+  draftId: string | null
+  channel: string
+  body: string
+  hashtags: string[]
+  imageRef: PostImageRef | null
+  status: PostStatus
+  /** Who is responsible for the post — reassignable. */
+  ownerId: string
+  /** Who created it — never changes. */
+  createdBy: string
+  contentCalendarId: string | null
+  publishedAt: string | null
+  createdAt: string
+  updatedAt: string
 }

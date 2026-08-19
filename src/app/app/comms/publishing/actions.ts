@@ -13,18 +13,30 @@ import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import {
   approveDraft,
+  attachPostImage,
   createAdhocSource,
+  deletePost,
   dismissDraft,
   editDraft,
   generateDrafts,
-  handOverApprovedDraft,
-  loadDraft,
+  handOverPost,
+  loadPost,
+  removePostImage,
   resolvePublishingConfig,
+  savePostFromDraft,
+  setPostOwner,
+  setPostStatus,
+  updatePost,
+  type PostStatus,
   type PublishingActionState,
 } from '@/modules/publishing'
 import { onPublishedHook, resolveSource } from '@/modules/publishing-registry'
 
 const SPACE_PATH = '/app/comms/publishing'
+
+function postPath(postId: string): string {
+  return `${SPACE_PATH}/posts/${postId}`
+}
 
 async function requireCommsOperator() {
   const supabase = await createClient()
@@ -130,8 +142,14 @@ export async function approveDraftAction(input: {
 
     const result = await approveDraft({ draftId: input.draftId, userId, currentFingerprint })
     if (!result.ok) return result
+
+    // Approving is also the moment the copy becomes a post someone owns: it
+    // arrives ready to publish rather than as a draft (ADR-0015).
+    const post = await savePostFromDraft({ draftId: input.draftId, userId, status: 'ready_to_publish' })
+    if (!post.ok) return post
+
     revalidatePath(SPACE_PATH)
-    return { ok: true }
+    return { ok: true, postId: post.data?.postId }
   } catch (error) {
     return failed(error, 'Could not approve the draft.')
   }
@@ -149,29 +167,161 @@ export async function dismissDraftAction(input: { draftId: string }): Promise<Pu
   }
 }
 
-export async function handOverDraftAction(input: { draftId: string }): Promise<PublishingActionState> {
+// ─── saved posts (ADR-0015) ───────────────────────────────────────────────────
+
+/** Keep a variant as a post without approving it — the "save it for later" path. */
+export async function savePostAction(input: { draftId: string }): Promise<PublishingActionState> {
   try {
-    const { supabase, userId } = await requireCommsOperator()
+    const { userId } = await requireCommsOperator()
+    const result = await savePostFromDraft({ draftId: input.draftId, userId })
+    if (!result.ok) return result
 
-    const draft = await loadDraft(input.draftId)
-    if (!draft) return { ok: false, error: 'Draft not found.' }
+    revalidatePath(SPACE_PATH)
+    return {
+      ok: true,
+      postId: result.data?.postId,
+      message: result.data?.existed ? 'Already saved.' : 'Saved.',
+    }
+  } catch (error) {
+    return failed(error, 'Could not save the post.')
+  }
+}
 
-    // Resolve the source for its title/link and the owner's provenance hook.
-    const source = await resolveSource({ supabase }, draft.sourceType, draft.sourceId)
+export async function updatePostAction(input: {
+  postId: string
+  body?: string
+  title?: string | null
+  hashtags?: string[]
+}): Promise<PublishingActionState> {
+  try {
+    await requireCommsOperator()
+    const result = await updatePost(input)
+    if (!result.ok) return result
 
-    const result = await handOverApprovedDraft({
-      draftId: input.draftId,
+    revalidatePath(SPACE_PATH)
+    revalidatePath(postPath(input.postId))
+    return { ok: true }
+  } catch (error) {
+    return failed(error, 'Could not save the post.')
+  }
+}
+
+export async function setPostStatusAction(input: {
+  postId: string
+  status: PostStatus
+}): Promise<PublishingActionState> {
+  try {
+    await requireCommsOperator()
+    const result = await setPostStatus(input)
+    if (!result.ok) return result
+
+    revalidatePath(SPACE_PATH)
+    revalidatePath(postPath(input.postId))
+    return { ok: true }
+  } catch (error) {
+    return failed(error, 'Could not change the status.')
+  }
+}
+
+export async function setPostOwnerAction(input: {
+  postId: string
+  ownerId: string
+}): Promise<PublishingActionState> {
+  try {
+    await requireCommsOperator()
+    const result = await setPostOwner(input)
+    if (!result.ok) return result
+
+    revalidatePath(SPACE_PATH)
+    revalidatePath(postPath(input.postId))
+    return { ok: true }
+  } catch (error) {
+    return failed(error, 'Could not change the owner.')
+  }
+}
+
+export async function attachPostImageAction(formData: FormData): Promise<PublishingActionState> {
+  try {
+    const { userId } = await requireCommsOperator()
+
+    const postId = formData.get('postId')
+    if (typeof postId !== 'string' || !postId) return { ok: false, error: 'Which post?' }
+    const file = formData.get('image')
+    if (!(file instanceof File)) return { ok: false, error: 'Pick an image first.' }
+    const alt = typeof formData.get('alt') === 'string' ? (formData.get('alt') as string) : ''
+
+    const config = await resolvePublishingConfig()
+    const result = await attachPostImage({
+      postId,
+      file,
+      alt,
       userId,
-      title: source?.title ?? null,
-      sourceLink: source?.publicUrl ?? null,
-      onPublished: onPublishedHook({ supabase }, draft.sourceType, draft.sourceId),
+      maxUploadMegabytes: config.maxUploadMegabytes,
     })
     if (!result.ok) return result
 
     revalidatePath(SPACE_PATH)
+    revalidatePath(postPath(postId))
+    return { ok: true, message: 'Picture added.' }
+  } catch (error) {
+    return failed(error, 'Could not add the picture.')
+  }
+}
+
+export async function removePostImageAction(input: { postId: string }): Promise<PublishingActionState> {
+  try {
+    await requireCommsOperator()
+    const result = await removePostImage(input)
+    if (!result.ok) return result
+
+    revalidatePath(SPACE_PATH)
+    revalidatePath(postPath(input.postId))
+    return { ok: true }
+  } catch (error) {
+    return failed(error, 'Could not remove the picture.')
+  }
+}
+
+export async function deletePostAction(input: { postId: string }): Promise<PublishingActionState> {
+  try {
+    await requireCommsOperator()
+    const result = await deletePost(input)
+    if (!result.ok) return result
+
+    revalidatePath(SPACE_PATH)
+    return { ok: true, message: 'Post deleted.' }
+  } catch (error) {
+    return failed(error, 'Could not delete the post.')
+  }
+}
+
+/**
+ * Put the post on the content calendar. Handover reads the post's current text,
+ * not the frozen draft, which is why it hangs off the post (ADR-0015).
+ */
+export async function handOverPostAction(input: { postId: string }): Promise<PublishingActionState> {
+  try {
+    const { supabase, userId } = await requireCommsOperator()
+
+    const post = await loadPost(input.postId)
+    if (!post) return { ok: false, error: 'Post not found.' }
+
+    // Resolve the source for its public link and the owner's provenance hook.
+    const source = await resolveSource({ supabase }, post.sourceType, post.sourceId)
+
+    const result = await handOverPost({
+      postId: input.postId,
+      userId,
+      sourceLink: source?.publicUrl ?? null,
+      onPublished: onPublishedHook({ supabase }, post.sourceType, post.sourceId),
+    })
+    if (!result.ok) return result
+
+    revalidatePath(SPACE_PATH)
+    revalidatePath(postPath(input.postId))
     revalidatePath('/app/comms/calendar')
     return { ok: true, warning: result.data?.warning, message: 'On the calendar.' }
   } catch (error) {
-    return failed(error, 'Could not hand the draft over.')
+    return failed(error, 'Could not hand the post over.')
   }
 }

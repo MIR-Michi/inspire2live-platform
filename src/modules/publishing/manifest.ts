@@ -21,13 +21,13 @@ export const manifest = defineManifest({
   version: '1.0.0',
   title: 'Publishing',
   summary:
-    'Turns a platform record or an uploaded screenshot into channel-ready copy, keeps it under human review, and hands the approved text to the content calendar.',
+    'Turns a platform record or an uploaded screenshot into channel-ready copy, keeps it under human review, and saves it as a post someone owns and edits until it is published.',
   surface: 'internal',
   data: {
     schema: 'publishing',
     tablePrefix: 'publishing_',
-    tables: ['publishing_drafts', 'publishing_sources'],
-    migrations: ['00173'],
+    tables: ['publishing_drafts', 'publishing_posts', 'publishing_sources'],
+    migrations: ['00173', '00174'],
   },
   provides: {
     api: [
@@ -40,7 +40,8 @@ export const manifest = defineManifest({
       'sourceReadiness',
       'validateChannelPostPayload',
       'rightsAllowHandover',
-      'handoverBlockReason',
+      'rightsBlockReason',
+      'postTransitionBlockReason',
       // ad-hoc source
       'createAdhocSource',
       'adhocSourceProvider',
@@ -53,12 +54,22 @@ export const manifest = defineManifest({
       'editDraft',
       'approveDraft',
       'dismissDraft',
-      'handOverApprovedDraft',
+      // saved posts (ADR-0015)
+      'loadPosts',
+      'loadPost',
+      'savePostFromDraft',
+      'updatePost',
+      'setPostStatus',
+      'setPostOwner',
+      'attachPostImage',
+      'removePostImage',
+      'deletePost',
+      'handOverPost',
       // configuration
       'resolvePublishingConfig',
     ],
-    events: ['publishing.draft.approved'],
-    ui: ['PublishingShell', 'PublishFromHere'],
+    events: ['publishing.draft.approved', 'publishing.post.published'],
+    ui: ['PublishingShell', 'PublishFromHere', 'PostBoard', 'PostEditor'],
     sources: ['adhoc'],
     settingsPanel: true,
   },
@@ -144,7 +155,14 @@ export const manifest = defineManifest({
   featureFlag: 'comms_team',
   personas: ['communications-coordinator'],
   roles: { read: ['comms_team', 'admin'], write: ['comms_team', 'admin'] },
-  requirements: ['REQ-PUB-001', 'REQ-PUB-002', 'REQ-PUB-003', 'REQ-PUB-004', 'REQ-PUB-005'],
+  requirements: [
+    'REQ-PUB-001',
+    'REQ-PUB-002',
+    'REQ-PUB-003',
+    'REQ-PUB-004',
+    'REQ-PUB-005',
+    'REQ-PUB-006',
+  ],
   operations: ['draft-post'],
 })
 

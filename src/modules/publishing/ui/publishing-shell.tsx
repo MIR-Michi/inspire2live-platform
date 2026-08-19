@@ -21,7 +21,6 @@ import { ActionModal, CharacterRing, ImageDropZone, StatusBadge } from '@/kernel
 import type { ImageDropZoneValue } from '@/kernel/ui'
 import type { SourceCandidate, SourceRightsStatus } from '@/kernel/publishing'
 import {
-  DRAFT_STATUS_META,
   RIGHTS_META,
   RIGHTS_STATUSES,
   type PublishingDraft,
@@ -32,6 +31,7 @@ export type PublishingActionState = {
   error?: string
   message?: string
   sourceId?: string
+  postId?: string
   warning?: string
 }
 
@@ -64,7 +64,7 @@ export type PublishingShellActions = {
   editDraft: (input: { draftId: string; body: string }) => Promise<PublishingActionState>
   approveDraft: (input: { draftId: string; sourceType: string; sourceId: string }) => Promise<PublishingActionState>
   dismissDraft: (input: { draftId: string }) => Promise<PublishingActionState>
-  handOverDraft: (input: { draftId: string }) => Promise<PublishingActionState>
+  savePost: (input: { draftId: string }) => Promise<PublishingActionState>
 }
 
 export type PublishingShellProps = {
@@ -73,7 +73,8 @@ export type PublishingShellProps = {
   candidates: Array<SourceCandidate & { providerLabel: string }>
   source: PublishingShellSource | null
   drafts: PublishingDraft[]
-  recentDrafts: PublishingDraft[]
+  /** Draft id → the saved post it became, for the variants already kept. */
+  postIdByDraftId: Record<string, string>
   maxUploadMegabytes: number
   actions: PublishingShellActions
 }
@@ -91,13 +92,17 @@ function spaceHref(sourceType: string, sourceId: string): string {
   return `/app/comms/publishing?sourceType=${encodeURIComponent(sourceType)}&sourceId=${encodeURIComponent(sourceId)}`
 }
 
+function postHref(postId: string): string {
+  return `/app/comms/publishing/posts/${postId}`
+}
+
 export function PublishingShell({
   channels,
   activeChannel,
   candidates,
   source,
   drafts,
-  recentDrafts,
+  postIdByDraftId,
   maxUploadMegabytes,
   actions,
 }: PublishingShellProps) {
@@ -213,9 +218,18 @@ export function PublishingShell({
                 imageUrl={source.imageUrl}
                 busy={busy}
                 approveBlocked={source.stale && source.staleBehaviour === 'block'}
+                savedPostId={postIdByDraftId[draft.id] ?? null}
                 onEdit={(body) => run(() => actions.editDraft({ draftId: draft.id, body }))}
                 onApprove={() =>
                   run(() => actions.approveDraft({ draftId: draft.id, sourceType: source.sourceType, sourceId: source.sourceId }))
+                }
+                onSave={() =>
+                  run(
+                    () => actions.savePost({ draftId: draft.id }),
+                    (state) => {
+                      if (state.postId) router.push(postHref(state.postId))
+                    },
+                  )
                 }
                 onDismiss={() => run(() => actions.dismissDraft({ draftId: draft.id }))}
               />
@@ -224,39 +238,16 @@ export function PublishingShell({
         </section>
       )}
 
-      {/* ③ APPROVE / HANDOVER */}
+      {/* ③ APPROVE — the copy is now a saved post; everything else happens there */}
       {(approved || handedOver) && (
         <ApprovedPanel
           draft={handedOver ?? approved!}
-          rights={source?.rights ?? null}
-          busy={busy}
+          postId={postIdByDraftId[(handedOver ?? approved!).id] ?? null}
           onCopy={(text) => {
             void navigator.clipboard.writeText(text)
             setNotice('Copied.')
           }}
-          onHandOver={(draftId) => run(() => actions.handOverDraft({ draftId }))}
         />
-      )}
-
-      {/* Recent strip */}
-      {recentDrafts.length > 0 && !source && (
-        <section className="space-y-2">
-          <h2 className="text-xs font-semibold uppercase tracking-wide text-neutral-400">Recent</h2>
-          <ul className="space-y-1.5">
-            {recentDrafts.map((draft) => (
-              <li key={draft.id}>
-                <Link
-                  href={spaceHref(draft.sourceType, draft.sourceId)}
-                  className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-2.5 text-sm hover:border-orange-300"
-                >
-                  <StatusBadge label={DRAFT_STATUS_META[draft.status].label} tone={DRAFT_STATUS_META[draft.status].tone} />
-                  <span className="min-w-0 flex-1 truncate text-neutral-700">{draft.body.split('\n')[0]}</span>
-                  <span className="shrink-0 text-xs text-neutral-400">{formatDate(draft.createdAt)}</span>
-                </Link>
-              </li>
-            ))}
-          </ul>
-        </section>
       )}
     </div>
   )
@@ -540,8 +531,10 @@ function VariantCard({
   imageUrl,
   busy,
   approveBlocked,
+  savedPostId,
   onEdit,
   onApprove,
+  onSave,
   onDismiss,
 }: {
   draft: PublishingDraft
@@ -549,8 +542,10 @@ function VariantCard({
   imageUrl: string | null
   busy: boolean
   approveBlocked: boolean
+  savedPostId: string | null
   onEdit: (body: string) => void
   onApprove: () => void
+  onSave: () => void
   onDismiss: () => void
 }) {
   const [text, setText] = useState(draft.body)
@@ -642,11 +637,29 @@ function VariantCard({
         >
           Approve
         </button>
+        {savedPostId ? (
+          <Link
+            href={postHref(savedPostId)}
+            className="rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50"
+          >
+            Open post
+          </Link>
+        ) : (
+          <button
+            type="button"
+            onClick={onSave}
+            disabled={busy}
+            title="Keep this as a post you can finish later"
+            className="rounded-xl border border-neutral-300 bg-white px-3 py-1.5 text-xs font-semibold text-neutral-700 hover:bg-neutral-50 disabled:opacity-50"
+          >
+            Save
+          </button>
+        )}
         <button
           type="button"
           onClick={onDismiss}
           disabled={busy}
-          className="rounded-xl border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-neutral-50 disabled:opacity-50"
+          className="ml-auto rounded-xl border border-neutral-200 px-3 py-1.5 text-xs font-semibold text-neutral-500 hover:bg-neutral-50 disabled:opacity-50"
         >
           Dismiss
         </button>
@@ -655,31 +668,30 @@ function VariantCard({
   )
 }
 
+/**
+ * The end of the wizard. Approving does not finish the job any more — it hands
+ * the copy to a saved post that carries the picture, the owner and the status
+ * from here on, so this panel points at the post rather than trying to be it.
+ */
 function ApprovedPanel({
   draft,
-  rights,
-  busy,
+  postId,
   onCopy,
-  onHandOver,
 }: {
   draft: PublishingDraft
-  rights: SourceRightsStatus | null
-  busy: boolean
+  postId: string | null
   onCopy: (text: string) => void
-  onHandOver: (draftId: string) => void
 }) {
-  const handedOver = draft.status === 'published'
-  const rightsBlocked = rights !== null && rights !== 'approved_for_publication'
   const copyText = [draft.body, draft.hashtags.join(' ')].filter(Boolean).join('\n\n')
 
   return (
     <section className="space-y-3 rounded-2xl border border-emerald-200 bg-emerald-50/50 p-5">
       <header className="flex items-center gap-2">
-        <StatusBadge label={handedOver ? 'Handed over' : 'Approved'} tone={handedOver ? 'blue' : 'green'} />
+        <StatusBadge label="Approved" tone="green" />
         {draft.approvedAt && <span className="text-xs text-neutral-400">{formatDate(draft.approvedAt)}</span>}
       </header>
       <p className="whitespace-pre-wrap rounded-xl border border-neutral-200 bg-white p-4 text-sm leading-relaxed text-neutral-800">{copyText}</p>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           onClick={() => onCopy(copyText)}
@@ -690,31 +702,18 @@ function ApprovedPanel({
           </svg>
           Copy
         </button>
-        {handedOver ? (
-          <span className="text-xs font-semibold text-neutral-500">
-            On the <Link href="/app/comms/calendar" className="text-orange-700 underline">calendar</Link>
-          </span>
-        ) : (
-          <span title={rightsBlocked ? (rights === 'needs_clearance' ? 'Rights not cleared yet' : 'Marked internal-only') : undefined}>
-            <button
-              type="button"
-              onClick={() => onHandOver(draft.id)}
-              disabled={busy || rightsBlocked}
-              className="inline-flex items-center gap-1.5 rounded-xl bg-orange-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-orange-700 disabled:cursor-not-allowed disabled:opacity-50"
-            >
-              <svg className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" strokeWidth={1.8} stroke="currentColor" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />
-              </svg>
-              Calendar
-            </button>
-          </span>
+        {postId && (
+          <Link
+            href={postHref(postId)}
+            className="inline-flex items-center gap-1.5 rounded-xl bg-orange-600 px-4 py-1.5 text-xs font-semibold text-white hover:bg-orange-700"
+          >
+            Open post
+          </Link>
         )}
       </div>
-      {rightsBlocked && !handedOver && (
-        <p className="text-xs text-neutral-500">
-          {rights === 'needs_clearance' ? 'Clear the rights before this can go on the calendar.' : 'Internal-only material stays inside — copy is available for internal use.'}
-        </p>
-      )}
+      <p className="text-xs text-neutral-500">
+        Add a picture, change the owner and mark it published on the post itself.
+      </p>
     </section>
   )
 }

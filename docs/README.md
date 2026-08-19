@@ -84,7 +84,8 @@
 | [0011](ADR/0011-pr-based-trunk-with-sprints.md) | PR-Based Trunk Development with Sprint Cadence | accepted | 2026-07-17 |
 | [0012](ADR/0012-adaptive-dashboard-composition.md) | Adaptive Dashboard Composition and User Preferences | accepted | 2026-07-17 |
 | [0013](ADR/0013-opportunity-engine-components.md) | The Podcast Opportunity Engine ships as two toolbox components | accepted | 2026-07-25 |
-| [0014](ADR/0014-publishing-space.md) | Publishing is a component with a source-provider extension point, not a per-channel feature | accepted | 2026-08-19 |
+| [0014](ADR/0014-publishing-space.md) | Publishing is a component with a source-provider extension point, not a per-channel feature | accepted (§6 amended by 0015) | 2026-08-19 |
+| [0015](ADR/0015-saved-posts.md) | A saved post is its own entity, and it owns the handover | accepted | 2026-08-19 |
 
 ---
 

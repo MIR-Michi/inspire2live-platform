@@ -12,6 +12,13 @@
 > **Owning module:** `src/modules/publishing` + a kernel source/channel contract.
 > **Delivery:** [`sprints/sprint-21-publishing-space/`](../sprints/sprint-21-publishing-space/description.md)
 > **Decision record:** [ADR-0014](ADR/0014-publishing-space.md).
+
+> **Amended by [ADR-0015](ADR/0015-saved-posts.md) (migration `00174`).** Approved copy is no longer
+> the end of the line: it becomes a **saved post** (`publishing_posts`) that has an owner, a picture,
+> a `draft · ready to publish · published` status, and stays editable — visible as tiles under the
+> wizard. Handover to the calendar moved from the draft to the post, so the calendar receives the text
+> as edited. Where this document describes the draft lifecycle (§6.4) or the component's API (§4), read
+> ADR-0015 alongside it; everything about sources, the AI workload and the rights gate still stands.
 > **Architecture it fits:** [`MODULAR_COMPONENT_ARCHITECTURE.md`](MODULAR_COMPONENT_ARCHITECTURE.md)
 > (ADR-0009), [ADR-0010](ADR/0010-platform-settings-space.md), [ADR-0013](ADR/0013-opportunity-engine-components.md),
 > [`AI_INTEGRATION.md`](AI_INTEGRATION.md).
@@ -187,7 +194,7 @@ export const manifest = defineManifest({
   data: {
     schema: 'publishing',
     tablePrefix: 'publishing_',
-    tables: ['publishing_drafts', 'publishing_sources'],
+    tables: ['publishing_drafts', 'publishing_sources'], // + 'publishing_posts' (ADR-0015)
     migrations: ['00173'], // ≥ 00173; verify against main at implementation time
   },
   provides: {
@@ -195,7 +202,7 @@ export const manifest = defineManifest({
       'CHANNEL_PROFILES', 'channelProfile', 'channelBudget',
       'createAdhocSource', 'adhocSourceProvider',
       'generateDrafts', 'loadDrafts', 'loadDraft',
-      'editDraft', 'approveDraft', 'dismissDraft', 'handOverApprovedDraft',
+      'editDraft', 'approveDraft', 'dismissDraft', 'handOverApprovedDraft', // → 'handOverPost' (ADR-0015)
       'sourceReadiness', 'resolvePublishingConfig',
     ],
     events: ['publishing.draft.approved'],
@@ -471,18 +478,26 @@ rather than a reuse.
   `src/modules/publishing/domain/schema.ts` and use `moduleClient<PublishingDatabase>()` from
   `@/kernel/data`, as `podcast-planning` does, until `src/types/database.ts` is regenerated.
 
-**Status lifecycle**
+**Status lifecycle** *(amended by [ADR-0015](ADR/0015-saved-posts.md) — see the second diagram)*
 
 ```
-pending ──edit──▶ pending ──approve──▶ approved ──handover──▶ published
-   │                                       │
-   ├──dismiss──▶ dismissed                 └── the calendar entry then owns the publishing lifecycle
+pending ──edit──▶ pending ──approve──▶ approved
+   │
+   ├──dismiss──▶ dismissed
    └──regenerate──▶ superseded
 ```
 
-`published` on a draft means *handed over*. The real publishing lifecycle
-(`draft → in_review → scheduled → published → archived`) stays in `content_calendar`, which already
-owns it and already validates transitions.
+Approval is now the end of the *draft's* line: the draft freezes there as the calibration record, and a
+**post** carries on from it.
+
+```
+approved draft ──save──▶ post: draft ⇄ ready_to_publish ⇄ published   (a person's statement)
+                              └──handover──▶ content_calendar entry
+```
+
+The draft's own `published` value (which meant *handed over*) is no longer written by any code path.
+The scheduling lifecycle (`draft → in_review → scheduled → published → archived`) still stays in
+`content_calendar`, which already owns it and already validates transitions.
 
 ---
 

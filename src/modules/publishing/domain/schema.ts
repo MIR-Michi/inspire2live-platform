@@ -52,7 +52,27 @@ export type PublishingDraftRow = {
   updated_at: string
 }
 
+export type PublishingPostRow = {
+  id: string
+  title: string | null
+  source_type: string
+  source_id: string
+  draft_id: string | null
+  channel: string
+  body: string
+  hashtags: string[]
+  image_ref: unknown | null // { bucket, storagePath, mediaType, alt }
+  status: 'draft' | 'ready_to_publish' | 'published'
+  owner_id: string
+  created_by: string
+  content_calendar_id: string | null
+  published_at: string | null
+  created_at: string
+  updated_at: string
+}
+
 export type PublishingDatabase = ModuleDatabase<{
   publishing_sources: ModuleTable<PublishingSourceRow>
   publishing_drafts: ModuleTable<PublishingDraftRow>
+  publishing_posts: ModuleTable<PublishingPostRow>
 }>

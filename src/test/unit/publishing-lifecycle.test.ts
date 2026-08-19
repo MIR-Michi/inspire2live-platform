@@ -1,8 +1,7 @@
 /**
- * Domain tests for the lifecycle rules (S21-T20): approval stamps + dismisses
- * siblings, handover is impossible without approval and without cleared
- * rights (enforced in the domain, not the UI), and regenerating supersedes
- * the previous pending run before writing the new one.
+ * Domain tests for the draft lifecycle rules (S21-T20): approval stamps and
+ * dismisses the run siblings, an approved draft can no longer be edited, and
+ * regenerating supersedes the previous pending run before writing the new one.
  *
  * The Supabase module client is replaced with a call recorder so the rules
  * are asserted on the exact writes the domain issues.
@@ -92,7 +91,7 @@ vi.mock('@/kernel/ai-client', () => ({
     [`[external-data:${label}:start]`, value, `[external-data:${label}:end]`].join('\n'),
 }))
 
-import { approveDraft, dismissDraft, editDraft, handOverApprovedDraft } from '@/modules/publishing/domain/lifecycle'
+import { approveDraft, dismissDraft, editDraft } from '@/modules/publishing/domain/lifecycle'
 import { generateDrafts } from '@/modules/publishing/domain/drafting'
 import { fingerprintSource, type PublishableSource } from '@/kernel/publishing'
 import { DEFAULT_PUBLISHING_CONFIG } from '@/modules/publishing/domain/types'
@@ -204,55 +203,8 @@ describe('dismissDraft', () => {
   })
 })
 
-describe('handOverApprovedDraft — the gate lives in the domain', () => {
-  it('is impossible without approval: no calendar entry is created', async () => {
-    loadDraftMock.mockResolvedValue(draft({ status: 'pending' }))
-    const result = await handOverApprovedDraft({ draftId: 'draft-1', userId: 'user-9' })
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toMatch(/approve/i)
-    expect(createCalendarEntryMock).not.toHaveBeenCalled()
-  })
-
-  it('is impossible when an ad-hoc source is not rights-cleared', async () => {
-    loadDraftMock.mockResolvedValue(draft({ status: 'approved', sourceType: 'adhoc', sourceId: 'src-1' }))
-    loadAdhocSourceRowMock.mockResolvedValue({ id: 'src-1', rights_status: 'needs_clearance' })
-    const result = await handOverApprovedDraft({ draftId: 'draft-1', userId: 'user-9' })
-    expect(result.ok).toBe(false)
-    if (!result.ok) expect(result.error).toMatch(/not cleared/i)
-    expect(createCalendarEntryMock).not.toHaveBeenCalled()
-  })
-
-  it('hands an approved, cleared draft over through content’s own action and runs the hook', async () => {
-    loadDraftMock.mockResolvedValue(
-      draft({ status: 'approved', sourceType: 'adhoc', sourceId: 'src-1', approvedBy: 'user-9' }),
-    )
-    loadAdhocSourceRowMock.mockResolvedValue({ id: 'src-1', rights_status: 'approved_for_publication' })
-    const onPublished = vi.fn().mockResolvedValue(undefined)
-
-    const result = await handOverApprovedDraft({
-      draftId: 'draft-1',
-      userId: 'user-9',
-      title: 'Our stand at ESMO',
-      onPublished,
-    })
-
-    expect(result.ok).toBe(true)
-    if (result.ok) expect(result.data?.contentCalendarId).toBe('cal-1')
-
-    expect(createCalendarEntryMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ title: 'Our stand at ESMO', channels: ['linkedin'], status: 'draft' }),
-    )
-    const link = recorded.find((call) => call.op === 'update')
-    expect(link?.payload).toMatchObject({ status: 'published', content_calendar_id: 'cal-1' })
-    expect(link?.filters).toMatchObject({ id: 'draft-1', status: 'approved' })
-    expect(logIntegrationIntentMock).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ target: 'linkedin', entityType: 'publishing_drafts', entityId: 'draft-1' }),
-    )
-    expect(onPublished).toHaveBeenCalledWith('cal-1')
-  })
-})
+// Handover moved to the saved post in ADR-0015 (the post is the copy that keeps
+// changing after approval). Its gates are covered by publishing-posts.test.ts.
 
 describe('generateDrafts — supersede on regenerate', () => {
   function source(): PublishableSource {

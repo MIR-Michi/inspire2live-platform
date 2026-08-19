@@ -7,13 +7,21 @@
 
 import { createClient } from '@/kernel/data/server'
 import { moduleClient } from '@/kernel/data'
+import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import type { PublishableField } from '@/kernel/publishing'
 import type {
   PublishingDatabase,
   PublishingDraftRow,
+  PublishingPostRow,
   PublishingSourceRow,
 } from '@/modules/publishing/domain/schema'
-import type { DraftClaim, PublishingDraft } from '@/modules/publishing/domain/types'
+import type {
+  DraftClaim,
+  PostImageRef,
+  PostStatus,
+  PublishingDraft,
+  PublishingPost,
+} from '@/modules/publishing/domain/types'
 
 export async function publishingDb() {
   const supabase = await createClient()
@@ -140,4 +148,124 @@ export async function loadAdhocSourceRow(sourceId: string): Promise<PublishingSo
     return null
   }
   return data ?? null
+}
+
+// ─── saved posts (ADR-0015) ───────────────────────────────────────────────────
+
+function asImageRef(value: unknown): PostImageRef | null {
+  if (!value || typeof value !== 'object') return null
+  const candidate = value as Partial<PostImageRef>
+  if (typeof candidate.bucket !== 'string' || typeof candidate.storagePath !== 'string') return null
+  return {
+    bucket: candidate.bucket,
+    storagePath: candidate.storagePath,
+    mediaType: typeof candidate.mediaType === 'string' ? candidate.mediaType : 'image/png',
+    alt: typeof candidate.alt === 'string' ? candidate.alt : '',
+  }
+}
+
+export function toPost(row: PublishingPostRow): PublishingPost {
+  return {
+    id: row.id,
+    title: row.title,
+    sourceType: row.source_type,
+    sourceId: row.source_id,
+    draftId: row.draft_id,
+    channel: row.channel,
+    body: row.body,
+    hashtags: row.hashtags ?? [],
+    imageRef: asImageRef(row.image_ref),
+    status: row.status,
+    ownerId: row.owner_id,
+    createdBy: row.created_by,
+    contentCalendarId: row.content_calendar_id,
+    publishedAt: row.published_at,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  }
+}
+
+/** The tile board: every saved post, newest first. */
+export async function loadPosts(params?: {
+  limit?: number
+  status?: PostStatus
+  ownerId?: string
+}): Promise<PublishingPost[]> {
+  const db = await publishingDb()
+  let query = db.from('publishing_posts').select('*').order('created_at', { ascending: false })
+
+  if (params?.status) query = query.eq('status', params.status)
+  if (params?.ownerId) query = query.eq('owner_id', params.ownerId)
+  if (params?.limit) query = query.limit(params.limit)
+
+  const { data, error } = await query
+  if (error) {
+    console.error('[publishing] loadPosts failed', error.message)
+    return []
+  }
+  return (data ?? []).map(toPost)
+}
+
+export async function loadPost(postId: string): Promise<PublishingPost | null> {
+  const db = await publishingDb()
+  const { data, error } = await db.from('publishing_posts').select('*').eq('id', postId).maybeSingle()
+  if (error) {
+    console.error('[publishing] loadPost failed', error.message)
+    return null
+  }
+  return data ? toPost(data) : null
+}
+
+/** Which variants of a run are already saved — so the UI can offer "Open post". */
+export async function loadPostsForDrafts(draftIds: string[]): Promise<PublishingPost[]> {
+  if (draftIds.length === 0) return []
+  const db = await publishingDb()
+  const { data, error } = await db.from('publishing_posts').select('*').in('draft_id', draftIds)
+  if (error) {
+    console.error('[publishing] loadPostsForDrafts failed', error.message)
+    return []
+  }
+  return (data ?? []).map(toPost)
+}
+
+/** A signed URL per post that carries a picture (the bucket is private). */
+export async function signPostImages(
+  posts: PublishingPost[],
+  expiresInSeconds = 3600,
+): Promise<Record<string, string>> {
+  const withImages = posts.filter((post) => post.imageRef)
+  if (withImages.length === 0) return {}
+
+  const supabase = await createClient()
+  const entries = await Promise.all(
+    withImages.map(async (post) => {
+      const image = post.imageRef!
+      const { data } = await supabase.storage.from(image.bucket).createSignedUrl(image.storagePath, expiresInSeconds)
+      return [post.id, data?.signedUrl ?? null] as const
+    }),
+  )
+
+  const urls: Record<string, string> = {}
+  for (const [postId, url] of entries) {
+    if (url) urls[postId] = url
+  }
+  return urls
+}
+
+/**
+ * Who a post can belong to: the people who can reach the workspace at all.
+ * Used both for the owner picker and to put a name on a tile.
+ */
+export async function loadPostOwnerOptions(): Promise<Array<{ id: string; name: string }>> {
+  const supabase = await createClient()
+  const { data, error } = await supabase.from('profiles').select('id, name, email, role').order('name')
+
+  if (error) {
+    console.error('[publishing] loadPostOwnerOptions failed', error.message)
+    return []
+  }
+
+  return (data ?? [])
+    .filter((profile) => canAccessCommsWorkspace(profile.role))
+    .map((profile) => ({ id: profile.id, name: profile.name ?? profile.email }))
 }

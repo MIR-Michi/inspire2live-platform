@@ -419,14 +419,15 @@ no reader is an orphan under ADR-0009 §10.
 ## 13 · Publishing Space (Sprint 21)
 
 One component turning a platform record **or** an uploaded screenshot into channel-ready copy
-(ADR-0014). Concept: `docs/PUBLISHING_SPACE_CONCEPT.md`. Migration `00173`.
+(ADR-0014), and keeping the result as a post someone owns (ADR-0015). Concept:
+`docs/PUBLISHING_SPACE_CONCEPT.md`. Migrations `00173`, `00174`.
 
 ### `publishing` — sources and drafts (migration `00173`)
 
 | Table | Purpose | Key columns |
 |---|---|---|
 | `publishing_sources` | Ad-hoc sources only: the material with **no owning platform record** — a screenshot plus one line of context and a rights answer. Linked sources are never copied here; they stay with the component that owns them. | `title` (optional, derived from `description` when absent), `description`, `images` (jsonb: `bucket`, `storagePath`, `mediaType`, `alt`, `bytes`), `rights_status` (`internal_only`/`approved_for_publication`/`needs_clearance`), `occurred_at`, `public_url`, `created_by` → `profiles` |
-| `publishing_drafts` | One row per generated variant, for **every** source kind. `body` carries human edits; `ai_body` is the untouched model output kept for calibration and is never overwritten. | `source_type`, **`source_id` (uuid, deliberately no FK — see below)**, `source_fingerprint`, `source_fields` (jsonb — exactly what was sent to the model), `channel` (the `CalendarChannel` vocabulary), `run_id`, `variant_index`, `angle`, `body`, `ai_body`, `hashtags`, `claims` (jsonb: `text`, `sourceFieldKey`), `image_ref`, `image_description` (the model's own reading of the image), `omitted`, `status` (`pending`/`approved`/`dismissed`/`superseded`/`published`), `workload`/`model`/`effort`/`prompt_version`/`raw_response`, `content_calendar_id` (soft link, set at handover), `created_by`, `approved_by`, `approved_at` |
+| `publishing_drafts` | One row per generated variant, for **every** source kind. `body` carries human edits made *during review*; `ai_body` is the untouched model output kept for calibration and is never overwritten. Frozen at approval — later edits live on the post. | `source_type`, **`source_id` (uuid, deliberately no FK — see below)**, `source_fingerprint`, `source_fields` (jsonb — exactly what was sent to the model), `channel` (the `CalendarChannel` vocabulary), `run_id`, `variant_index`, `angle`, `body`, `ai_body`, `hashtags`, `claims` (jsonb: `text`, `sourceFieldKey`), `image_ref`, `image_description` (the model's own reading of the image), `omitted`, `status` (`pending`/`approved`/`dismissed`/`superseded`/`published` — `published` is legacy and no longer written, see §13.1), `workload`/`model`/`effort`/`prompt_version`/`raw_response`, `content_calendar_id` (legacy soft link), `created_by`, `approved_by`, `approved_at` |
 
 **RLS:** comms team / admin on both tables via `is_comms_team_or_admin()`, mirroring the rest of the
 Comms space. The same predicate gates the `publishing-uploads` bucket (§7), so neither the rows nor
@@ -446,9 +447,32 @@ pending run collides on slot 0. Regeneration must supersede the previous run fir
 at the draft it came from. The table itself stays owned by `content` — the constraint is widened, not
 the ownership.
 
-**Approval is not a setting.** `status` may only reach `published` through the domain layer's
-handover, which refuses an unapproved draft and refuses a source whose `rights_status` is anything
-other than `approved_for_publication`. Every other tunable in this component is manifest `config`.
+### 13.1 · `publishing_posts` — the saved post (migration `00174`)
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `publishing_posts` | The **human-owned artifact**: one row per post someone decided to keep (ADR-0015). Materialised from a draft variant, then editable for the rest of its life — which is the difference between it and the draft it came from. | `title` (optional; the tile falls back to the first line of `body`), `source_type` + **`source_id`** (soft, same rule as `publishing_drafts`), `draft_id` → `publishing_drafts` (`on delete set null` — the post outlives the draft), `channel`, `body`, `hashtags`, `image_ref` (jsonb, replaceable), `status` (`draft`/`ready_to_publish`/`published`), `owner_id` → `profiles` (reassignable), `created_by` → `profiles` (immutable), `content_calendar_id` (soft link, set at handover), `published_at` |
+
+**The status is a person's vocabulary, not the run's.** `draft → ready_to_publish → published`, and
+backwards again. `published` is a **human statement that the copy went out** — the platform has no
+channel connector and never sets it. The draft's own `published` value (meaning *handed over*) is
+therefore no longer written by any code path; it remains in the CHECK constraint for pre-`00174` rows.
+
+**The rights gate covers every forward move,** not only handover: `rightsBlockReason` is consulted when
+marking a post ready, when marking it published, and at handover, so material that is `internal_only`
+or `needs_clearance` cannot move right at any of the three. Moving a post *backwards* is never gated.
+As before, this is fixed in the domain layer and is not a setting.
+
+**Handover reads the post, not the draft** — `handOverPost` sends the post's *current* body to
+`content`'s `createCalendarEntry`, with the **owner** as the calendar entry's author. Widening
+`comms_integration_intents.entity_type` with `publishing_posts` lets the delivery intent point at it.
+
+**One post per variant** is enforced by a partial unique index on `draft_id`, so a double-click on Save
+returns the existing post instead of a duplicate tile.
+
+**Pictures.** A post reuses the `publishing-uploads` bucket (§7). Objects it uploads itself live under
+the `posts/` prefix, and *only* those are deleted when the picture is replaced or removed — a post may
+also point at the source's image, which `publishing_sources` owns.
 
 ---
 

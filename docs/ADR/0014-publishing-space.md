@@ -90,6 +90,12 @@ simply registers no connector.
 
 ### 6. Approved copy hands over to `content_calendar`; provenance is written back by the owner
 
+> **Amended by [ADR-0015](0015-saved-posts.md).** Handover now hangs off the saved post
+> (`handOverPost`) rather than the draft (`handOverApprovedDraft`, removed), because a post stays
+> editable after approval and handing the frozen draft over would put pre-edit text on the calendar.
+> Everything below still holds — the route through `content`'s own action, the `onPublished` hook and
+> the single publishing path are unchanged.
+
 `handOverApprovedDraft` calls `content`'s own action to create the calendar entry (ADR-0009 §9 rule 3)
 and then calls the provider's optional `onPublished` hook, so writing
 `campus_sessions.published_outputs` happens inside `events`. There is no second publishing path and no

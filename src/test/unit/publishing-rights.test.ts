@@ -3,8 +3,8 @@ import {
   canApproveDraft,
   canDismissDraft,
   canEditDraft,
-  handoverBlockReason,
   rightsAllowHandover,
+  rightsBlockReason,
 } from '@/modules/publishing/domain/rights'
 
 describe('rightsAllowHandover (concept §8)', () => {
@@ -32,21 +32,15 @@ describe('lifecycle guards', () => {
   })
 })
 
-describe('handoverBlockReason — approval is unconditional, rights have teeth', () => {
-  it('blocks every non-approved status (approval before handover, no exceptions)', () => {
-    expect(handoverBlockReason({ status: 'pending' }, null)).toMatch(/approve/i)
-    expect(handoverBlockReason({ status: 'dismissed' }, null)).toMatch(/approve/i)
-    expect(handoverBlockReason({ status: 'superseded' }, null)).toMatch(/approve/i)
-    expect(handoverBlockReason({ status: 'published' }, null)).toMatch(/already/i)
+describe('rightsBlockReason — the single chokepoint every forward move goes through', () => {
+  it('blocks material that is not cleared, and says why', () => {
+    expect(rightsBlockReason('needs_clearance')).toMatch(/not cleared/i)
+    expect(rightsBlockReason('internal_only')).toMatch(/internal/i)
   })
 
-  it('blocks an approved draft whose material is not cleared', () => {
-    expect(handoverBlockReason({ status: 'approved' }, 'needs_clearance')).toMatch(/not cleared/i)
-    expect(handoverBlockReason({ status: 'approved' }, 'internal_only')).toMatch(/internal/i)
-  })
-
-  it('allows an approved draft with cleared or absent rights', () => {
-    expect(handoverBlockReason({ status: 'approved' }, 'approved_for_publication')).toBeNull()
-    expect(handoverBlockReason({ status: 'approved' }, null)).toBeNull()
+  it('allows cleared material and a linked source that carries no answer', () => {
+    expect(rightsBlockReason('approved_for_publication')).toBeNull()
+    expect(rightsBlockReason(null)).toBeNull()
+    expect(rightsBlockReason(undefined)).toBeNull()
   })
 })

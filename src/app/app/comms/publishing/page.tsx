@@ -11,10 +11,14 @@ import { createClient } from '@/lib/supabase/server'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
 import {
   CHANNEL_PROFILES,
+  PostBoard,
   PublishingShell,
   loadDrafts,
-  loadRecentDrafts,
+  loadPostOwnerOptions,
+  loadPosts,
+  loadPostsForDrafts,
   resolvePublishingConfig,
+  signPostImages,
   sourceReadiness,
   type PublishingShellSource,
 } from '@/modules/publishing'
@@ -25,7 +29,7 @@ import {
   dismissDraftAction,
   editDraftAction,
   generateDraftsAction,
-  handOverDraftAction,
+  savePostAction,
 } from './actions'
 
 const ACTIVE_CHANNEL = 'linkedin'
@@ -57,6 +61,9 @@ export default async function PublishingPage({
   try {
     const supabase = await createClient()
     const config = await resolvePublishingConfig()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
 
     const channels = CHANNEL_PROFILES.map((profile) => ({
       channel: profile.channel,
@@ -109,7 +116,22 @@ export default async function PublishingPage({
       }
     }
 
-    const recentDrafts = await loadRecentDrafts(8)
+    // Which of the visible variants are already saved, so a variant offers
+    // "Open post" instead of a second Save.
+    const savedForDrafts = await loadPostsForDrafts(drafts.map((draft) => draft.id))
+    const postIdByDraftId: Record<string, string> = {}
+    for (const post of savedForDrafts) {
+      if (post.draftId) postIdByDraftId[post.draftId] = post.id
+    }
+
+    // The tile board replaces the source step's "recent" strip: it is only
+    // shown when nothing is selected, so the wizard stays one decision wide.
+    const posts = shellSource ? [] : await loadPosts({ limit: 60 })
+    const [postImageUrls, owners] = await Promise.all([
+      signPostImages(posts),
+      posts.length > 0 ? loadPostOwnerOptions() : Promise.resolve([]),
+    ])
+    const ownerNames = Object.fromEntries(owners.map((owner) => [owner.id, owner.name]))
 
     return (
       <div className="mx-auto max-w-6xl space-y-6">
@@ -128,7 +150,7 @@ export default async function PublishingPage({
           candidates={candidates}
           source={shellSource}
           drafts={drafts}
-          recentDrafts={recentDrafts}
+          postIdByDraftId={postIdByDraftId}
           maxUploadMegabytes={config.maxUploadMegabytes}
           actions={{
             createAdhocSource: createAdhocSourceAction,
@@ -136,9 +158,17 @@ export default async function PublishingPage({
             editDraft: editDraftAction,
             approveDraft: approveDraftAction,
             dismissDraft: dismissDraftAction,
-            handOverDraft: handOverDraftAction,
+            savePost: savePostAction,
           }}
         />
+        {!shellSource && (
+          <PostBoard
+            posts={posts}
+            imageUrls={postImageUrls}
+            ownerNames={ownerNames}
+            currentUserId={user?.id ?? null}
+          />
+        )}
       </div>
     )
   } catch (error) {

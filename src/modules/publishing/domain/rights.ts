@@ -3,9 +3,10 @@
  * guards. Both are pure so they can be unit-tested without a database, and
  * both are enforced in the domain layer — never only in the UI.
  *
- * Human approval before handover is deliberately NOT a setting (ADR-0014 §8):
- * `handoverBlockReason` is the single chokepoint, and there is no code path
- * around it.
+ * The rights answer is deliberately NOT a setting (ADR-0014 §8):
+ * `rightsBlockReason` is the single chokepoint every forward move goes
+ * through — marking a post ready, marking it published, and handing it to the
+ * calendar — and there is no code path around it.
  */
 
 import type { SourceRightsStatus } from '@/kernel/publishing'
@@ -35,20 +36,14 @@ export function canDismissDraft(status: DraftStatus): boolean {
 }
 
 /**
- * The handover gate. Returns null when handover may proceed, otherwise the
- * human-readable reason it must not. Approval is unconditional and rights must
- * be cleared — enforced here, in the domain, for every caller.
+ * The rights gate. Returns null when the material may leave the building,
+ * otherwise the human-readable reason it must not. Enforced here, in the
+ * domain, for every caller — there is no second copy of these words and no
+ * setting that switches them off.
  */
-export function handoverBlockReason(
-  draft: { status: DraftStatus },
-  rights: SourceRightsStatus | null | undefined,
-): string | null {
-  if (draft.status === 'published') return 'This draft has already been handed over.'
-  if (draft.status !== 'approved') return 'Only an approved draft can hand over — approve it first.'
-  if (!rightsAllowHandover(rights)) {
-    return rights === 'needs_clearance'
-      ? 'The rights on this material are not cleared yet.'
-      : 'This material is marked internal-only.'
-  }
-  return null
+export function rightsBlockReason(rights: SourceRightsStatus | null | undefined): string | null {
+  if (rightsAllowHandover(rights)) return null
+  return rights === 'needs_clearance'
+    ? 'The rights on this material are not cleared yet.'
+    : 'This material is marked internal-only.'
 }
