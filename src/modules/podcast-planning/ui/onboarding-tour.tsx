@@ -3,353 +3,46 @@
 /**
  * podcast-planning/ui/onboarding-tour.tsx — "How it works", watchable in-app.
  *
- * A short self-playing walkthrough of the Podcast space that behaves like an
- * explainer video: seven scenes of ~7 seconds, story-style progress bars,
- * play/pause, and scene-to-scene skipping. It is built from the same icons and
- * shapes as the real screens, so what it teaches is literally what the user
- * will see — and when the UI changes, this changes with it (no mp4 to re-record).
+ * A self-playing walkthrough of the Podcast space that behaves like an explainer
+ * video: twenty scenes in six chapters (~4 minutes), story-style progress bars,
+ * play/pause, scene skipping and a chapter rail to jump straight to a subject.
+ * The script lives in `onboarding-tour-scenes.tsx`; it explains the *reasoning*
+ * behind the workflow, not only where the buttons are.
+ *
+ * It is assembled from the planner's own icons and card shapes, so what it
+ * teaches is literally what the user will see — and when the UI changes, this
+ * changes with it (no mp4 to re-record).
  *
  * Each scene is narrated aloud through the browser's built-in speech synthesis
- * (no audio assets, nothing to re-record): a scene that finishes visually holds
- * until its sentence has been spoken, pausing the tour pauses the voice, and a
- * speaker button mutes it. Where speech synthesis is unavailable the tour plays
- * silently, exactly as before.
+ * at a deliberately slow, level rate (no audio assets, nothing to re-record):
+ * a scene that finishes visually holds until its sentence has been spoken,
+ * pausing the tour pauses the voice, and a speaker button mutes it. Where
+ * speech synthesis is unavailable the tour plays silently.
+ *
+ * The player is resizable (three widths, remembered per browser) and driveable
+ * from the keyboard: space plays and pauses, the arrows step between scenes,
+ * escape closes.
  *
  * Opened from a button in the space header; never auto-plays.
  */
 
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  IconAsk,
-  IconBoard,
-  IconBooked,
-  IconCheck,
-  IconClock,
-  IconPlanning,
-  IconQuestion,
-  IconRecorded,
-  IconWishlist,
-  InitialsAvatar,
-  STAGE_ICONS,
-} from '@/modules/podcast-planning/ui/icons'
+  CHAPTER_START,
+  CHAPTERS,
+  SCENES,
+  TOTAL_MS,
+} from '@/modules/podcast-planning/ui/onboarding-tour-scenes'
 
-// ─── The scenes ───────────────────────────────────────────────────────────────
-
-/** A staggered entrance: fade-up with a delay, hidden until its turn. */
-function Enter({ delay, children }: { delay: number; children: React.ReactNode }) {
-  return (
-    <div className="animate-fade-up" style={{ animationDelay: `${delay}ms` }}>
-      {children}
-    </div>
-  )
-}
-
-function ChipMock({ label, delay }: { label: string; delay: number }) {
-  return (
-    <Enter delay={delay}>
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-        <IconCheck className="h-3 w-3" />
-        {label}
-      </span>
-    </Enter>
-  )
-}
-
-function SceneWelcome() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-5">
-      <Enter delay={200}>
-        <span className="flex h-16 w-16 items-center justify-center rounded-2xl bg-neutral-900 text-white">
-          <IconRecorded className="h-8 w-8" />
-        </span>
-      </Enter>
-      <div className="flex gap-2">
-        <Enter delay={900}>
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-700">
-            <IconRecorded className="h-4 w-4" />
-            Episodes
-          </span>
-        </Enter>
-        <Enter delay={1400}>
-          <span className="inline-flex items-center gap-1.5 rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-sm font-semibold text-neutral-700">
-            <IconBoard className="h-4 w-4" />
-            Planning
-          </span>
-        </Enter>
-      </div>
-    </div>
-  )
-}
-
-function SceneQuestion() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-6">
-      <Enter delay={200}>
-        <div className="w-full max-w-sm rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-          <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-            <IconQuestion className="h-4 w-4 shrink-0 text-neutral-400" />
-            Why is a proven diagnostic still unreimbursed?
-          </p>
-        </div>
-      </Enter>
-      <div className="flex max-w-sm flex-wrap justify-center gap-1.5">
-        <ChipMock label="Question" delay={1200} />
-        <ChipMock label="Why now" delay={2000} />
-        <ChipMock label="Action" delay={2800} />
-        <ChipMock label="Link" delay={3600} />
-        <ChipMock label="Format" delay={4400} />
-      </div>
-    </div>
-  )
-}
-
-function SceneWishlist() {
-  const people = ['Maria Santos', 'John Weber', 'Aisha Khan']
-  return (
-    <div className="flex h-full items-center justify-center px-6">
-      <div className="w-full max-w-xs rounded-xl border border-neutral-200 bg-neutral-50 p-3">
-        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-neutral-600">
-          <IconWishlist className="h-3.5 w-3.5 text-neutral-400" />
-          Wishlist
-        </p>
-        <ul className="space-y-2">
-          {people.map((name, index) => (
-            <li key={name}>
-              <Enter delay={600 + index * 900}>
-                <div className="flex items-center gap-2.5 rounded-xl border border-neutral-200 bg-white px-3 py-2 shadow-sm">
-                  <InitialsAvatar name={name} className="h-8 w-8 text-[11px]" />
-                  <span className="text-sm font-semibold text-neutral-900">{name}</span>
-                </div>
-              </Enter>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </div>
-  )
-}
-
-function SceneNextMove() {
-  const steps = ['wishlist', 'research', 'ask', 'planning', 'booked', 'recorded'] as const
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-6 px-6">
-      <Enter delay={200}>
-        <ol className="flex items-center">
-          {steps.map((stage, index) => {
-            const Icon = STAGE_ICONS[stage]
-            const state = index < 1 ? 'done' : index === 1 ? 'active' : 'todo'
-            return (
-              <li key={stage} className="flex items-center">
-                {index > 0 && (
-                  <span className={`h-0.5 w-4 ${state === 'todo' ? 'bg-neutral-200' : 'bg-neutral-800'}`} />
-                )}
-                <span
-                  className={[
-                    'flex h-8 w-8 items-center justify-center rounded-full border',
-                    state === 'active'
-                      ? 'border-neutral-900 bg-neutral-900 text-white'
-                      : state === 'done'
-                        ? 'border-neutral-800 bg-white text-neutral-800'
-                        : 'border-neutral-200 bg-white text-neutral-300',
-                  ].join(' ')}
-                >
-                  <Icon className="h-4 w-4" />
-                </span>
-              </li>
-            )
-          })}
-        </ol>
-      </Enter>
-      <Enter delay={1400}>
-        <span className="flex animate-pulse items-center gap-2 rounded-xl bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white">
-          <IconAsk className="h-4 w-4" />
-          Ask
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
-            <path d="M5 12h14M13 6l6 6-6 6" />
-          </svg>
-        </span>
-      </Enter>
-    </div>
-  )
-}
-
-function SceneWaiting() {
-  return (
-    <div className="flex h-full items-center justify-center gap-3 px-6">
-      <Enter delay={200}>
-        <div className="w-40 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-          <p className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.1em] text-neutral-600">
-            <span className="flex items-center gap-1.5">
-              <IconAsk className="h-3.5 w-3.5 text-amber-600" />
-              Ask
-            </span>
-            <span className="font-medium text-neutral-500">3/6</span>
-          </p>
-          <div className="rounded-xl border border-neutral-200 bg-white px-3 py-2 shadow-sm">
-            <div className="flex items-center gap-2">
-              <InitialsAvatar name="Maria Santos" className="h-7 w-7 text-[10px]" />
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500">
-                <IconClock className="h-3 w-3" />
-                9d
-              </span>
-            </div>
-          </div>
-        </div>
-      </Enter>
-      <Enter delay={1400}>
-        <div className="w-40 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-neutral-600">
-            <IconPlanning className="h-3.5 w-3.5 text-amber-600" />
-            Planning
-            <IconClock className="h-3 w-3 text-amber-600" />
-          </p>
-          <p className="py-3 text-center text-[11px] text-neutral-400">waiting on them</p>
-        </div>
-      </Enter>
-    </div>
-  )
-}
-
-function SceneNextUp() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-3 px-6">
-      <Enter delay={200}>
-        <p className="text-xs font-semibold uppercase tracking-[0.14em] text-neutral-400">Next up</p>
-      </Enter>
-      <div className="flex flex-wrap justify-center gap-2">
-        <Enter delay={800}>
-          <span className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white py-1.5 pl-1.5 pr-2.5 shadow-sm">
-            <InitialsAvatar name="John Weber" className="h-7 w-7 text-[10px]" />
-            <span className="text-sm font-semibold text-neutral-800">John Weber</span>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-              Nudge due
-            </span>
-          </span>
-        </Enter>
-        <Enter delay={1800}>
-          <span className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white py-1.5 pl-1.5 pr-2.5 shadow-sm">
-            <InitialsAvatar name="Aisha Khan" className="h-7 w-7 text-[10px]" />
-            <span className="text-sm font-semibold text-neutral-800">Aisha Khan</span>
-            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-              No reply
-            </span>
-          </span>
-        </Enter>
-      </div>
-    </div>
-  )
-}
-
-function SceneFinish() {
-  return (
-    <div className="flex h-full flex-col items-center justify-center gap-4 px-6">
-      <div className="flex items-center gap-2">
-        <Enter delay={200}>
-          <span className="flex h-10 w-10 items-center justify-center rounded-full border border-neutral-800 bg-white text-neutral-800">
-            <IconBooked className="h-5 w-5" />
-          </span>
-        </Enter>
-        <Enter delay={800}>
-          <span className="h-0.5 w-6 bg-neutral-800" />
-        </Enter>
-        <Enter delay={1000}>
-          <span className="flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white">
-            <IconRecorded className="h-5 w-5" />
-          </span>
-        </Enter>
-      </div>
-      <Enter delay={2000}>
-        <div className="flex items-center gap-3 rounded-xl border border-neutral-200 bg-white px-4 py-3 shadow-sm">
-          <InitialsAvatar name="Maria Santos" className="h-9 w-9 text-xs" />
-          <div>
-            <p className="text-sm font-semibold text-neutral-900">New episode</p>
-            <p className="text-xs text-neutral-500">on the content calendar</p>
-          </div>
-        </div>
-      </Enter>
-    </div>
-  )
-}
-
-type Scene = {
-  id: string
-  title: string
-  caption: string
-  /** Spoken aloud via speech synthesis while the scene plays. */
-  narration: string
-  duration: number
-  View: () => React.JSX.Element
-}
-
-const SCENES: Scene[] = [
-  {
-    id: 'welcome',
-    title: 'The Podcast space',
-    caption: 'Two rooms: the episodes you make, and the planning that books them.',
-    narration:
-      'Welcome to the Podcast space. It has two rooms: Episodes, the shows you make, and Planning, where the next guest gets found and booked.',
-    duration: 6000,
-    View: SceneWelcome,
-  },
-  {
-    id: 'question',
-    title: 'Start with a question',
-    caption: 'Five checks make it ready for names — green means done.',
-    narration:
-      'Everything starts with a question — one sentence somebody could disagree with. Five green checks mean it is ready for names.',
-    duration: 7500,
-    View: SceneQuestion,
-  },
-  {
-    id: 'wishlist',
-    title: 'List who could answer it',
-    caption: 'Add as many people as you like — research is unlimited.',
-    narration:
-      'Then list everyone who could answer it. The wishlist is unlimited — add freely, research later.',
-    duration: 6500,
-    View: SceneWishlist,
-  },
-  {
-    id: 'next-move',
-    title: 'Follow the one next move',
-    caption: 'Every card shows a single button for its next step. If it is blocked, it says why.',
-    narration:
-      'Every person card shows exactly one next move, as a single button. If the move is blocked, the button tells you why.',
-    duration: 7000,
-    View: SceneNextMove,
-  },
-  {
-    id: 'waiting',
-    title: 'Amber means waiting',
-    caption: 'Ask and Planning wait on somebody else. Six open asks is the ceiling.',
-    narration:
-      'Amber columns mean you are waiting on somebody else. Six open asks at a time is the ceiling — chasing is capped, thinking is not.',
-    duration: 7000,
-    View: SceneWaiting,
-  },
-  {
-    id: 'next-up',
-    title: '“Next up” finds your work',
-    caption: 'Cards that need a decision surface at the top — no scanning columns.',
-    narration:
-      'The Next up strip finds your work for you: nudges due, silences to act on, bookings that stalled. No scanning columns.',
-    duration: 7000,
-    View: SceneNextUp,
-  },
-  {
-    id: 'finish',
-    title: 'Booked, recorded, published',
-    caption: 'A recorded card hands over to the content calendar. Start with a question.',
-    narration:
-      'Once a recording is done, the episode hands over to the content calendar. That is the whole loop — start with a question.',
-    duration: 7500,
-    View: SceneFinish,
-  },
-]
+// ─── Playback ─────────────────────────────────────────────────────────────────
 
 const TICK_MS = 100
 
-// ─── The player ───────────────────────────────────────────────────────────────
+/** Slower than default and slightly under natural pitch: explanatory, unhurried. */
+const SPEECH_RATE = 0.86
+const SPEECH_PITCH = 0.95
+/** A beat of silence before a scene starts speaking, so it never barges in. */
+const SPEECH_LEAD_MS = 450
 
 type PlayerState = { scene: number; elapsed: number; playing: boolean; spoken: boolean }
 
@@ -369,6 +62,51 @@ function advance(prev: PlayerState, waitForSpeech: boolean): PlayerState {
   return { ...prev, elapsed, playing: false }
 }
 
+/** Calm, unhurried English voices, best first. Falls back to whatever exists. */
+const CALM_VOICES = [/serena/i, /libby/i, /sonia/i, /daniel/i, /google uk english/i, /samantha/i]
+
+function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
+  const english = voices.filter((voice) => voice.lang?.toLowerCase().startsWith('en'))
+  if (english.length === 0) return null
+  const british = english.filter((voice) => voice.lang.toLowerCase().startsWith('en-gb'))
+  const pool = british.length > 0 ? british : english
+  for (const pattern of CALM_VOICES) {
+    const match = pool.find((voice) => pattern.test(voice.name))
+    if (match) return match
+  }
+  return pool[0] ?? null
+}
+
+function clock(ms: number): string {
+  const seconds = Math.max(0, Math.round(ms / 1000))
+  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`
+}
+
+// ─── Size ─────────────────────────────────────────────────────────────────────
+
+const SIZES = ['compact', 'regular', 'large'] as const
+type Size = (typeof SIZES)[number]
+
+const SIZE_STYLE: Record<Size, { shell: string; stage: string; scale: string }> = {
+  compact: { shell: 'max-w-xl', stage: 'h-56 sm:h-64', scale: 'scale-90' },
+  regular: { shell: 'max-w-3xl', stage: 'h-72 sm:h-80', scale: 'scale-100' },
+  large: { shell: 'max-w-5xl', stage: 'h-80 sm:h-[28rem]', scale: 'scale-110 sm:scale-125' },
+}
+
+const SIZE_KEY = 'i2l.podcast-tour.size'
+
+function storedSize(): Size {
+  if (typeof window === 'undefined') return 'regular'
+  try {
+    const saved = window.localStorage.getItem(SIZE_KEY)
+    return (SIZES as readonly string[]).includes(saved ?? '') ? (saved as Size) : 'regular'
+  } catch {
+    return 'regular'
+  }
+}
+
+// ─── The player ───────────────────────────────────────────────────────────────
+
 function TourPlayer({ onClose }: { onClose: () => void }) {
   const [state, setState] = useState<PlayerState>({
     scene: 0,
@@ -376,11 +114,12 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
     playing: true,
     spoken: false,
   })
-  // The player only mounts after a click, so this is a plain capability check.
+  // The player only mounts after a click, so these are plain browser reads.
   const [voiceSupported] = useState(
     () => typeof window !== 'undefined' && 'speechSynthesis' in window
   )
   const [voiceOn, setVoiceOn] = useState(true)
+  const [size, setSize] = useState<Size>(storedSize)
   const dialogRef = useRef<HTMLDivElement>(null)
   // Chrome garbage-collects utterances it no longer references, which silences
   // `onend`; holding the current one in a ref keeps it alive until it finishes.
@@ -391,50 +130,6 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
   const narrating = voiceSupported && voiceOn
   const atEnd =
     scene === SCENES.length - 1 && elapsed >= current.duration && (!narrating || state.spoken)
-
-  useEffect(() => {
-    dialogRef.current?.focus()
-  }, [])
-
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === 'Escape') onClose()
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  }, [onClose])
-
-  useEffect(() => {
-    if (!playing) return
-    const timer = setInterval(() => setState((prev) => advance(prev, narrating)), TICK_MS)
-    return () => clearInterval(timer)
-  }, [playing, narrating])
-
-  // Speak the current scene; re-runs when the scene changes or voice is toggled.
-  useEffect(() => {
-    if (!narrating) return
-    const synth = window.speechSynthesis
-    synth.cancel()
-    const utterance = new SpeechSynthesisUtterance(SCENES[scene].narration)
-    utterance.lang = 'en-GB'
-    const markSpoken = () => setState((prev) => ({ ...prev, spoken: true }))
-    utterance.onend = markSpoken
-    utterance.onerror = markSpoken
-    utteranceRef.current = utterance
-    synth.speak(utterance)
-    return () => {
-      utterance.onend = null
-      utterance.onerror = null
-      synth.cancel()
-    }
-  }, [scene, narrating])
-
-  // Pausing the tour pauses the voice mid-sentence, and play resumes it.
-  useEffect(() => {
-    if (!narrating) return
-    if (playing) window.speechSynthesis.resume()
-    else window.speechSynthesis.pause()
-  }, [playing, narrating])
 
   const goTo = useCallback((index: number) => {
     setState((prev) => {
@@ -451,7 +146,104 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
     })
   }, [])
 
+  const toggle = useCallback(() => {
+    setState((prev) =>
+      prev.scene === SCENES.length - 1 && prev.elapsed >= SCENES[prev.scene].duration
+        ? { scene: 0, elapsed: 0, playing: true, spoken: false }
+        : { ...prev, playing: !prev.playing }
+    )
+  }, [])
+
+  const resize = useCallback((step: number) => {
+    setSize((prev) => {
+      const index = SIZES.indexOf(prev) + step
+      return SIZES[Math.max(0, Math.min(index, SIZES.length - 1))]
+    })
+  }, [])
+
+  useEffect(() => {
+    dialogRef.current?.focus()
+  }, [])
+
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(SIZE_KEY, size)
+    } catch {
+      // A browser refusing storage should not break playback.
+    }
+  }, [size])
+
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if (event.key === 'Escape') return onClose()
+      if (event.key === 'ArrowRight') return goTo(state.scene + 1)
+      if (event.key === 'ArrowLeft') return goTo(state.scene - 1)
+      // Space on a focused button already clicks it; don't toggle twice.
+      if (event.key === ' ' && !(event.target instanceof HTMLButtonElement)) {
+        event.preventDefault()
+        toggle()
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose, goTo, toggle, state.scene])
+
+  useEffect(() => {
+    if (!playing) return
+    const timer = setInterval(() => setState((prev) => advance(prev, narrating)), TICK_MS)
+    return () => clearInterval(timer)
+  }, [playing, narrating])
+
+  // Speak the current scene; re-runs when the scene changes or voice is toggled.
+  useEffect(() => {
+    if (!narrating) return
+    const synth = window.speechSynthesis
+    synth.cancel()
+    const markSpoken = () => setState((prev) => ({ ...prev, spoken: true }))
+    const lead = setTimeout(() => {
+      const utterance = new SpeechSynthesisUtterance(SCENES[scene].narration)
+      utterance.lang = 'en-GB'
+      utterance.rate = SPEECH_RATE
+      utterance.pitch = SPEECH_PITCH
+      // Read late: Chrome populates the voice list asynchronously.
+      const voice = pickVoice(synth.getVoices())
+      if (voice) utterance.voice = voice
+      utterance.onend = markSpoken
+      utterance.onerror = markSpoken
+      utteranceRef.current = utterance
+      synth.speak(utterance)
+    }, SPEECH_LEAD_MS)
+    return () => {
+      clearTimeout(lead)
+      const utterance = utteranceRef.current
+      if (utterance) {
+        utterance.onend = null
+        utterance.onerror = null
+      }
+      synth.cancel()
+    }
+  }, [scene, narrating])
+
+  // Pausing the tour pauses the voice mid-sentence, and play resumes it.
+  useEffect(() => {
+    if (!narrating) return
+    if (playing) window.speechSynthesis.resume()
+    else window.speechSynthesis.pause()
+  }, [playing, narrating])
+
+  // Chrome stops speaking after ~15 seconds unless nudged; harmless elsewhere.
+  useEffect(() => {
+    if (!narrating || !playing) return
+    const keepAlive = setInterval(() => window.speechSynthesis.resume(), 8000)
+    return () => clearInterval(keepAlive)
+  }, [narrating, playing])
+
   const CurrentView = current.View
+  const style = SIZE_STYLE[size]
+  const chapterScenes = SCENES.map((item, index) => ({ item, index })).filter(
+    ({ item }) => item.chapter === current.chapter
+  )
+  const overall = SCENES.slice(0, scene).reduce((sum, item) => sum + item.duration, 0) + elapsed
 
   return (
     <div
@@ -465,13 +257,87 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
         aria-label="How the Podcast space works"
         tabIndex={-1}
         onClick={(event) => event.stopPropagation()}
-        className="w-full max-w-xl overflow-hidden rounded-2xl bg-white shadow-2xl outline-none"
+        className={`w-full ${style.shell} overflow-hidden rounded-2xl bg-white shadow-2xl outline-none`}
       >
-        {/* Story-style progress: one bar per scene, click to jump. */}
-        <div className="flex gap-1 px-4 pt-3">
-          {SCENES.map((item, index) => {
+        {/* Title bar: what this is, how long it takes, how big it should be. */}
+        <div className="flex items-center justify-between border-b border-neutral-100 px-4 py-2.5">
+          <div className="flex items-baseline gap-2">
+            <h2 className="text-sm font-semibold text-neutral-900">How the Podcast space works</h2>
+            <span className="text-xs font-medium tabular-nums text-neutral-400">
+              {clock(overall)} / {clock(TOTAL_MS)}
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Smaller"
+              onClick={() => resize(-1)}
+              disabled={size === SIZES[0]}
+              className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-30"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
+                <path d="M9 3v6H3M21 15h-6v6" />
+                <path d="m3 21 6-6M21 3l-6 6" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label="Larger"
+              onClick={() => resize(1)}
+              disabled={size === SIZES[SIZES.length - 1]}
+              className="rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100 disabled:opacity-30"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
+                <path d="M15 3h6v6M9 21H3v-6" />
+                <path d="M21 3l-7 7M3 21l7-7" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              aria-label="Close"
+              onClick={onClose}
+              className="ml-1 rounded-lg p-1.5 text-neutral-500 hover:bg-neutral-100"
+            >
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
+                <path d="m6 6 12 12M18 6 6 18" />
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        {/* Chapters: jump straight to a subject. */}
+        <div className="flex flex-wrap gap-1 px-4 pt-3">
+          {CHAPTERS.map((chapter) => {
+            const active = chapter.id === current.chapter
+            const Icon = chapter.Icon
+            return (
+              <button
+                key={chapter.id}
+                type="button"
+                aria-current={active}
+                onClick={() => goTo(CHAPTER_START[chapter.id])}
+                className={`inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-semibold transition-colors ${
+                  active
+                    ? 'bg-neutral-950 text-white'
+                    : 'text-neutral-500 hover:bg-neutral-100 hover:text-neutral-900'
+                }`}
+              >
+                <Icon className="h-3.5 w-3.5" />
+                {chapter.label}
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Story-style progress: one bar per scene in this chapter, click to jump. */}
+        <div className="flex gap-1 px-4 pt-2">
+          {chapterScenes.map(({ item, index }) => {
             const fill =
-              index < scene ? 100 : index > scene ? 0 : Math.min((elapsed / item.duration) * 100, 100)
+              index < scene
+                ? 100
+                : index > scene
+                  ? 0
+                  : Math.min((elapsed / item.duration) * 100, 100)
             return (
               <button
                 key={item.id}
@@ -490,8 +356,8 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Stage */}
-        <div className="relative h-64 sm:h-72">
-          <div key={current.id} className="h-full">
+        <div className={`relative ${style.stage}`}>
+          <div key={current.id} className={`h-full origin-center ${style.scale}`}>
             <CurrentView />
           </div>
 
@@ -513,14 +379,18 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Caption */}
-        <div key={`caption-${current.id}`} className="animate-fade-up px-6 pb-4 text-center">
-          <h2 className="text-base font-semibold text-neutral-900">{current.title}</h2>
+        <div
+          key={`caption-${current.id}`}
+          aria-live="polite"
+          className="animate-fade-up px-6 pb-4 text-center"
+        >
+          <h3 className="text-base font-semibold text-neutral-900">{current.title}</h3>
           <p className="mt-0.5 text-sm text-neutral-500">{current.caption}</p>
         </div>
 
         {/* Controls */}
         <div className="flex items-center justify-between border-t border-neutral-100 px-4 py-2.5">
-          <span className="w-14 text-xs font-medium text-neutral-400">
+          <span className="w-16 text-xs font-medium tabular-nums text-neutral-400">
             {scene + 1}/{SCENES.length}
           </span>
           <div className="flex items-center gap-1">
@@ -538,9 +408,7 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
             <button
               type="button"
               aria-label={playing ? 'Pause' : 'Play'}
-              onClick={() =>
-                atEnd ? goTo(0) : setState((prev) => ({ ...prev, playing: !prev.playing }))
-              }
+              onClick={toggle}
               className="rounded-lg bg-neutral-950 p-2.5 text-white hover:bg-neutral-800"
             >
               {playing ? (
@@ -588,13 +456,9 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
               </button>
             )}
           </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="w-14 text-right text-xs font-semibold text-neutral-500 hover:text-neutral-900"
-          >
-            Close
-          </button>
+          <span className="w-16 text-right text-[11px] font-medium text-neutral-400">
+            space · ← →
+          </span>
         </div>
       </div>
     </div>
