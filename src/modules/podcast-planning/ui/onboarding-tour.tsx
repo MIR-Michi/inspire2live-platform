@@ -4,14 +4,16 @@
  * podcast-planning/ui/onboarding-tour.tsx — "How it works", watchable in-app.
  *
  * A self-playing walkthrough of the Podcast space that behaves like an explainer
- * video: twenty scenes in six chapters (~4 minutes), story-style progress bars,
- * play/pause, scene skipping and a chapter rail to jump straight to a subject.
- * The script lives in `onboarding-tour-scenes.tsx`; it explains the *reasoning*
- * behind the workflow, not only where the buttons are.
+ * video: twenty-four scenes in seven chapters (~6 minutes), story-style progress
+ * bars, play/pause, scene skipping and a chapter rail to jump to a subject.
  *
- * It is assembled from the planner's own icons and card shapes, so what it
- * teaches is literally what the user will see — and when the UI changes, this
- * changes with it (no mp4 to re-record).
+ * Half the scenes are the **product itself**, not a drawing of it. The real
+ * screens are rendered server-side (`onboarding-tour-screens.tsx`) and handed to
+ * this player as nodes; a scene names one and, optionally, a point to zoom into.
+ * The stage fits the screen to the frame and pans between focus points, which is
+ * what gives the tour its camera. Because they are the live components, a UI
+ * change lands in the tour for free — and the stage is `inert`, so a click on a
+ * demo card cannot move anything.
  *
  * Each scene is narrated aloud through the browser's built-in speech synthesis
  * at a deliberately slow, level rate (no audio assets, nothing to re-record):
@@ -31,8 +33,12 @@ import {
   CHAPTER_START,
   CHAPTERS,
   SCENES,
+  SCREEN_WIDTH,
   TOTAL_MS,
 } from '@/modules/podcast-planning/ui/onboarding-tour-scenes'
+import type { Focus, ScreenId } from '@/modules/podcast-planning/ui/onboarding-tour-scenes'
+
+export type TourScreens = Record<ScreenId, React.ReactNode>
 
 // ─── Playback ─────────────────────────────────────────────────────────────────
 
@@ -88,9 +94,9 @@ const SIZES = ['compact', 'regular', 'large'] as const
 type Size = (typeof SIZES)[number]
 
 const SIZE_STYLE: Record<Size, { shell: string; stage: string; scale: string }> = {
-  compact: { shell: 'max-w-xl', stage: 'h-56 sm:h-64', scale: 'scale-90' },
-  regular: { shell: 'max-w-3xl', stage: 'h-72 sm:h-80', scale: 'scale-100' },
-  large: { shell: 'max-w-5xl', stage: 'h-80 sm:h-[28rem]', scale: 'scale-110 sm:scale-125' },
+  compact: { shell: 'max-w-2xl', stage: 'h-64 sm:h-72', scale: 'scale-90' },
+  regular: { shell: 'max-w-4xl', stage: 'h-72 sm:h-[24rem]', scale: 'scale-100' },
+  large: { shell: 'max-w-6xl', stage: 'h-[26rem] sm:h-[34rem]', scale: 'scale-105 sm:scale-110' },
 }
 
 const SIZE_KEY = 'i2l.podcast-tour.size'
@@ -105,9 +111,95 @@ function storedSize(): Size {
   }
 }
 
+// ─── The camera ───────────────────────────────────────────────────────────────
+
+const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value))
+
+/**
+ * How far a screen may be enlarged to fill the frame. Without a ceiling the
+ * drawer (400 px wide) would be blown up nearly threefold in a large modal and
+ * stop looking like the thing it is teaching.
+ */
+const MAX_FIT = 1.25
+
+/**
+ * A real screen on the stage: laid out at its natural width, scaled to fit the
+ * frame, then panned and zoomed to the scene's focus point. Panning is clamped
+ * to the screen's edges so a rough focus coordinate never reveals empty space,
+ * and the whole thing is `inert` — these are live components.
+ */
+function ScreenStage({
+  screen,
+  focus,
+  children,
+}: {
+  screen: ScreenId
+  focus?: Focus
+  children: React.ReactNode
+}) {
+  const frameRef = useRef<HTMLDivElement>(null)
+  const canvasRef = useRef<HTMLDivElement>(null)
+  const [box, setBox] = useState({ width: 0, height: 0, canvasHeight: 0 })
+
+  useEffect(() => {
+    const frame = frameRef.current
+    const canvas = canvasRef.current
+    if (!frame || !canvas) return
+    // Measured in the observer rather than the effect body: transforms do not
+    // affect layout, so this settles after one callback and cannot loop.
+    const observer = new ResizeObserver(() =>
+      setBox({
+        width: frame.clientWidth,
+        height: frame.clientHeight,
+        canvasHeight: canvas.offsetHeight,
+      })
+    )
+    observer.observe(frame)
+    observer.observe(canvas)
+    return () => observer.disconnect()
+  }, [])
+
+  const natural = SCREEN_WIDTH[screen]
+  const measured = box.width > 0 && box.canvasHeight > 0
+  const scale = Math.min(box.width / natural, MAX_FIT) * (focus?.scale ?? 1)
+  const contentWidth = natural * scale
+  const contentHeight = box.canvasHeight * scale
+
+  const x =
+    contentWidth <= box.width
+      ? (box.width - contentWidth) / 2
+      : clamp(box.width / 2 - ((focus?.x ?? 50) / 100) * contentWidth, box.width - contentWidth, 0)
+  const y =
+    contentHeight <= box.height
+      ? (box.height - contentHeight) / 2
+      : clamp(
+          box.height / 2 - ((focus?.y ?? 0) / 100) * contentHeight,
+          box.height - contentHeight,
+          0
+        )
+
+  return (
+    <div ref={frameRef} className="h-full w-full overflow-hidden bg-neutral-100">
+      <div
+        ref={canvasRef}
+        inert
+        style={{
+          width: natural,
+          transform: measured ? `translate(${x}px, ${y}px) scale(${scale})` : undefined,
+          transformOrigin: '0 0',
+          opacity: measured ? 1 : 0,
+        }}
+        className="rounded-lg bg-white p-4 shadow-sm transition-[transform,opacity] duration-700 ease-out"
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // ─── The player ───────────────────────────────────────────────────────────────
 
-function TourPlayer({ onClose }: { onClose: () => void }) {
+function TourPlayer({ screens, onClose }: { screens: TourScreens; onClose: () => void }) {
   const [state, setState] = useState<PlayerState>({
     scene: 0,
     elapsed: 0,
@@ -238,8 +330,8 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
     return () => clearInterval(keepAlive)
   }, [narrating, playing])
 
-  const CurrentView = current.View
   const style = SIZE_STYLE[size]
+  const SceneView = current.View
   const chapterScenes = SCENES.map((item, index) => ({ item, index })).filter(
     ({ item }) => item.chapter === current.chapter
   )
@@ -330,7 +422,7 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
         </div>
 
         {/* Story-style progress: one bar per scene in this chapter, click to jump. */}
-        <div className="flex gap-1 px-4 pt-2">
+        <div className="flex gap-1 px-4 pb-2 pt-2">
           {chapterScenes.map(({ item, index }) => {
             const fill =
               index < scene
@@ -355,11 +447,19 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
           })}
         </div>
 
-        {/* Stage */}
+        {/* Stage: a real screen under the camera, or a drawing. */}
         <div className={`relative ${style.stage}`}>
-          <div key={current.id} className={`h-full origin-center ${style.scale}`}>
-            <CurrentView />
-          </div>
+          {current.screen ? (
+            <ScreenStage key={current.screen} screen={current.screen} focus={current.focus}>
+              {screens[current.screen]}
+            </ScreenStage>
+          ) : (
+            SceneView && (
+              <div key={current.id} className={`h-full origin-center ${style.scale}`}>
+                <SceneView />
+              </div>
+            )
+          )}
 
           {atEnd && (
             <div className="absolute inset-0 flex items-center justify-center bg-white/70">
@@ -382,7 +482,7 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
         <div
           key={`caption-${current.id}`}
           aria-live="polite"
-          className="animate-fade-up px-6 pb-4 text-center"
+          className="animate-fade-up px-6 pb-4 pt-3 text-center"
         >
           <h3 className="text-base font-semibold text-neutral-900">{current.title}</h3>
           <p className="mt-0.5 text-sm text-neutral-500">{current.caption}</p>
@@ -465,8 +565,13 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
   )
 }
 
-/** The button that lives in the space header, and the player it opens. */
-export function PodcastOnboardingTour() {
+/**
+ * The button that lives in the space header, and the player it opens.
+ * Wrapped by `PodcastOnboardingTour`, which renders the real screens on the
+ * server — this half is client-only and stays free of module imports that
+ * cannot cross that boundary.
+ */
+export function TourLauncher({ screens }: { screens: TourScreens }) {
   const [open, setOpen] = useState(false)
 
   return (
@@ -481,7 +586,7 @@ export function PodcastOnboardingTour() {
         </svg>
         How it works
       </button>
-      {open && <TourPlayer onClose={() => setOpen(false)} />}
+      {open && <TourPlayer screens={screens} onClose={() => setOpen(false)} />}
     </>
   )
 }

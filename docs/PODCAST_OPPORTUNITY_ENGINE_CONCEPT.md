@@ -18,10 +18,12 @@
 > `docs/changes/2026-08-20-podcast-planner-visual-ux.md`.
 >
 > **The in-app "How it works" tour narrates the reasoning in this document** — §1 (why the tab
-> exists), §2 (question before names), §3 (the stages, the gates and the one limit), §7, §8 and §10
-> (chance of a yes, routes and the score). The script lives in
-> `src/modules/podcast-planning/ui/onboarding-tour-scenes.tsx`; when the thinking here changes,
-> change it there too. See `docs/changes/2026-08-20-podcast-onboarding-tour.md`.
+> exists), §2 (question before names), §3 (the stages, the gates and the one limit), §5 (what Radar
+> will watch, and that it is not built yet), §7, §8 and §10 (chance of a yes, routes and the score).
+> The script lives in `src/modules/podcast-planning/ui/onboarding-tour-scenes.tsx` and walks a
+> worked example through the real screens (`onboarding-tour-fixture.ts` ·
+> `onboarding-tour-screens.tsx`); when the thinking here changes, change it there too. See
+> `docs/changes/2026-08-20-podcast-onboarding-tour.md`.
 
 ---
 

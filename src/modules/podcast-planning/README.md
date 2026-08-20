@@ -84,6 +84,9 @@ ui/
   candidate-drawer.tsx          the seven-block person card
   question-composer.tsx · candidate-research-form.tsx · candidate-stage-controls.tsx
   guest-import-button.tsx
+  onboarding-tour*.tsx           the "How it works" walkthrough: -screens (server, renders the
+                                 real screens) · -fixture (the worked example) · -scenes (script,
+                                 zoom) · onboarding-tour (the player)
 ```
 
 ## Not built here (Phase B / C)

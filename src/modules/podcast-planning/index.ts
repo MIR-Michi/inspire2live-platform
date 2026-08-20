@@ -137,4 +137,4 @@ export type { PlanningScreen } from '@/modules/podcast-planning/ui/planning-stra
 export { OpportunityBoard } from '@/modules/podcast-planning/ui/opportunity-board'
 export { QuestionsScreen } from '@/modules/podcast-planning/ui/questions-screen'
 export { CandidateDrawer } from '@/modules/podcast-planning/ui/candidate-drawer'
-export { PodcastOnboardingTour } from '@/modules/podcast-planning/ui/onboarding-tour'
+export { PodcastOnboardingTour } from '@/modules/podcast-planning/ui/onboarding-tour-screens'

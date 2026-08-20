@@ -3,36 +3,42 @@
 /**
  * podcast-planning/ui/onboarding-tour-scenes.tsx — the script the tour plays.
  *
- * Twenty scenes in six chapters: what the space is *for* before what its
- * buttons do. The rationale spoken here is the reasoning recorded in
- * `docs/PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md` (§1 why it exists · §2 question
- * before names · §3 the stages and gates · §3 the one limit · §7/§8/§10 score
- * and routes) — when that thinking changes, change it here too.
+ * Twenty-four scenes in seven chapters, following **one worked example** (the
+ * unreimbursed-diagnostic question in `onboarding-tour-fixture.ts`) from a blank
+ * Questions screen to a recording handed to the calendar.
  *
- * Every visual is assembled from the planner's own icons and card shapes, so
- * the tour teaches the screens the user is about to use rather than a drawing
- * of them. Scene length is derived from the narration (see `narrationMs`) so
- * the progress bar tracks the voice instead of racing ahead of it.
+ * Half the scenes put the **real screens** on stage — the Questions screen, the
+ * Board, a candidate drawer, the route explorer and the People directory,
+ * rendered server-side in `onboarding-tour-screens.tsx` and referenced here by
+ * `screen` — with a `focus` that zooms into the part being talked about. The
+ * rest are schematic, and only where there is nothing to point at: the reason a
+ * question outlives a no, the shape of the network, the search that is still
+ * being built, the six-ask ceiling.
+ *
+ * The rationale spoken here is the reasoning recorded in
+ * `docs/PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md` (§1 why it exists · §2 question
+ * before names · §3 stages, gates and the one limit · §5 discovery · §7 routes ·
+ * §10 the score) — when that thinking changes, change it here too.
+ *
+ * Scene length is derived from the narration (see `narrationMs`) so the progress
+ * bar tracks the voice instead of racing ahead of it.
  */
 
 import {
+  IconArrowRight,
   IconAsk,
   IconBoard,
   IconBooked,
   IconCheck,
-  IconClock,
   IconClose,
   IconHandshake,
   IconOverride,
+  IconPeople,
   IconPlanning,
   IconQuestion,
   IconRecorded,
-  IconResearch,
-  IconSleep,
   IconStar,
-  IconWishlist,
   InitialsAvatar,
-  STAGE_ICONS,
 } from '@/modules/podcast-planning/ui/icons'
 
 // ─── Shared scene furniture ───────────────────────────────────────────────────
@@ -67,14 +73,12 @@ function Label({ children }: { children: React.ReactNode }) {
   )
 }
 
-function ChipMock({ label, delay }: { label: string; delay: number }) {
+/** Marks a scene as describing something not yet in the product. */
+function ComingNext() {
   return (
-    <Enter delay={delay}>
-      <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">
-        <IconCheck className="h-3 w-3" />
-        {label}
-      </span>
-    </Enter>
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-violet-700">
+      Coming next
+    </span>
   )
 }
 
@@ -156,9 +160,7 @@ function SceneVisible() {
           </div>
         </Enter>
         <Enter delay={1400}>
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-5 w-5 text-neutral-400">
-            <path d="M5 12h14M13 6l6 6-6 6" />
-          </svg>
+          <IconArrowRight className="h-5 w-5 text-neutral-400" />
         </Enter>
         <Enter delay={2000}>
           <div className="flex gap-1.5 rounded-xl border border-neutral-200 bg-white p-2 shadow-sm">
@@ -179,45 +181,14 @@ function SceneVisible() {
   )
 }
 
-// ─── Chapter 2 · The question comes before the names ──────────────────────────
-
-function SceneLevels() {
-  return (
-    <Stage>
-      <Enter delay={200}>
-        <div className="w-full max-w-sm rounded-2xl border-2 border-neutral-800 p-3">
-          <p className="mb-2 flex items-center gap-1.5 text-xs font-bold uppercase tracking-[0.1em] text-neutral-800">
-            <IconQuestion className="h-3.5 w-3.5" />
-            Question
-          </p>
-          <Enter delay={1200}>
-            <div className="rounded-xl border border-neutral-400 bg-white p-3">
-              <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-neutral-600">
-                <InitialsAvatar name="Maria Santos" className="h-5 w-5 text-[9px]" />
-                Person
-              </p>
-              <Enter delay={2200}>
-                <div className="rounded-lg border border-dashed border-neutral-300 bg-neutral-50 px-3 py-1.5">
-                  <p className="flex items-center gap-1.5 text-xs font-medium text-neutral-500">
-                    <IconAsk className="h-3 w-3" />
-                    Invitation
-                  </p>
-                </div>
-              </Enter>
-            </div>
-          </Enter>
-        </div>
-      </Enter>
-    </Stage>
-  )
-}
+// ─── Chapter 2 · It starts with a question ────────────────────────────────────
 
 function SceneOutlives() {
-  const people = ['Maria Santos', 'John Weber', 'Aisha Khan']
+  const people = ['Anna Bergmann', 'Ruben Oduya', 'Femke Aalders']
   return (
     <Stage>
       <Enter delay={200}>
-        <Card className="w-full max-w-sm">
+        <Card className="w-full max-w-md">
           <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
             <IconQuestion className="h-4 w-4 shrink-0 text-neutral-400" />
             Why is a proven diagnostic still unreimbursed?
@@ -254,264 +225,183 @@ function SceneOutlives() {
   )
 }
 
-function SceneQuestionFields() {
-  return (
-    <Stage>
-      <Enter delay={200}>
-        <Card className="w-full max-w-sm px-4 py-3">
-          <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-            <IconQuestion className="h-4 w-4 shrink-0 text-neutral-400" />
-            Why is a proven diagnostic still unreimbursed?
-          </p>
-        </Card>
-      </Enter>
-      <div className="flex max-w-sm flex-wrap justify-center gap-1.5">
-        <ChipMock label="Question" delay={1400} />
-        <ChipMock label="Why now" delay={2200} />
-        <ChipMock label="Action" delay={3000} />
-        <ChipMock label="Link" delay={3800} />
-        <ChipMock label="Format" delay={4600} />
-      </div>
-    </Stage>
-  )
-}
+// ─── Chapter 3 · Finding the people ───────────────────────────────────────────
 
-function SceneAnchor() {
-  const people = ['Maria Santos', 'John Weber', 'Aisha Khan', 'Tom Verhoeven']
-  return (
-    <Stage>
-      <div className="w-full max-w-xs rounded-xl border border-neutral-200 bg-neutral-50 p-3">
-        <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-neutral-600">
-          <IconWishlist className="h-3.5 w-3.5 text-neutral-400" />
-          Wishlist
-        </p>
-        <ul className="space-y-1.5">
-          {people.map((name, index) => (
-            <li key={name}>
-              <Enter delay={400 + index * 500}>
-                <div
-                  className={`flex items-center gap-2.5 rounded-xl border bg-white px-3 py-1.5 shadow-sm ${index === 0 ? 'border-orange-300 ring-2 ring-orange-100' : 'border-neutral-200'}`}
-                >
-                  <InitialsAvatar name={name} className="h-7 w-7 text-[10px]" />
-                  <span className="flex-1 text-sm font-semibold text-neutral-900">{name}</span>
-                  {index === 0 ? (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold uppercase tracking-wide text-orange-800">
-                      <IconStar className="h-3 w-3" filled />
-                      Anchor
-                    </span>
-                  ) : (
-                    <Enter delay={3200}>
-                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-                        +3
-                      </span>
-                    </Enter>
-                  )}
-                </div>
-              </Enter>
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Stage>
-  )
-}
-
-// ─── Chapter 3 · The six stages ───────────────────────────────────────────────
-
-const PIPELINE = ['wishlist', 'research', 'ask', 'planning', 'booked', 'recorded'] as const
-
-function Stepper({ activeIndex }: { activeIndex: number }) {
-  return (
-    <ol className="flex items-center">
-      {PIPELINE.map((stage, index) => {
-        const Icon = STAGE_ICONS[stage]
-        const state = index < activeIndex ? 'done' : index === activeIndex ? 'active' : 'todo'
-        return (
-          <li key={stage} className="flex items-center">
-            {index > 0 && (
-              <span className={`h-0.5 w-4 ${state === 'todo' ? 'bg-neutral-200' : 'bg-neutral-800'}`} />
-            )}
-            <span
-              className={[
-                'flex h-8 w-8 items-center justify-center rounded-full border',
-                state === 'active'
-                  ? 'border-neutral-900 bg-neutral-900 text-white'
-                  : state === 'done'
-                    ? 'border-neutral-800 bg-white text-neutral-800'
-                    : 'border-neutral-200 bg-white text-neutral-300',
-              ].join(' ')}
-            >
-              <Icon className="h-4 w-4" />
-            </span>
-          </li>
-        )
-      })}
-    </ol>
-  )
-}
-
-function SceneStages() {
-  return (
-    <Stage>
-      <Enter delay={200}>
-        <Stepper activeIndex={-1} />
-      </Enter>
-      <Enter delay={1600}>
-        <div className="flex items-center gap-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-neutral-500">
-            <IconSleep className="h-3.5 w-3.5 text-neutral-400" />
-            Not now
-          </span>
-          <span className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1 text-xs font-semibold text-neutral-500">
-            <IconClose className="h-3.5 w-3.5 text-neutral-400" />
-            Closed
-          </span>
-        </div>
-      </Enter>
-      <Enter delay={2800}>
-        <p className="text-xs font-medium text-neutral-500">two exits — one sleeps, one keeps the reason</p>
-      </Enter>
-    </Stage>
-  )
-}
-
-function SceneResearch() {
-  return (
-    <Stage>
-      <Enter delay={200}>
-        <Card className="w-full max-w-sm px-4 py-3">
-          <p className="flex items-center gap-2 text-sm font-semibold text-neutral-900">
-            <IconResearch className="h-4 w-4 shrink-0 text-neutral-400" />
-            What can only they say?
-          </p>
-        </Card>
-      </Enter>
-      <div className="w-full max-w-sm space-y-1.5">
-        <Enter delay={1600}>
-          <p className="flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-xs font-medium text-emerald-800">
-            <IconCheck className="h-3.5 w-3.5 shrink-0" />
-            “I signed the decision that delayed it.”
-          </p>
-        </Enter>
-        <Enter delay={3000}>
-          <p className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-neutral-50 px-3 py-1.5 text-xs font-medium text-neutral-400">
-            <IconClose className="h-3.5 w-3.5 shrink-0" />
-            <span className="line-through">“Senior person in the field.”</span>
-          </p>
-        </Enter>
-      </div>
-    </Stage>
-  )
-}
-
-function SceneOneMove() {
-  return (
-    <Stage>
-      <Enter delay={200}>
-        <Stepper activeIndex={1} />
-      </Enter>
-      <div className="w-full max-w-xs space-y-2">
-        <Enter delay={1400}>
-          <span className="flex items-center justify-center gap-2 rounded-xl bg-neutral-950 px-5 py-2.5 text-sm font-semibold text-white">
-            <IconAsk className="h-4 w-4" />
-            Ask
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
-              <path d="M5 12h14M13 6l6 6-6 6" />
-            </svg>
-          </span>
-        </Enter>
-        <Enter delay={3000}>
-          <div className="space-y-1">
-            <span className="flex items-center justify-center gap-2 rounded-xl bg-neutral-200 px-5 py-2.5 text-sm font-semibold text-neutral-500">
-              <IconAsk className="h-4 w-4" />
-              Ask
-            </span>
-            <p className="text-center text-[11px] leading-4 text-amber-900">
-              Needs an angle and a route before asking.
-            </p>
-          </div>
-        </Enter>
-      </div>
-    </Stage>
-  )
-}
-
-function SceneDays() {
-  const marks = [
-    { day: 'Day 0', label: 'sent', tone: 'text-neutral-700' },
-    { day: 'Day 7', label: 'one nudge', tone: 'text-amber-800' },
-    { day: 'Day 14', label: 'treated as no', tone: 'text-red-700' },
+/** Concentric reach: the warm rings first, the cold world last. */
+function SceneNetworkFirst() {
+  const rings = [
+    { label: 'Everyone else', size: 'h-56 w-56', tone: 'border-dashed border-neutral-200 text-neutral-400' },
+    { label: 'People they know', size: 'h-44 w-44', tone: 'border-neutral-200 text-neutral-500' },
+    { label: 'Members & hubs', size: 'h-32 w-32', tone: 'border-neutral-300 text-neutral-600' },
+    { label: 'Past guests', size: 'h-20 w-20', tone: 'border-neutral-900 text-neutral-900' },
   ]
   return (
     <Stage>
-      <div className="flex w-full max-w-sm items-start justify-between">
-        {marks.map((mark, index) => (
-          <div key={mark.day} className="flex flex-1 items-start">
-            {index > 0 && <span className="mt-3 h-0.5 flex-1 bg-neutral-200" />}
-            <Enter delay={400 + index * 1600}>
-              <div className="flex w-20 flex-col items-center gap-1.5">
-                <span
-                  className={`flex h-7 w-7 items-center justify-center rounded-full border-2 bg-white ${index === 2 ? 'border-red-300 text-red-600' : index === 1 ? 'border-amber-300 text-amber-600' : 'border-neutral-300 text-neutral-500'}`}
-                >
-                  <IconClock className="h-3.5 w-3.5" />
-                </span>
-                <span className="text-[11px] font-bold text-neutral-700">{mark.day}</span>
-                <span className={`text-[11px] font-medium ${mark.tone}`}>{mark.label}</span>
+      <div className="relative flex h-56 w-56 items-center justify-center">
+        {rings.map((ring, index) => (
+          <div key={ring.label} className="absolute inset-0 flex items-center justify-center">
+            <Enter delay={2400 - index * 700}>
+              <div
+                className={`flex ${ring.size} items-start justify-center rounded-full border-2 ${ring.tone}`}
+              >
+                <span className="mt-1.5 text-[10px] font-semibold">{ring.label}</span>
               </div>
             </Enter>
           </div>
         ))}
+        <Enter delay={3000}>
+          <IconPeople className="h-5 w-5 text-neutral-900" />
+        </Enter>
       </div>
-      <Enter delay={5000}>
-        <p className="text-xs font-medium text-neutral-500">the platform keeps the calendar, not your memory</p>
+      <Enter delay={3600}>
+        <p className="text-xs font-medium text-neutral-500">warm first — a cold approach is the last resort</p>
       </Enter>
     </Stage>
   )
 }
 
-// ─── Chapter 4 · One limit, on purpose ────────────────────────────────────────
-
-function SceneWaiting() {
+/** What the assisted search watches. Explicitly not built yet. */
+function SceneAiSearch() {
+  const sources = ['Journals', 'Registries', 'Regulators', 'Congress programmes', 'News']
   return (
     <Stage>
-      <div className="flex items-start gap-3">
-        <Enter delay={200}>
-          <div className="w-36 rounded-xl border border-amber-200 bg-amber-50/60 p-3">
-            <p className="mb-2 flex items-center justify-between text-xs font-semibold uppercase tracking-[0.1em] text-neutral-600">
-              <span className="flex items-center gap-1.5">
-                <IconAsk className="h-3.5 w-3.5 text-amber-600" />
-                Ask
+      <Enter delay={200}>
+        <ComingNext />
+      </Enter>
+      <div className="flex items-center gap-4">
+        <div className="space-y-1">
+          {sources.map((source, index) => (
+            <Enter key={source} delay={700 + index * 400}>
+              <span className="block rounded-lg border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600 shadow-sm">
+                {source}
               </span>
-              <IconClock className="h-3 w-3 text-amber-600" />
-            </p>
-            <Card>
-              <div className="flex items-center gap-2">
-                <InitialsAvatar name="Maria Santos" className="h-7 w-7 text-[10px]" />
-                <span className="inline-flex items-center gap-1 text-[11px] font-medium text-neutral-500">
-                  <IconClock className="h-3 w-3" />
-                  9d
-                </span>
-              </div>
-            </Card>
+            </Enter>
+          ))}
+        </div>
+        <Enter delay={2800}>
+          <IconArrowRight className="h-5 w-5 text-neutral-400" />
+        </Enter>
+        <Enter delay={3100}>
+          <div className="w-32 rounded-xl border-2 border-neutral-900 bg-white px-3 py-2.5 text-center shadow-sm">
+            <IconQuestion className="mx-auto h-5 w-5 text-neutral-900" />
+            <p className="mt-1 text-[11px] font-semibold text-neutral-900">your live questions</p>
           </div>
         </Enter>
-        <Enter delay={1600}>
-          <div className="w-36 rounded-xl border border-neutral-200 bg-white p-3">
-            <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-neutral-600">
-              <IconResearch className="h-3.5 w-3.5 text-neutral-400" />
-              Research
-            </p>
-            <Card className="border-neutral-200">
-              <div className="flex items-center gap-2">
-                <InitialsAvatar name="Aisha Khan" className="h-7 w-7 text-[10px]" />
-                <span className="text-[11px] font-semibold text-neutral-600">your move</span>
-              </div>
-            </Card>
+      </div>
+      <Enter delay={4000}>
+        <p className="text-xs font-medium text-neutral-500">open sources only — never scraped profiles</p>
+      </Enter>
+    </Stage>
+  )
+}
+
+/** The three filters, the citation, and the human gate at the end. */
+function SceneAiFilters() {
+  const filters = ['Is it about the question?', 'Does it group with what we have?', 'Who is named in it?']
+  return (
+    <Stage>
+      <div className="flex flex-wrap justify-center gap-1.5">
+        {filters.map((filter, index) => (
+          <Enter key={filter} delay={300 + index * 800}>
+            <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-sm">
+              <IconCheck className="h-3 w-3 text-neutral-400" />
+              {filter}
+            </span>
+          </Enter>
+        ))}
+      </div>
+      <Enter delay={2800}>
+        <Card className="flex w-full max-w-sm items-center gap-3 px-4 py-3">
+          <InitialsAvatar name="Femke Aalders" className="h-9 w-9 text-xs" />
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold text-neutral-900">Suggested name</p>
+            <p className="truncate text-[11px] text-neutral-500">with the source it came from</p>
+          </div>
+          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
+            source
+          </span>
+        </Card>
+      </Enter>
+      <Enter delay={3900}>
+        <p className="inline-flex items-center gap-1.5 rounded-full border border-neutral-900 bg-neutral-950 px-3 py-1 text-[11px] font-semibold text-white">
+          <IconCheck className="h-3 w-3" />
+          nothing lands on the board until a person accepts it
+        </p>
+      </Enter>
+    </Stage>
+  )
+}
+
+// ─── Chapter 5 · One card ─────────────────────────────────────────────────────
+
+function SceneOverride() {
+  return (
+    <Stage>
+      <div className="w-full max-w-xs space-y-1.5">
+        <Enter delay={1800}>
+          <div className="flex items-center gap-2.5 rounded-xl border-2 border-neutral-900 bg-white px-3 py-2 shadow-sm">
+            <IconOverride className="h-4 w-4 text-neutral-900" />
+            <InitialsAvatar name="Sanne Willems" className="h-7 w-7 text-[10px]" />
+            <span className="flex-1 text-sm font-semibold text-neutral-900">Sanne Willems</span>
+            <span className="text-xs font-semibold text-neutral-400">54</span>
+          </div>
+        </Enter>
+        {['Anna Bergmann', 'Ruben Oduya'].map((name, index) => (
+          <Enter key={name} delay={200 + index * 400}>
+            <div className="flex items-center gap-2.5 rounded-xl border border-neutral-200 bg-white px-3 py-2 opacity-70">
+              <InitialsAvatar name={name} className="h-7 w-7 text-[10px]" />
+              <span className="flex-1 text-sm font-medium text-neutral-600">{name}</span>
+              <span className="text-xs font-semibold text-neutral-400">{index === 0 ? 82 : 71}</span>
+            </div>
+          </Enter>
+        ))}
+      </div>
+      <Enter delay={3200}>
+        <p className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] font-semibold text-neutral-600">
+          <IconCheck className="h-3 w-3 text-neutral-400" />
+          recorded as a deliberate decision
+        </p>
+      </Enter>
+    </Stage>
+  )
+}
+
+// ─── Chapter 6 · Getting to a yes ─────────────────────────────────────────────
+
+function SceneTwoAsks() {
+  return (
+    <Stage>
+      <div className="flex items-center gap-2">
+        <Enter delay={200}>
+          <div className="flex flex-col items-center gap-1">
+            <InitialsAvatar name="Lina Vos" className="h-10 w-10 text-xs" />
+            <span className="text-[11px] font-semibold text-neutral-600">Inspire2Live</span>
+          </div>
+        </Enter>
+        <Enter delay={1200}>
+          <div className="flex flex-col items-center gap-1">
+            <IconHandshake className="h-5 w-5 text-neutral-400" />
+            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-600">
+              0.60
+            </span>
+          </div>
+        </Enter>
+        <Enter delay={2000}>
+          <div className="flex flex-col items-center gap-1">
+            <InitialsAvatar name="Anna Bergmann" className="h-10 w-10 text-xs" />
+            <span className="text-[11px] font-semibold text-neutral-600">the guest</span>
           </div>
         </Enter>
       </div>
       <Enter delay={3000}>
-        <p className="text-xs font-medium text-neutral-500">amber waits on them · white waits on you</p>
+        <div className="flex flex-col items-center gap-1.5">
+          <span className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-medium text-neutral-600 shadow-sm">
+            1 · “Do you know her?” — costs nothing, and “rather not” is an answer
+          </span>
+          <span className="rounded-lg border border-neutral-900 bg-neutral-950 px-3 py-1.5 text-[11px] font-semibold text-white">
+            2 · “Would you introduce us?” — only the strongest
+          </span>
+        </div>
       </Enter>
     </Stage>
   )
@@ -536,190 +426,14 @@ function SceneCeiling() {
       </div>
       <Enter delay={3400}>
         <p className="text-xs font-medium text-neutral-500">
-          three of six used — every open ask costs somebody&rsquo;s goodwill
+          think as widely as you like · chase only what you can carry
         </p>
       </Enter>
     </Stage>
   )
 }
 
-function SceneAsymmetry() {
-  return (
-    <Stage>
-      <div className="flex items-center gap-3">
-        <Enter delay={200}>
-          <div className="w-36 rounded-xl border border-neutral-200 bg-white px-4 py-3 text-center shadow-sm">
-            <p className="text-2xl font-bold text-neutral-900">∞</p>
-            <p className="mt-1 text-xs font-semibold text-neutral-700">Wishlist · Research</p>
-            <p className="mt-0.5 text-[11px] text-neutral-500">think as widely as you like</p>
-          </div>
-        </Enter>
-        <Enter delay={1800}>
-          <div className="w-36 rounded-xl border-2 border-neutral-900 bg-neutral-950 px-4 py-3 text-center text-white shadow-sm">
-            <p className="text-2xl font-bold">6</p>
-            <p className="mt-1 text-xs font-semibold">Ask</p>
-            <p className="mt-0.5 text-[11px] text-neutral-300">chase only what you can carry</p>
-          </div>
-        </Enter>
-      </div>
-    </Stage>
-  )
-}
-
-// ─── Chapter 5 · Judgement: the score and the routes ──────────────────────────
-
-function SceneScore() {
-  const parts = [
-    { label: 'Yes', width: 'w-16' },
-    { label: 'Reach', width: 'w-12' },
-    { label: 'Timing', width: 'w-14' },
-    { label: 'Follow-up', width: 'w-8' },
-    { label: 'Mission', width: 'w-12' },
-    { label: 'Format', width: 'w-4' },
-  ]
-  return (
-    <Stage>
-      <div className="flex items-center gap-4">
-        <Enter delay={200}>
-          <div className="flex flex-col items-center">
-            <span className="text-4xl font-bold tracking-tight text-neutral-900">82</span>
-            <span className="mt-1 inline-flex items-center gap-1.5 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">
-              <span className="h-2 w-2 rounded-full bg-emerald-500" />
-              Chase now
-            </span>
-          </div>
-        </Enter>
-        <div className="space-y-1">
-          {parts.map((part, index) => (
-            <Enter key={part.label} delay={900 + index * 450}>
-              <div className="flex items-center gap-2">
-                <span className="w-16 text-right text-[11px] font-medium text-neutral-500">
-                  {part.label}
-                </span>
-                <span className={`h-2 rounded-full bg-neutral-800 ${part.width}`} />
-              </div>
-            </Enter>
-          ))}
-        </div>
-      </div>
-      <Enter delay={4000}>
-        <p className="text-xs font-medium text-neutral-500">the breakdown is always shown, never just the number</p>
-      </Enter>
-    </Stage>
-  )
-}
-
-function SceneOverride() {
-  return (
-    <Stage>
-      <div className="w-full max-w-xs space-y-1.5">
-        <Enter delay={1800}>
-          <div className="flex items-center gap-2.5 rounded-xl border-2 border-neutral-900 bg-white px-3 py-2 shadow-sm">
-            <IconOverride className="h-4 w-4 text-neutral-900" />
-            <InitialsAvatar name="Tom Verhoeven" className="h-7 w-7 text-[10px]" />
-            <span className="flex-1 text-sm font-semibold text-neutral-900">Tom Verhoeven</span>
-            <span className="text-xs font-semibold text-neutral-400">54</span>
-          </div>
-        </Enter>
-        {['Maria Santos', 'Aisha Khan'].map((name, index) => (
-          <Enter key={name} delay={200 + index * 400}>
-            <div className="flex items-center gap-2.5 rounded-xl border border-neutral-200 bg-white px-3 py-2 opacity-70">
-              <InitialsAvatar name={name} className="h-7 w-7 text-[10px]" />
-              <span className="flex-1 text-sm font-medium text-neutral-600">{name}</span>
-              <span className="text-xs font-semibold text-neutral-400">{index === 0 ? 82 : 71}</span>
-            </div>
-          </Enter>
-        ))}
-      </div>
-      <Enter delay={3200}>
-        <p className="inline-flex items-center gap-1.5 rounded-full border border-neutral-200 bg-white px-3 py-1 text-[11px] font-semibold text-neutral-600">
-          <IconCheck className="h-3 w-3 text-neutral-400" />
-          recorded as a deliberate decision
-        </p>
-      </Enter>
-    </Stage>
-  )
-}
-
-function SceneRoutes() {
-  return (
-    <Stage>
-      <div className="flex items-center gap-2">
-        <Enter delay={200}>
-          <div className="flex flex-col items-center gap-1">
-            <InitialsAvatar name="Lina Vos" className="h-10 w-10 text-xs" />
-            <span className="text-[11px] font-semibold text-neutral-600">Inspire2Live</span>
-          </div>
-        </Enter>
-        <Enter delay={1200}>
-          <div className="flex flex-col items-center gap-1">
-            <IconHandshake className="h-5 w-5 text-neutral-400" />
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-bold text-neutral-600">
-              0.85
-            </span>
-          </div>
-        </Enter>
-        <Enter delay={2000}>
-          <div className="flex flex-col items-center gap-1">
-            <InitialsAvatar name="Maria Santos" className="h-10 w-10 text-xs" />
-            <span className="text-[11px] font-semibold text-neutral-600">the guest</span>
-          </div>
-        </Enter>
-      </div>
-      <Enter delay={3000}>
-        <div className="flex flex-col items-center gap-1.5">
-          <span className="rounded-lg border border-neutral-200 bg-white px-3 py-1.5 text-[11px] font-medium text-neutral-600 shadow-sm">
-            1 · “Do you know her?” — costs nothing
-          </span>
-          <span className="rounded-lg border border-neutral-900 bg-neutral-950 px-3 py-1.5 text-[11px] font-semibold text-white">
-            2 · “Would you introduce us?” — only the strongest
-          </span>
-        </div>
-      </Enter>
-    </Stage>
-  )
-}
-
-// ─── Chapter 6 · Your day ─────────────────────────────────────────────────────
-
-function SceneNextUp() {
-  return (
-    <Stage>
-      <Enter delay={200}>
-        <Label>Next up</Label>
-      </Enter>
-      <div className="flex max-w-md flex-wrap justify-center gap-2">
-        <Enter delay={900}>
-          <span className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white py-1.5 pl-1.5 pr-2.5 shadow-sm">
-            <InitialsAvatar name="John Weber" className="h-7 w-7 text-[10px]" />
-            <span className="text-sm font-semibold text-neutral-800">John Weber</span>
-            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[11px] font-semibold text-amber-800">
-              Nudge due
-            </span>
-          </span>
-        </Enter>
-        <Enter delay={2100}>
-          <span className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white py-1.5 pl-1.5 pr-2.5 shadow-sm">
-            <InitialsAvatar name="Aisha Khan" className="h-7 w-7 text-[10px]" />
-            <span className="text-sm font-semibold text-neutral-800">Aisha Khan</span>
-            <span className="rounded-full bg-red-50 px-2 py-0.5 text-[11px] font-semibold text-red-700">
-              No reply
-            </span>
-          </span>
-        </Enter>
-        <Enter delay={3300}>
-          <span className="flex items-center gap-2 rounded-lg border border-neutral-200 bg-white py-1.5 pl-1.5 pr-2.5 shadow-sm">
-            <InitialsAvatar name="Tom Verhoeven" className="h-7 w-7 text-[10px]" />
-            <span className="text-sm font-semibold text-neutral-800">Tom Verhoeven</span>
-            <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-semibold text-neutral-700">
-              Date drifting
-            </span>
-          </span>
-        </Enter>
-      </div>
-    </Stage>
-  )
-}
+// ─── Chapter 7 · The loop ─────────────────────────────────────────────────────
 
 function SceneHandover() {
   return (
@@ -749,7 +463,7 @@ function SceneHandover() {
       </div>
       <Enter delay={3000}>
         <Card className="flex items-center gap-3 px-4 py-3">
-          <InitialsAvatar name="Maria Santos" className="h-9 w-9 text-xs" />
+          <InitialsAvatar name="Kwame Mensah" className="h-9 w-9 text-xs" />
           <div>
             <p className="text-sm font-semibold text-neutral-900">New episode</p>
             <p className="text-xs text-neutral-500">on the content calendar</p>
@@ -782,7 +496,7 @@ function SceneClosing() {
 
 // ─── Chapters ─────────────────────────────────────────────────────────────────
 
-export type ChapterId = 'why' | 'questions' | 'stages' | 'limits' | 'judgement' | 'day'
+export type ChapterId = 'why' | 'question' | 'people' | 'board' | 'card' | 'routes' | 'loop'
 
 export const CHAPTERS: Array<{
   id: ChapterId
@@ -790,14 +504,39 @@ export const CHAPTERS: Array<{
   Icon: (props: { className?: string }) => React.JSX.Element
 }> = [
   { id: 'why', label: 'Why', Icon: IconQuestion },
-  { id: 'questions', label: 'Questions', Icon: IconWishlist },
-  { id: 'stages', label: 'Stages', Icon: IconBoard },
-  { id: 'limits', label: 'Limits', Icon: IconClock },
-  { id: 'judgement', label: 'Judgement', Icon: IconStar },
-  { id: 'day', label: 'Your day', Icon: IconPlanning },
+  { id: 'question', label: 'The question', Icon: IconCheck },
+  { id: 'people', label: 'Finding people', Icon: IconPeople },
+  { id: 'board', label: 'The board', Icon: IconBoard },
+  { id: 'card', label: 'One card', Icon: IconStar },
+  { id: 'routes', label: 'Getting a yes', Icon: IconHandshake },
+  { id: 'loop', label: 'The loop', Icon: IconPlanning },
 ]
 
 // ─── The script ───────────────────────────────────────────────────────────────
+
+/** Which real screen a scene puts on stage (rendered in `-screens.tsx`). */
+export type ScreenId = 'questions' | 'board' | 'drawer' | 'routes' | 'people'
+
+/**
+ * The width each screen is laid out at before the stage scales it to the frame —
+ * roughly the width it occupies in the app, so the six board columns and the
+ * drawer's narrow column both look like themselves.
+ */
+export const SCREEN_WIDTH: Record<ScreenId, number> = {
+  questions: 1040,
+  board: 1180,
+  drawer: 400,
+  routes: 520,
+  people: 880,
+}
+
+/**
+ * Where to point the camera. `x`/`y` are a percentage of the screen being shown
+ * and mark the point held in the middle of the stage; `scale` is 1 for the whole
+ * screen and above that to zoom in. Panning is clamped to the screen's edges, so
+ * a rough coordinate is enough.
+ */
+export type Focus = { scale: number; x: number; y: number }
 
 export type Scene = {
   id: string
@@ -808,7 +547,11 @@ export type Scene = {
   narration: string
   /** Derived from the narration, so the bar tracks the voice. */
   duration: number
-  View: () => React.JSX.Element
+  /** A real screen, optionally zoomed… */
+  screen?: ScreenId
+  focus?: Focus
+  /** …or a drawing, for the ideas that have no screen. */
+  View?: () => React.JSX.Element
 }
 
 /**
@@ -822,13 +565,14 @@ function narrationMs(text: string): number {
 }
 
 const SCRIPT: Array<Omit<Scene, 'duration'>> = [
+  // ── Why ────────────────────────────────────────────────────────────────────
   {
     id: 'welcome',
     chapter: 'why',
     title: 'How this space works',
-    caption: 'Four minutes on the workflow — and the thinking behind it.',
+    caption: 'One real question, from a blank page to a recording.',
     narration:
-      'Welcome. In four minutes, this explains not just where things are, but why the workflow is shaped this way.',
+      'Welcome to the podcast planning space. This is how it works, and why it is shaped this way. We will follow one real question the whole way through.',
     View: SceneWelcome,
   },
   {
@@ -837,169 +581,224 @@ const SCRIPT: Array<Omit<Scene, 'duration'>> = [
     title: 'Booking is the hard part',
     caption: 'The scarce resource is not editing. It is getting the right person to say yes.',
     narration:
-      'Editing is not the bottleneck. The hard part is booking: choosing a question worth asking, working out who can answer it, and reaching them.',
+      'Editing is not the bottleneck. The hard part is booking: choosing a question worth asking, working out who can actually answer it, and reaching them before the moment passes.',
     View: SceneBottleneck,
   },
   {
     id: 'visible',
     chapter: 'why',
     title: 'Out of one inbox',
-    caption: 'Booking work that nobody can see cannot be shared, learned from, or handed over.',
+    caption: 'Booking work nobody can see cannot be shared, learned from, or handed over.',
     narration:
-      'It lives in one head and one inbox: nobody else sees it, nothing is learned from a refusal, and a network of advocates in forty-five countries goes unused.',
+      'Normally that work lives in one head and one inbox. Nobody else sees it, nothing is learned from a refusal, and a network of advocates in forty-five countries goes unused.',
     View: SceneVisible,
   },
+
+  // ── The question ───────────────────────────────────────────────────────────
   {
-    id: 'levels',
-    chapter: 'questions',
-    title: 'Three levels, nested',
-    caption: 'A question · the people who could answer it · each attempt to reach one of them.',
+    id: 'question-screen',
+    chapter: 'question',
+    title: 'Everything starts here',
+    caption: 'The Questions screen — not a wishlist of famous names.',
     narration:
-      'Everything sits on three levels: the question being asked, the people who could answer it, and each attempt to reach one of them.',
-    View: SceneLevels,
+      'Everything starts on the Questions screen, not with a list of famous names. A question is one sentence somebody could disagree with — the unit this space is built on.',
+    screen: 'questions',
+  },
+  {
+    id: 'question-example',
+    chapter: 'question',
+    title: 'The question we will follow',
+    caption: 'Specific, current, and arguable — somebody could take the other side.',
+    narration:
+      'Here is the one we will follow. Why is a proven diagnostic still unreimbursed, three years after parliament heard the case? Specific, arguable, and happening now: the assessment reopened last month.',
+    screen: 'questions',
+    focus: { scale: 1.9, x: 34, y: 22 },
+  },
+  {
+    id: 'question-gate',
+    chapter: 'question',
+    title: 'Five things before any name',
+    caption: 'Question · why now · what a listener should do · where that points · format.',
+    narration:
+      'A question opens only once five things are written down: the question, why now, what a listener should do, where that points, and the format. Those twenty minutes decide everything downstream.',
+    screen: 'questions',
+    focus: { scale: 2.4, x: 22, y: 40 },
   },
   {
     id: 'outlives',
-    chapter: 'questions',
+    chapter: 'question',
     title: 'A question outlives a no',
-    caption: 'The card is the person; the question is the folder they sit in.',
+    caption: 'The question is the folder; each person is a card inside it.',
     narration:
-      'The card is the person; the question is the folder they sit in. Otherwise one refusal would throw away all the framing work. This way, a no costs one card.',
+      'Each person becomes a card inside that question. Most invitations fail — if the question were a person, one refusal would throw away all the framing work. Here a no costs one card.',
     View: SceneOutlives,
   },
+
+  // ── Finding people ─────────────────────────────────────────────────────────
   {
-    id: 'fields',
-    chapter: 'questions',
-    title: 'Written down before any name',
-    caption: 'The question, why now, what a listener should do, and the format it fits.',
+    id: 'people-screen',
+    chapter: 'people',
+    title: 'One shared directory',
+    caption: 'Past guests, members, CRM contacts, and people we have only read about.',
     narration:
-      'So a question opens only once the essentials are down: the question itself, why it matters now, what a listener should do afterwards, and its format.',
-    View: SceneQuestionFields,
+      'Now the names. Everyone we could reach sits in one directory: past guests, members and hubs, CRM contacts, and people we have only read about. Nobody is rediscovered twice.',
+    screen: 'people',
   },
   {
-    id: 'anchor',
-    chapter: 'questions',
-    title: 'Many names, one anchor',
-    caption: 'Most invitations fail — so a wishlist makes a no an inconvenience, not a restart.',
+    id: 'network-first',
+    chapter: 'people',
+    title: 'Inspire2Live first, then outward',
+    caption: 'A warm route converts many times better than a cold one.',
     narration:
-      'Then list many people, because most invitations fail. One is the anchor: land that name first, and every other name becomes easier to win.',
-    View: SceneAnchor,
+      'The order matters. Inside Inspire2Live first: past guests who said yes once, then members and hubs, then the people they know. Outward only when those rings are exhausted — a warm route converts far better.',
+    View: SceneNetworkFirst,
   },
   {
-    id: 'stages',
-    chapter: 'stages',
-    title: 'Six stages, two exits',
-    caption: 'Wishlist · research · ask · planning · booked · recorded.',
+    id: 'ai-search',
+    chapter: 'people',
+    title: 'Reaching further: assisted search',
+    caption: 'Not built yet. A research assistant on open sources — not a magic box.',
     narration:
-      'Each person moves through six stages: wishlist, research, ask, planning, booked, recorded. Two exits catch the rest: not now, which sleeps and returns, and closed, with a reason.',
-    View: SceneStages,
+      'Reaching beyond the network is where assisted search comes in. It is not built yet, and this is how it will work: like a research assistant watching open sources — journals, registries, regulators, congress programmes, the news — for your live questions.',
+    View: SceneAiSearch,
   },
   {
-    id: 'research',
-    chapter: 'stages',
-    title: 'Research is the gate',
-    caption: 'What can this person say that nobody else can?',
+    id: 'ai-filters',
+    chapter: 'people',
+    title: 'Three filters, then a human',
+    caption: 'Every suggestion would arrive with its source, and wait for someone to accept it.',
     narration:
-      'Research decides quality: what can this person say that nobody else can? If the answer is only that they are senior in the field, that is not an angle.',
-    View: SceneResearch,
+      'What it finds passes three filters: is it about the question, does it group with what we have, and who is named. Every suggestion carries its source, and a person accepts it before it reaches the board. The score stays plain arithmetic, never a model.',
+    View: SceneAiFilters,
+  },
+
+  // ── The board ──────────────────────────────────────────────────────────────
+  {
+    id: 'board-full',
+    chapter: 'board',
+    title: 'Everything in flight, on one board',
+    caption: 'Six stages, left to right, grouped by the question they belong to.',
+    narration:
+      'This is the board: everything in flight, grouped by question, six stages running left to right — wishlist, research, ask, planning, booked, recorded.',
+    screen: 'board',
   },
   {
-    id: 'one-move',
-    chapter: 'stages',
-    title: 'One next move',
-    caption: 'A single button per card — and if it is blocked, it says what is missing.',
+    id: 'board-left',
+    chapter: 'board',
+    title: 'Thinking is free',
+    caption: 'List as many people as you like. One of them is the anchor.',
     narration:
-      'From there, each card offers exactly one next move, as a single button. If blocked, it says what is missing, so you need not remember the rules.',
-    View: SceneOneMove,
+      'On the left, thinking is free — list as many as you like. One is the anchor: secure that name and the rest get easier. Research asks what this person can say that nobody else can.',
+    screen: 'board',
+    focus: { scale: 2.1, x: 16, y: 30 },
   },
   {
-    id: 'days',
-    chapter: 'stages',
-    title: 'The platform counts the days',
-    caption: 'One nudge at seven days. Silence past fourteen is treated as a no.',
+    id: 'board-ask',
+    chapter: 'board',
+    title: 'Amber means you are waiting',
+    caption: 'One nudge at seven days; silence past fourteen is treated as a no.',
     narration:
-      'Once a request is out, the platform counts the days. One nudge after seven. Silence past fourteen counts as a no, and the card returns for a different route.',
-    View: SceneDays,
+      'Amber means the card is with somebody else — a different problem from work you owe. Once a request is out the platform counts: one nudge after seven days, silence past fourteen is a no.',
+    screen: 'board',
+    focus: { scale: 2.1, x: 45, y: 30 },
   },
   {
-    id: 'waiting',
-    chapter: 'limits',
-    title: 'Waiting is not to-do',
-    caption: 'Amber columns are with somebody else. White ones are with you.',
+    id: 'board-nextup',
+    chapter: 'board',
+    title: '“Next up” finds your work',
+    caption: 'Nudges due, silences past the cut-off, stalled bookings, sleepers waking.',
     narration:
-      'Two stages are waiting states, shown in amber, because waiting on someone else and having work to do are different problems that should never look alike.',
-    View: SceneWaiting,
+      'You never scan the board for your work. Next up collects every card needing a decision today: a nudge due, a silence past the cut-off, a stalled booking, a sleeper waking.',
+    screen: 'board',
+    focus: { scale: 2.2, x: 22, y: 6 },
+  },
+
+  // ── One card ───────────────────────────────────────────────────────────────
+  {
+    id: 'drawer-full',
+    chapter: 'card',
+    title: 'One person, one question',
+    caption: 'Who they are, where they sit, and the one next move — always at the top.',
+    narration:
+      'Open a card: one person on one question. Who they are, where they sit, and the single next move. Underneath, the angle — what only Anna can say. She sat on the panel that rejected the test twice.',
+    screen: 'drawer',
   },
   {
-    id: 'ceiling',
-    chapter: 'limits',
-    title: 'Chasing is capped at six',
-    caption: 'Every open request needs following up, and spends somebody’s goodwill.',
+    id: 'drawer-move',
+    chapter: 'card',
+    title: 'One button, and it explains itself',
+    caption: 'A blocked move says what is missing instead of failing silently.',
     narration:
-      'Research is unlimited; chasing is not. Six open asks at a time, because every request needs following up and every introduction spends somebody’s goodwill.',
-    View: SceneCeiling,
+      'There is only ever one button, and a blocked move says what is missing. The rules live in the server, not in the form, so they cannot be skipped by clicking somewhere else.',
+    screen: 'drawer',
+    focus: { scale: 1.8, x: 50, y: 12 },
   },
   {
-    id: 'asymmetry',
-    chapter: 'limits',
-    title: 'A pipeline, not a backlog',
-    caption: 'Think as widely as you like; chase only what you can carry.',
-    narration:
-      'That asymmetry is deliberate: think as widely as you like, chase only what you can carry. An unlimited list only makes you feel behind.',
-    View: SceneAsymmetry,
-  },
-  {
-    id: 'score',
-    chapter: 'judgement',
+    id: 'drawer-score',
+    chapter: 'card',
     title: 'A score you can argue with',
-    caption: 'Out of a hundred, from six parts — the breakdown is always visible.',
+    caption: 'A hundred points from six parts, and the arithmetic is always shown.',
     narration:
-      'Each person carries a score out of a hundred: chance of a yes, reach, timeliness, follow-up, mission and format. The breakdown is always shown, never just the number.',
-    View: SceneScore,
+      'A score out of a hundred from six parts: chance of a yes, reach, timeliness, follow-up, mission and format. The breakdown is always there — a number you cannot argue with is one you should not trust.',
+    screen: 'drawer',
+    focus: { scale: 1.8, x: 50, y: 32 },
   },
   {
     id: 'override',
-    chapter: 'judgement',
+    chapter: 'card',
     title: 'It ranks; you decide',
-    caption: 'Any card can be pushed to the top — and that choice is recorded.',
+    caption: 'Any card can be pushed to the top — with the reason kept.',
     narration:
-      'The score ranks; it never decides. Push any card to the top and that is recorded as a deliberate choice, because an override that keeps being right means the model is wrong.',
+      'It ranks; you decide. Push any card to the top and that is recorded, with a reason. An override that keeps turning out right means the model is wrong, not the person.',
     View: SceneOverride,
   },
+
+  // ── Getting a yes ──────────────────────────────────────────────────────────
   {
-    id: 'routes',
-    chapter: 'judgement',
+    id: 'routes-screen',
+    chapter: 'routes',
+    title: 'Who can open the door',
+    caption: 'Routes ranked by strength, and by whether a human confirmed them.',
+    narration:
+      'So how do we reach her? For each person the platform lists the routes in: who might open the door, how strong the tie is, and whether a human confirmed it or the platform merely suspects it.',
+    screen: 'routes',
+  },
+  {
+    id: 'two-asks',
+    chapter: 'routes',
     title: 'Two asks, in this order',
     caption: 'The cheap question first; the favour only to the strongest contact.',
     narration:
-      'Routes come from the network: the platform suggests who might know your guest, then asks them one cheap question. Only the strongest confirmed contact is asked for the favour.',
-    View: SceneRoutes,
+      'Two asks, in this order. The cheap one first — do you know her? — where rather not is a fine answer. Only the strongest confirmed contact is asked for an introduction. Goodwill is scarce.',
+    View: SceneTwoAsks,
   },
   {
-    id: 'next-up',
-    chapter: 'day',
-    title: '“Next up” finds your work',
-    caption: 'Nudges due, silences past the cut-off, bookings that stalled.',
+    id: 'ceiling',
+    chapter: 'routes',
+    title: 'Chasing is capped at six',
+    caption: 'Wishlist and research are unlimited. Open asks are not.',
     narration:
-      'Day to day, you do not scan columns. The Next up strip collects every card needing a decision: a nudge due, a silence past the cut-off, a stalled booking.',
-    View: SceneNextUp,
+      'Which is why chasing is capped: six open asks at a time, across every question. Wishlist and research stay unlimited. Think as widely as you like, chase only what you can carry.',
+    View: SceneCeiling,
   },
+
+  // ── The loop ───────────────────────────────────────────────────────────────
   {
     id: 'handover',
-    chapter: 'day',
+    chapter: 'loop',
     title: 'Recorded hands over',
     caption: 'The planner feeds the content calendar; it never duplicates it.',
     narration:
-      'When the recording exists, the card closes and creates an item on the content calendar. The planner feeds the calendar; it never duplicates it.',
+      'When the recording exists, the card closes and creates an item on the content calendar. The planner feeds the calendar, never duplicates it. And the guest becomes an introducer for the next question.',
     View: SceneHandover,
   },
   {
     id: 'closing',
-    chapter: 'day',
+    chapter: 'loop',
     title: 'Start with a question',
     caption: 'A question worth asking first, names second, one next move at a time.',
     narration:
-      'That is the loop. If you remember one thing, remember the order: a question worth asking first, names second, one next move at a time.',
+      'That is the loop. Remember the order: a question worth asking first, names second, one next move at a time.',
     View: SceneClosing,
   },
 ]
