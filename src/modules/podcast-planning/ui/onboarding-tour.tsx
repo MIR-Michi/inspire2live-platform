@@ -9,6 +9,12 @@
  * shapes as the real screens, so what it teaches is literally what the user
  * will see — and when the UI changes, this changes with it (no mp4 to re-record).
  *
+ * Each scene is narrated aloud through the browser's built-in speech synthesis
+ * (no audio assets, nothing to re-record): a scene that finishes visually holds
+ * until its sentence has been spoken, pausing the tour pauses the voice, and a
+ * speaker button mutes it. Where speech synthesis is unavailable the tour plays
+ * silently, exactly as before.
+ *
  * Opened from a button in the space header; never auto-plays.
  */
 
@@ -269,6 +275,8 @@ type Scene = {
   id: string
   title: string
   caption: string
+  /** Spoken aloud via speech synthesis while the scene plays. */
+  narration: string
   duration: number
   View: () => React.JSX.Element
 }
@@ -278,6 +286,8 @@ const SCENES: Scene[] = [
     id: 'welcome',
     title: 'The Podcast space',
     caption: 'Two rooms: the episodes you make, and the planning that books them.',
+    narration:
+      'Welcome to the Podcast space. It has two rooms: Episodes, the shows you make, and Planning, where the next guest gets found and booked.',
     duration: 6000,
     View: SceneWelcome,
   },
@@ -285,6 +295,8 @@ const SCENES: Scene[] = [
     id: 'question',
     title: 'Start with a question',
     caption: 'Five checks make it ready for names — green means done.',
+    narration:
+      'Everything starts with a question — one sentence somebody could disagree with. Five green checks mean it is ready for names.',
     duration: 7500,
     View: SceneQuestion,
   },
@@ -292,6 +304,8 @@ const SCENES: Scene[] = [
     id: 'wishlist',
     title: 'List who could answer it',
     caption: 'Add as many people as you like — research is unlimited.',
+    narration:
+      'Then list everyone who could answer it. The wishlist is unlimited — add freely, research later.',
     duration: 6500,
     View: SceneWishlist,
   },
@@ -299,6 +313,8 @@ const SCENES: Scene[] = [
     id: 'next-move',
     title: 'Follow the one next move',
     caption: 'Every card shows a single button for its next step. If it is blocked, it says why.',
+    narration:
+      'Every person card shows exactly one next move, as a single button. If the move is blocked, the button tells you why.',
     duration: 7000,
     View: SceneNextMove,
   },
@@ -306,6 +322,8 @@ const SCENES: Scene[] = [
     id: 'waiting',
     title: 'Amber means waiting',
     caption: 'Ask and Planning wait on somebody else. Six open asks is the ceiling.',
+    narration:
+      'Amber columns mean you are waiting on somebody else. Six open asks at a time is the ceiling — chasing is capped, thinking is not.',
     duration: 7000,
     View: SceneWaiting,
   },
@@ -313,6 +331,8 @@ const SCENES: Scene[] = [
     id: 'next-up',
     title: '“Next up” finds your work',
     caption: 'Cards that need a decision surface at the top — no scanning columns.',
+    narration:
+      'The Next up strip finds your work for you: nudges due, silences to act on, bookings that stalled. No scanning columns.',
     duration: 7000,
     View: SceneNextUp,
   },
@@ -320,6 +340,8 @@ const SCENES: Scene[] = [
     id: 'finish',
     title: 'Booked, recorded, published',
     caption: 'A recorded card hands over to the content calendar. Start with a question.',
+    narration:
+      'Once a recording is done, the episode hands over to the content calendar. That is the whole loop — start with a question.',
     duration: 7500,
     View: SceneFinish,
   },
@@ -329,25 +351,46 @@ const TICK_MS = 100
 
 // ─── The player ───────────────────────────────────────────────────────────────
 
-type PlayerState = { scene: number; elapsed: number; playing: boolean }
+type PlayerState = { scene: number; elapsed: number; playing: boolean; spoken: boolean }
 
-/** One tick of playback: advance within the scene, roll over, or stop at the end. */
-function advance(prev: PlayerState): PlayerState {
+/**
+ * One tick of playback: advance within the scene, roll over, or stop at the end.
+ * With narration on, a visually finished scene holds (bar full) until its
+ * sentence has been spoken, so the voice is never cut off mid-word.
+ */
+function advance(prev: PlayerState, waitForSpeech: boolean): PlayerState {
   if (!prev.playing) return prev
   const duration = SCENES[prev.scene].duration
-  const elapsed = prev.elapsed + TICK_MS
+  const elapsed = Math.min(prev.elapsed + TICK_MS, duration)
   if (elapsed < duration) return { ...prev, elapsed }
-  if (prev.scene < SCENES.length - 1) return { scene: prev.scene + 1, elapsed: 0, playing: true }
-  return { ...prev, elapsed: duration, playing: false }
+  if (waitForSpeech && !prev.spoken) return { ...prev, elapsed }
+  if (prev.scene < SCENES.length - 1)
+    return { scene: prev.scene + 1, elapsed: 0, playing: true, spoken: false }
+  return { ...prev, elapsed, playing: false }
 }
 
 function TourPlayer({ onClose }: { onClose: () => void }) {
-  const [state, setState] = useState<PlayerState>({ scene: 0, elapsed: 0, playing: true })
+  const [state, setState] = useState<PlayerState>({
+    scene: 0,
+    elapsed: 0,
+    playing: true,
+    spoken: false,
+  })
+  // The player only mounts after a click, so this is a plain capability check.
+  const [voiceSupported] = useState(
+    () => typeof window !== 'undefined' && 'speechSynthesis' in window
+  )
+  const [voiceOn, setVoiceOn] = useState(true)
   const dialogRef = useRef<HTMLDivElement>(null)
+  // Chrome garbage-collects utterances it no longer references, which silences
+  // `onend`; holding the current one in a ref keeps it alive until it finishes.
+  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null)
 
   const { scene, elapsed, playing } = state
   const current = SCENES[scene]
-  const atEnd = scene === SCENES.length - 1 && elapsed >= current.duration
+  const narrating = voiceSupported && voiceOn
+  const atEnd =
+    scene === SCENES.length - 1 && elapsed >= current.duration && (!narrating || state.spoken)
 
   useEffect(() => {
     dialogRef.current?.focus()
@@ -363,15 +406,48 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (!playing) return
-    const timer = setInterval(() => setState(advance), TICK_MS)
+    const timer = setInterval(() => setState((prev) => advance(prev, narrating)), TICK_MS)
     return () => clearInterval(timer)
-  }, [playing])
+  }, [playing, narrating])
+
+  // Speak the current scene; re-runs when the scene changes or voice is toggled.
+  useEffect(() => {
+    if (!narrating) return
+    const synth = window.speechSynthesis
+    synth.cancel()
+    const utterance = new SpeechSynthesisUtterance(SCENES[scene].narration)
+    utterance.lang = 'en-GB'
+    const markSpoken = () => setState((prev) => ({ ...prev, spoken: true }))
+    utterance.onend = markSpoken
+    utterance.onerror = markSpoken
+    utteranceRef.current = utterance
+    synth.speak(utterance)
+    return () => {
+      utterance.onend = null
+      utterance.onerror = null
+      synth.cancel()
+    }
+  }, [scene, narrating])
+
+  // Pausing the tour pauses the voice mid-sentence, and play resumes it.
+  useEffect(() => {
+    if (!narrating) return
+    if (playing) window.speechSynthesis.resume()
+    else window.speechSynthesis.pause()
+  }, [playing, narrating])
 
   const goTo = useCallback((index: number) => {
-    setState({
-      scene: Math.max(0, Math.min(index, SCENES.length - 1)),
-      elapsed: 0,
-      playing: true,
+    setState((prev) => {
+      const next = Math.max(0, Math.min(index, SCENES.length - 1))
+      return {
+        scene: next,
+        elapsed: 0,
+        playing: true,
+        // Replaying the same scene reruns the visuals without re-speaking, so
+        // keep its spoken flag — otherwise it would wait forever on a voice
+        // that already finished.
+        spoken: next === prev.scene ? prev.spoken : false,
+      }
     })
   }, [])
 
@@ -488,6 +564,29 @@ function TourPlayer({ onClose }: { onClose: () => void }) {
                 <path d="M16 5h2v14h-2zM4 5v14l10-7z" />
               </svg>
             </button>
+            {voiceSupported && (
+              <button
+                type="button"
+                aria-label={voiceOn ? 'Mute narration' : 'Unmute narration'}
+                aria-pressed={voiceOn}
+                onClick={() => setVoiceOn((on) => !on)}
+                className={`rounded-lg p-2 hover:bg-neutral-100 ${voiceOn ? 'text-neutral-600' : 'text-neutral-300'}`}
+              >
+                {voiceOn ? (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
+                    <path d="M11 5 6 9H2v6h4l5 4z" />
+                    <path d="M15.5 8.5a5 5 0 0 1 0 7" />
+                    <path d="M18.5 5.5a9 9 0 0 1 0 13" />
+                  </svg>
+                ) : (
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" className="h-4 w-4">
+                    <path d="M11 5 6 9H2v6h4l5 4z" />
+                    <path d="m16 9 6 6" />
+                    <path d="m22 9-6 6" />
+                  </svg>
+                )}
+              </button>
+            )}
           </div>
           <button
             type="button"
