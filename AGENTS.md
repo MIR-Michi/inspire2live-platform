@@ -52,7 +52,7 @@ Everything you run before committing (see [§5](#5-verify-before-you-commit)):
 |---|---|
 | `pnpm typecheck` | TypeScript (`tsc --noEmit`) |
 | `pnpm lint` | ESLint |
-| `pnpm test` | Unit tests (Vitest) — `test:watch`, `test:coverage` also exist |
+| `pnpm test:coverage` | Unit tests (Vitest) **and the 60% coverage gate — this is what CI runs**. `pnpm test` / `test:watch` are the faster inner loop, but green there is not green in CI |
 | `pnpm governance` | The three module-boundary CI gates (see §6) |
 | `pnpm build` | Production build |
 | `pnpm test:e2e` | Playwright smoke (only when a runtime surface changed) |
@@ -70,8 +70,12 @@ Everything you run before committing (see [§5](#5-verify-before-you-commit)):
 A change is done when **all of these are green** and you have seen the behavior work:
 
 ```bash
-pnpm typecheck && pnpm lint && pnpm test && pnpm governance && pnpm build
+pnpm typecheck && pnpm lint && pnpm test:coverage && pnpm governance && pnpm build
 ```
+
+- Use `test:coverage`, not `test`: a change can add code faster than it adds tests and push
+  the global thresholds in `vitest.config.ts` under water while every test still passes.
+  That failure is invisible to `pnpm test` and fails CI.
 
 - DB migrations are validated by CI on a throwaway Postgres — if you touch
   `supabase/migrations/**`, see §6 and [`docs/CI_TROUBLESHOOTING.md`](docs/CI_TROUBLESHOOTING.md).

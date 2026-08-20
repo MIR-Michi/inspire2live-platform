@@ -78,6 +78,25 @@ every weekly tick on an AI-disabled platform did two database round-trips to pro
 The lesson generalises past this sprint. Cron routes have no user to notice they are misbehaving,
 which is exactly why the five gates passing green said nothing about either bug.
 
+**A third defect, found by CI rather than by me.** The branch went up green on the five gates and
+failed CI anyway: 762 tests passing, coverage at 58.77% lines against a 60% threshold. The cause is
+that the gate written in AGENTS.md §5 runs `pnpm test`, while CI runs `pnpm test:coverage` — so a
+sprint that adds ~2,500 lines of code faster than it adds tests can be locally green and globally
+under water, and nothing on the developer's machine says so. AGENTS.md §3/§5 now name
+`test:coverage` as the gate, which is the actual repair; the rest was consequence:
+
+- `kernel/sources` was the real gap, at 10% — two clients whose parsing *is* the provenance every
+  Radar citation rests on, and S22-T04 had promised fixture tests that were never written. Now 98%
+  across 24 tests, against recorded payloads with `fetch` stubbed: normalisation, the retraction
+  drop, partial dates discarded rather than guessed, DOI-before-catalogue URLs, `TITLE_ABS` scoping,
+  and down-versus-empty error behaviour.
+- Radar's Supabase reads and writes, its settings resolver, the run-lock and the `radar.ts` wiring
+  are excluded in `vitest.config.ts`, under the rule Sprint 20 wrote for exactly these layers. That
+  is a judgement worth stating plainly rather than burying in a config diff: the decisions those
+  files used to hold were extracted into `radar-types.ts` and `radar-grounding.ts` during the sprint
+  and are covered at ~100%, so what is excluded is wiring whose test would assert a mock. If logic
+  migrates back into them, the exclusion becomes a place for bugs to hide.
+
 **A note for the next sprint.** Search recall was the surprise. OpenAlex and Europe PMC both AND
 every term, so a four-word question retrieved one paper where three of its words retrieved 138. The
 answer was a domain anchor (`radarDomainAnchor`, default `cancer`, never dropped) plus a widening
