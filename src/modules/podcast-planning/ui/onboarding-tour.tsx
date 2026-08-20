@@ -7,7 +7,7 @@
  * video: twenty-four scenes in seven chapters (~6 minutes), story-style progress
  * bars, play/pause, scene skipping and a chapter rail to jump to a subject.
  *
- * Half the scenes are the **product itself**, not a drawing of it. The real
+ * Most scenes are the **product itself**, not a drawing of it. The real
  * screens are rendered server-side (`onboarding-tour-screens.tsx`) and handed to
  * this player as nodes; a scene names one and, optionally, a point to zoom into.
  * The stage fits the screen to the frame and pans between focus points, which is
@@ -485,7 +485,11 @@ function TourPlayer({ screens, onClose }: { screens: TourScreens; onClose: () =>
           className="animate-fade-up px-6 pb-4 pt-3 text-center"
         >
           <h3 className="text-base font-semibold text-neutral-900">{current.title}</h3>
-          <p className="mt-0.5 text-sm text-neutral-500">{current.caption}</p>
+          {/* `data-copy`: the caption is the scene, not a subtitle — without it
+              a muted viewer gets a title and nothing else (see globals.css). */}
+          <p data-copy className="mt-0.5 text-sm text-neutral-500">
+            {current.caption}
+          </p>
         </div>
 
         {/* Controls */}

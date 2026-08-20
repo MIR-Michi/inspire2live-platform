@@ -2,8 +2,9 @@
  * podcast-planning/ui/onboarding-tour-screens.tsx — the real screens, on stage.
  *
  * The tour shows the actual Questions screen, Board, candidate drawer, route
- * explorer and People list — not a redrawing of them — so what it teaches is
- * what the user is about to use, and a UI change lands in the tour for free.
+ * explorer, People list and Radar review — not a redrawing of them — so what it
+ * teaches is what the user is about to use, and a UI change lands in the tour
+ * for free.
  *
  * They are rendered **here, on the server**, and handed to the client player as
  * props. That is not decoration: `CandidateDrawer` and `RouteExplorer` reach
@@ -20,6 +21,7 @@ import { PeopleDirectory, RouteExplorer } from '@/modules/network'
 import { CandidateDrawer } from '@/modules/podcast-planning/ui/candidate-drawer'
 import { OpportunityBoard } from '@/modules/podcast-planning/ui/opportunity-board'
 import { QuestionsScreen } from '@/modules/podcast-planning/ui/questions-screen'
+import { RadarReview } from '@/modules/podcast-planning/ui/radar-screen'
 import { TourLauncher } from '@/modules/podcast-planning/ui/onboarding-tour'
 import {
   TOUR_BOARD,
@@ -27,6 +29,7 @@ import {
   TOUR_DRAWER,
   TOUR_OWNERS,
   TOUR_PEOPLE,
+  TOUR_RADAR,
   TOUR_SUMMARIES,
 } from '@/modules/podcast-planning/ui/onboarding-tour-fixture'
 
@@ -62,6 +65,7 @@ export function PodcastOnboardingTour() {
           />
         ),
         people: <PeopleDirectory people={TOUR_PEOPLE} />,
+        radar: <RadarReview items={TOUR_RADAR.items} status={TOUR_RADAR.status} />,
       }}
     />
   )

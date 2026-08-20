@@ -16,6 +16,9 @@
  */
 
 import type { NamedRoute, NetworkPerson } from '@/modules/network'
+import type { RadarProposal, RadarRunStatus } from '@/modules/podcast-planning/domain/radar-types'
+import type { ProposalEvidence } from '@/modules/podcast-planning/ui/proposal-card'
+import type { RadarReviewItem } from '@/modules/podcast-planning/ui/radar-screen'
 import { DEFAULT_PLANNING_CONFIG } from '@/modules/podcast-planning/domain/types'
 import type {
   CandidateStage,
@@ -486,4 +489,89 @@ export const TOUR_DRAWER = {
   routes: BERGMANN_ROUTES,
   invitations: BERGMANN_INVITATIONS,
   openAskCount: TOUR_BOARD.openAskCount,
+}
+
+// ─── Radar ────────────────────────────────────────────────────────────────────
+
+/**
+ * Two papers, from the two catalogues Radar actually reads. Both are needed:
+ * the two-source floor is the rule the tour is about to explain, and a
+ * one-source example would contradict it on screen.
+ */
+const RADAR_EVIDENCE: ProposalEvidence[] = [
+  {
+    id: 'tour-signal-consensus',
+    title:
+      'Inconsistent evidence thresholds in national reimbursement decisions for molecular diagnostics',
+    url: 'https://example.org/records/thresholds',
+    publishedAt: dateAgo(11),
+    source: 'openalex',
+  },
+  {
+    id: 'tour-signal-registry',
+    title: 'Access to molecular testing across four European health systems: a registry analysis',
+    url: 'https://example.org/records/access',
+    publishedAt: dateAgo(26),
+    source: 'europepmc',
+  },
+]
+
+/**
+ * A proposal Radar would produce for a question that does **not** exist yet —
+ * the ambient case, which is the one worth showing, because the reader has to
+ * understand that accepting opens a draft question rather than filing a name.
+ *
+ * The angles are written the way the grounding rule forces them to be: about
+ * what the paper shows, attributable to the record beside it.
+ */
+const RADAR_PROPOSAL: RadarProposal = {
+  id: 'tour-proposal',
+  questionId: null,
+  mode: 'topic',
+  proposedQuestion:
+    'Should a diagnostic be reimbursed on the same evidence in one country and refused in another?',
+  whyNow:
+    'Two independent groups published inside a fortnight — one showing national thresholds diverging, one measuring what that costs patients.',
+  whyNowAt: dateAgo(11),
+  signalIds: RADAR_EVIDENCE.map((item) => item.id),
+  names: [
+    {
+      name: 'Clara Vasseur',
+      role: 'First author',
+      organisation: 'Institut Curie',
+      country: 'FR',
+      angle:
+        'Measured the thresholds diverging, so can say whether it is evidence or appetite that differs.',
+      signalId: 'tour-signal-consensus',
+      url: 'https://example.org/records/thresholds',
+      sourceCount: 2,
+    },
+    {
+      name: 'Nora Roessler',
+      role: 'Senior author',
+      organisation: 'Charité — Universitätsmedizin Berlin',
+      country: 'DE',
+      angle: 'Ran the registry analysis and can say what the delay does to the people waiting.',
+      signalId: 'tour-signal-registry',
+      url: 'https://example.org/records/access',
+      sourceCount: 1,
+    },
+  ],
+  status: 'pending',
+  dismissedReason: null,
+  decidedAt: null,
+  openedQuestionId: null,
+  openedCandidates: 0,
+  createdAt: daysAgo(1),
+}
+
+export const TOUR_RADAR: { items: RadarReviewItem[]; status: RadarRunStatus } = {
+  items: [{ proposal: RADAR_PROPOSAL, evidence: RADAR_EVIDENCE, questionLabel: null }],
+  status: {
+    status: 'success',
+    message: null,
+    startedAt: daysAgo(1),
+    finishedAt: daysAgo(1),
+    inserted: 1,
+  },
 }

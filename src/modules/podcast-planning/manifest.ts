@@ -11,6 +11,12 @@
  *
  * Not part of `events`: the podcast *episode* stays there, and a Recorded card
  * hands over to the content calendar rather than duplicating it.
+ *
+ * Phase B adds Radar (ADR-0016): signals read from open scholarly APIs through
+ * `@/kernel/sources`, grouped by a model into one reviewable proposal, which on
+ * acceptance writes people through `network`'s API and unscored wishlist cards
+ * through this component's own. Radar contributes stored fields — sources,
+ * dates — and never a term in the score.
  */
 
 import { defineManifest } from '@/kernel/manifest'
@@ -30,8 +36,11 @@ export const manifest = defineManifest({
       'podcast_question_candidates',
       'podcast_candidate_scores',
       'podcast_invitations',
+      'podcast_radar_signals',
+      'podcast_radar_proposals',
+      'podcast_radar_status',
     ],
-    migrations: ['00172'],
+    migrations: ['00172', '00175'],
   },
   provides: {
     api: [
@@ -74,6 +83,16 @@ export const manifest = defineManifest({
       'handOverToContentCalendar',
       'importPastGuests',
       'loadScoreHistory',
+      // radar (Phase B)
+      'findNamesForQuestion',
+      'acceptProposal',
+      'dismissProposal',
+      'loadProposals',
+      'loadRadarStatus',
+      'countPendingProposals',
+      'runRadarScan',
+      'radarDedupeKey',
+      'anonymiseClosedCards',
     ],
     events: ['podcast.candidate.booked', 'podcast.candidate.recorded'],
     ui: [
@@ -82,11 +101,13 @@ export const manifest = defineManifest({
       'QuestionsScreen',
       'CandidateDrawer',
       'PodcastOnboardingTour',
+      'RadarScreen',
+      'FindNamesButton',
     ],
     settingsPanel: true,
   },
   dependsOn: {
-    kernel: ['identity', 'rbac', 'data', 'settings'],
+    kernel: ['identity', 'rbac', 'data', 'settings', 'ai-client', 'sources'],
     // People and routes come from `network`'s published contract; the content
     // calendar handover goes through `content`'s.
     components: ['network@^1', 'content@^1', 'events@^1'],
@@ -155,11 +176,116 @@ export const manifest = defineManifest({
       max: 365,
       step: 1,
     },
+    // ── Radar (Phase B). Thresholds, not constants: the ten-cards-a-fortnight
+    // target is a design guess until three real reviews have been run.
+    radarEnabled: {
+      type: 'boolean',
+      label: 'Radar scan enabled',
+      description:
+        'Whether the scheduled scan runs. "Find names" on a question is a person pressing a button and is never affected by this.',
+      default: true,
+    },
+    radarIntervalDays: {
+      type: 'number',
+      label: 'Scan every (days)',
+      description:
+        'Matches the working rhythm. A scan more often than the review that clears it just builds a backlog, which is the inbox Radar exists to avoid.',
+      default: 14,
+      min: 1,
+      max: 90,
+      step: 1,
+    },
+    radarDomainAnchor: {
+      type: 'string',
+      label: 'Always search within',
+      description:
+        'Kept in every Radar query so a question’s leftover words cannot wander out of the field. Without it, "does earlier detection actually change outcomes" returns kidney-stone diagnostics.',
+      default: 'cancer',
+    },
+    radarLookbackDays: {
+      type: 'number',
+      label: 'Look back (days)',
+      description: 'How far back a scan reads the open sources for new material.',
+      default: 120,
+      min: 7,
+      max: 730,
+      step: 1,
+    },
+    radarMaxNames: {
+      type: 'number',
+      label: 'Names per proposal',
+      description:
+        'The most people one proposal may suggest. A shortlist somebody reads beats a list they scroll.',
+      default: 6,
+      min: 1,
+      max: 20,
+      step: 1,
+    },
+    radarMinSources: {
+      type: 'number',
+      label: 'Sources before a topic appears',
+      description:
+        'One paper is not a topic. Three independent sources in a fortnight is itself the reason to record now — and is where the timeliness score saturates.',
+      default: 2,
+      min: 1,
+      max: 10,
+      step: 1,
+    },
+    radarMaxTopicsPerRun: {
+      type: 'number',
+      label: 'Topics per scan',
+      description:
+        'Surplus is dropped, never queued. If more clear the bar than this allows, the bar is wrong.',
+      default: 10,
+      min: 1,
+      max: 50,
+      step: 1,
+    },
+    radarMaxSearchesPerRun: {
+      type: 'number',
+      label: 'Search calls per run',
+      description: 'Hard ceiling on provider web searches in one run — the per-run half of the cost guard.',
+      default: 8,
+      min: 0,
+      max: 60,
+      step: 1,
+    },
+    radarMonthlyBudgetUsd: {
+      type: 'number',
+      label: 'Monthly AI budget (USD)',
+      description:
+        'A scheduled run checks the trailing thirty days of recorded AI spend and refuses if this is exceeded, saying so in the run status. It never blocks a person pressing a button.',
+      default: 25,
+      min: 1,
+      max: 1000,
+      step: 1,
+    },
+    retentionClosedCardMonths: {
+      type: 'number',
+      label: 'Anonymise closed cards after (months)',
+      description:
+        'A closed card keeps its reason — which is what the model learns from — but loses the note and the person it pointed at.',
+      default: 12,
+      min: 1,
+      max: 120,
+      step: 1,
+    },
   },
   featureFlag: 'comms_team',
   personas: ['communications-coordinator'],
   roles: { read: ['comms_team', 'admin'], write: ['comms_team', 'admin'] },
-  requirements: ['REQ-POD-001', 'REQ-POD-002', 'REQ-POD-003', 'REQ-POD-004'],
+  requirements: [
+    'REQ-POD-001',
+    'REQ-POD-002',
+    'REQ-POD-003',
+    'REQ-POD-004',
+    'REQ-RAD-001',
+    'REQ-RAD-002',
+    'REQ-RAD-003',
+    'REQ-RAD-004',
+    'REQ-RAD-005',
+    'REQ-RAD-006',
+  ],
   operations: [],
 })
 

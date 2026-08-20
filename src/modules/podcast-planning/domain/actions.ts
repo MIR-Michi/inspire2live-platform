@@ -166,6 +166,13 @@ export async function addCandidate(input: {
   questionId: string
   personId: string
   angle?: string | null
+  /**
+   * Where the name came from. Radar passes its own proposal so "did assisted
+   * discovery ever produce somebody who got booked" has an answer; everything
+   * else is a person typing, which is the default.
+   */
+  origin?: 'human' | 'radar'
+  radarProposalId?: string | null
 }): Promise<ActionResult<{ id: string }>> {
   // The soft reference is checked here, through `network`'s public API, because
   // there is no foreign key to check it for us (ADR-0013 §2).
@@ -181,6 +188,8 @@ export async function addCandidate(input: {
       question_id: input.questionId,
       person_id: input.personId,
       angle: input.angle ?? null,
+      origin: input.origin ?? 'human',
+      radar_proposal_id: input.radarProposalId ?? null,
       created_by: await currentUserId(),
     })
     .select('id')

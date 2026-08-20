@@ -33,6 +33,11 @@ yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 
+# stdout/stderr from background dev servers started by an agent session
+codex-*.log
+*.out.log
+*.err.log
+
 # env files — keep .env.example committed as a template
 .env
 .env.local

@@ -70,12 +70,20 @@ body {
 }
 
 /* ─── Global copy cleanup ─────────────────────────────────────────────────── */
-h1 + p[class*="text-sm"][class*="text-neutral-500"],
-h2 + p[class*="text-sm"][class*="text-neutral-500"],
-h3 + p[class*="text-sm"][class*="text-neutral-500"],
-h1 + p[class*="text-sm"][class*="text-neutral-600"],
-h2 + p[class*="text-sm"][class*="text-neutral-600"],
-h3 + p[class*="text-sm"][class*="text-neutral-600"] {
+/*
+ * The visual-UX pass dropped decorative subtitles; this catches the ones shared
+ * components still emit. It matches on *shape*, which makes it blunt: a
+ * paragraph that happens to be small, grey and next to a heading disappears
+ * whether or not it is decoration. Anything that is real content — the sentence
+ * a Radar proposal is justified by, for instance — must say so with `data-copy`
+ * and is then left alone.
+ */
+h1 + p[class*="text-sm"][class*="text-neutral-500"]:not([data-copy]),
+h2 + p[class*="text-sm"][class*="text-neutral-500"]:not([data-copy]),
+h3 + p[class*="text-sm"][class*="text-neutral-500"]:not([data-copy]),
+h1 + p[class*="text-sm"][class*="text-neutral-600"]:not([data-copy]),
+h2 + p[class*="text-sm"][class*="text-neutral-600"]:not([data-copy]),
+h3 + p[class*="text-sm"][class*="text-neutral-600"]:not([data-copy]) {
   display: none;
 }
 

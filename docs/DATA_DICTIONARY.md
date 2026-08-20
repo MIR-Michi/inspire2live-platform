@@ -3,7 +3,7 @@
 > **Purpose:** Human-readable database schema reference. Table descriptions, key columns, relationships.  
 > **Source of truth:** `supabase/migrations/` (00001–00173) and `src/types/database.ts`  
 > **Audience:** Developers writing queries, new team members understanding the data model.  
-> **Last reviewed:** 2026-08-19
+> **Last reviewed:** 2026-08-20
 
 ---
 
@@ -476,5 +476,38 @@ also point at the source's image, which `publishing_sources` owns.
 
 ---
 
-*Last updated: 2026-08-19 · Maintainer: Michael Wittinger*
+## 14 · Podcast Radar (Sprint 22)
+
+Phase B of the opportunity engine: assisted discovery. Design in
+[`PODCAST_RADAR_CONCEPT.md`](PODCAST_RADAR_CONCEPT.md), decision in
+[ADR-0016](ADR/0016-radar-structured-sources.md). All three tables are owned by `podcast-planning`
+and readable only by the comms team (`is_comms_team_or_admin()`).
+
+### `podcast-planning` — Radar (migration `00175`)
+
+| Table | Purpose | Key columns |
+|---|---|---|
+| `podcast_radar_signals` | One row per record retrieved from an open source. The **evidence layer**: everything a proposal cites resolves to a row here, and nothing a model said is stored as fact. | `source` (`openalex`/`europepmc`/`congress_programme`/`regulator`/`web`), `external_id`, **`dedupe_key`** (unique — `source:external_id`, computed identically in app code and SQL), `title`, `url`, `published_at`, `people` (jsonb: name, role, organisation, country, external id), `payload` (jsonb: doi, venue, citation count, …), `discovered_at` |
+| `podcast_radar_proposals` | One row per thing put forward for review — a question, its why-now, and the names attached. Survives the decision: what was suggested and *not* taken is part of the record. | `mode` (`names` for a live question, `topic` for the scan), `question_id` (null for `topic`), `proposed_question` + `why_now` + `why_now_at` (**copies**, so the card still reads correctly after the question is reworded), `signal_ids` (uuid[]), `names` (jsonb, each with its `signalId`), `status` (`pending`/`opened`/`dismissed`/`later`/`superseded`), `dismissed_reason`, `decided_by`/`decided_at`, `model`/`effort`/`raw_response` |
+| `podcast_radar_status` | Singleton run-lock and last-run report for the scheduled scan, same shape as `conference_discovery_status`. | `singleton` (CHECK true), `last_run_status` (`idle`/`running`/`success`/`error`), `last_run_message` (prose — the Radar screen shows it verbatim), `started_at`, `finished_at`, `proposals_created` |
+
+**Two indexes carry rules, not just speed.** `uq_podcast_radar_signals_dedupe` makes re-running a
+search converge on one row rather than accumulating copies, which is what keeps the independent-source
+count honest. `uq_podcast_radar_one_pending` (partial, `status = 'pending' and question_id is not
+null`) allows only one open proposal per question — a second "find names" run supersedes the first
+rather than stacking a second card on the reviewer.
+
+**`podcast_question_candidates` gains two columns.** `origin` (`human`/`radar`, default `human`,
+CHECK-constrained) and `radar_proposal_id`, so a card created from a proposal stays attributable to
+the run that suggested it. Cards Radar creates are **unscored wishlist cards** — Radar never writes a
+score, and scoring stays the arithmetic it already was.
+
+**Cross-source duplication is collapsed before storage.** OpenAlex and Europe PMC both index many of
+the same papers (three in twenty-five on the first live run), and counting one paper twice would let a
+single result clear a floor built to require corroboration. Records sharing a DOI are merged, keeping
+the OpenAlex row because it carries author identifiers and countries.
+
+---
+
+*Last updated: 2026-08-20 · Maintainer: Michael Wittinger*
 

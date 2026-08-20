@@ -37,6 +37,8 @@ export type AiWorkloadId =
   | 'personal_monitoring'
   | 'lightweight_backfill'
   | 'channel_post_draft'
+  | 'podcast_radar_names'
+  | 'podcast_radar_topics'
 
 export type AiWorkloadPolicy = {
   id: AiWorkloadId
@@ -225,6 +227,28 @@ export const AI_WORKLOAD_POLICIES: readonly AiWorkloadPolicy[] = [
     recommendedEffort: 'medium',
     recommendation:
       'Short, well-bounded copywriting with a human reviewing every word does not warrant the most expensive reasoning tier. Sonnet 5 reads image input (screenshot sources) and keeps grounded structured output reliable at Sonnet cost; override per workload if calibration shows the drafts drifting.',
+  },
+  {
+    id: 'podcast_radar_names',
+    section: 'Podcast Radar',
+    label: 'Suggest guests for a question',
+    description:
+      'Reads author records already fetched from open scholarly APIs and says which of those people could answer a specific podcast question, and what only they could say.',
+    recommendedModel: 'claude-sonnet-5',
+    recommendedEffort: 'low',
+    recommendation:
+      'The facts arrive from the API, not from the model: it selects among people it was handed and writes one sentence about each, and a suggestion naming anybody it was not given is discarded before review. That is judgement over a bounded list rather than research, so Sonnet 5 at low effort is the right tier.',
+  },
+  {
+    id: 'podcast_radar_topics',
+    section: 'Podcast Radar',
+    label: 'Group signals into a question',
+    description:
+      'Bundles scholarly and policy signals that are about one underlying issue and phrases that issue as a single arguable question with a dated reason it matters now.',
+    recommendedModel: 'claude-sonnet-5',
+    recommendedEffort: 'low',
+    recommendation:
+      'Grouping and phrasing are the two things a database cannot do, and both are checked by a human before anything is opened. Sonnet 5 keeps citation discipline reliable at Sonnet cost; raise the effort only if the proposed questions read as subject areas rather than as claims somebody could disagree with.',
   },
 ] as const
 

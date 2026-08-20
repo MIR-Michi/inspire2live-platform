@@ -3,17 +3,17 @@
 /**
  * podcast-planning/ui/onboarding-tour-scenes.tsx — the script the tour plays.
  *
- * Twenty-four scenes in seven chapters, following **one worked example** (the
+ * Twenty-seven scenes in seven chapters, following **one worked example** (the
  * unreimbursed-diagnostic question in `onboarding-tour-fixture.ts`) from a blank
  * Questions screen to a recording handed to the calendar.
  *
- * Half the scenes put the **real screens** on stage — the Questions screen, the
- * Board, a candidate drawer, the route explorer and the People directory,
- * rendered server-side in `onboarding-tour-screens.tsx` and referenced here by
- * `screen` — with a `focus` that zooms into the part being talked about. The
- * rest are schematic, and only where there is nothing to point at: the reason a
- * question outlives a no, the shape of the network, the search that is still
- * being built, the six-ask ceiling.
+ * Most scenes put the **real screens** on stage — the Questions screen, the
+ * Board, a candidate drawer, the route explorer, the People directory and the
+ * Radar review, rendered server-side in `onboarding-tour-screens.tsx` and
+ * referenced here by `screen` — with a `focus` that zooms into the part being
+ * talked about. The rest are schematic, and only where there is nothing to point
+ * at: the reason a question outlives a no, the shape of the network, the rule
+ * that keeps Radar grounded, the six-ask ceiling.
  *
  * The rationale spoken here is the reasoning recorded in
  * `docs/PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md` (§1 why it exists · §2 question
@@ -70,15 +70,6 @@ function Card({ children, className }: { children: React.ReactNode; className?: 
 function Label({ children }: { children: React.ReactNode }) {
   return (
     <p className="text-xs font-semibold uppercase tracking-[0.12em] text-neutral-400">{children}</p>
-  )
-}
-
-/** Marks a scene as describing something not yet in the product. */
-function ComingNext() {
-  return (
-    <span className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-violet-50 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.1em] text-violet-700">
-      Coming next
-    </span>
   )
 }
 
@@ -260,72 +251,111 @@ function SceneNetworkFirst() {
   )
 }
 
-/** What the assisted search watches. Explicitly not built yet. */
-function SceneAiSearch() {
-  const sources = ['Journals', 'Registries', 'Regulators', 'Congress programmes', 'News']
+/**
+ * Where the facts come from, and what is left for the model to do (ADR-0016).
+ * The struck-through name is the point of the scene, not decoration.
+ */
+function SceneGrounding() {
   return (
     <Stage>
-      <Enter delay={200}>
-        <ComingNext />
-      </Enter>
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-3">
         <div className="space-y-1">
-          {sources.map((source, index) => (
-            <Enter key={source} delay={700 + index * 400}>
-              <span className="block rounded-lg border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-medium text-neutral-600 shadow-sm">
+          {['OpenAlex', 'Europe PMC'].map((source, index) => (
+            <Enter key={source} delay={200 + index * 500}>
+              <span className="block rounded-lg border border-neutral-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-neutral-700 shadow-sm">
                 {source}
               </span>
             </Enter>
           ))}
+          <Enter delay={1200}>
+            <p className="pt-0.5 text-[10px] font-medium text-neutral-400">open catalogues</p>
+          </Enter>
         </div>
-        <Enter delay={2800}>
-          <IconArrowRight className="h-5 w-5 text-neutral-400" />
+        <Enter delay={1500}>
+          <IconArrowRight className="h-4 w-4 text-neutral-400" />
         </Enter>
-        <Enter delay={3100}>
-          <div className="w-32 rounded-xl border-2 border-neutral-900 bg-white px-3 py-2.5 text-center shadow-sm">
-            <IconQuestion className="mx-auto h-5 w-5 text-neutral-900" />
-            <p className="mt-1 text-[11px] font-semibold text-neutral-900">your live questions</p>
+        <Enter delay={1800}>
+          <div className="w-28 rounded-xl border-2 border-neutral-900 bg-white px-2.5 py-2 text-center shadow-sm">
+            <p className="text-[11px] font-bold text-neutral-900">the records</p>
+            <p className="mt-0.5 text-[10px] leading-tight text-neutral-500">
+              papers · authors · affiliations · dates
+            </p>
+          </div>
+        </Enter>
+        <Enter delay={2400}>
+          <IconArrowRight className="h-4 w-4 text-neutral-400" />
+        </Enter>
+        <Enter delay={2700}>
+          <div className="w-28 rounded-xl border border-dashed border-violet-300 bg-violet-50 px-2.5 py-2 text-center">
+            <p className="text-[11px] font-bold text-violet-800">the model</p>
+            <p className="mt-0.5 text-[10px] leading-tight text-violet-700">
+              groups and phrases — nothing else
+            </p>
           </div>
         </Enter>
       </div>
-      <Enter delay={4000}>
-        <p className="text-xs font-medium text-neutral-500">open sources only — never scraped profiles</p>
+      <Enter delay={3500}>
+        <div className="flex items-center gap-2 rounded-xl border border-neutral-200 bg-white px-3 py-2 shadow-sm">
+          {/* Deliberately not an InitialsAvatar: real initials here read as a
+              real person, and this one is meant to be nobody. */}
+          <span className="flex h-7 w-7 items-center justify-center rounded-full border border-dashed border-neutral-300 text-[11px] font-bold text-neutral-300">
+            ?
+          </span>
+          <span className="text-xs font-medium text-neutral-400 line-through">
+            a name no record backs
+          </span>
+          <span className="rounded-full bg-neutral-900 px-2 py-0.5 text-[10px] font-bold text-white">
+            dropped
+          </span>
+        </div>
+      </Enter>
+      <Enter delay={4300}>
+        <p className="text-xs font-medium text-neutral-500">
+          dropped before you see it — not flagged for you to judge
+        </p>
       </Enter>
     </Stage>
   )
 }
 
-/** The three filters, the citation, and the human gate at the end. */
-function SceneAiFilters() {
-  const filters = ['Is it about the question?', 'Does it group with what we have?', 'Who is named in it?']
+/** What accepting writes — and, more importantly, what it refuses to write. */
+function SceneAccept() {
+  const writes = ['A draft question', 'Unscored cards on the wishlist', 'People, each fact cited']
+  const nevers = ['a score', 'a listener action', 'any stage past Wishlist']
   return (
     <Stage>
+      <Enter delay={200}>
+        <span className="inline-flex items-center gap-1.5 rounded-lg bg-neutral-900 px-3 py-1.5 text-xs font-semibold text-white">
+          <IconCheck className="h-3.5 w-3.5" />
+          Open the question with 2 names
+        </span>
+      </Enter>
       <div className="flex flex-wrap justify-center gap-1.5">
-        {filters.map((filter, index) => (
-          <Enter key={filter} delay={300 + index * 800}>
-            <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-600 shadow-sm">
-              <IconCheck className="h-3 w-3 text-neutral-400" />
-              {filter}
+        {writes.map((item, index) => (
+          <Enter key={item} delay={900 + index * 600}>
+            <span className="inline-flex items-center gap-1 rounded-full border border-neutral-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-neutral-700 shadow-sm">
+              <IconCheck className="h-3 w-3 text-emerald-600" />
+              {item}
             </span>
           </Enter>
         ))}
       </div>
-      <Enter delay={2800}>
-        <Card className="flex w-full max-w-sm items-center gap-3 px-4 py-3">
-          <InitialsAvatar name="Femke Aalders" className="h-9 w-9 text-xs" />
-          <div className="min-w-0 flex-1">
-            <p className="text-sm font-semibold text-neutral-900">Suggested name</p>
-            <p className="truncate text-[11px] text-neutral-500">with the source it came from</p>
-          </div>
-          <span className="rounded-full bg-neutral-100 px-2 py-0.5 text-[10px] font-semibold text-neutral-600">
-            source
+      <Enter delay={3000}>
+        <div className="flex flex-wrap items-center justify-center gap-1.5 rounded-xl border border-dashed border-neutral-300 bg-neutral-50 px-3 py-2">
+          <span className="text-[11px] font-bold uppercase tracking-[0.1em] text-neutral-400">
+            never
           </span>
-        </Card>
+          {nevers.map((item, index) => (
+            <span key={item} className="text-[11px] font-medium text-neutral-500">
+              {index > 0 && <span className="pr-1.5 text-neutral-300">·</span>}
+              {item}
+            </span>
+          ))}
+        </div>
       </Enter>
       <Enter delay={3900}>
-        <p className="inline-flex items-center gap-1.5 rounded-full border border-neutral-900 bg-neutral-950 px-3 py-1 text-[11px] font-semibold text-white">
-          <IconCheck className="h-3 w-3" />
-          nothing lands on the board until a person accepts it
+        <p className="text-xs font-medium text-neutral-500">
+          it opens a draft — the editorial decision stays yours
         </p>
       </Enter>
     </Stage>
@@ -515,7 +545,7 @@ export const CHAPTERS: Array<{
 // ─── The script ───────────────────────────────────────────────────────────────
 
 /** Which real screen a scene puts on stage (rendered in `-screens.tsx`). */
-export type ScreenId = 'questions' | 'board' | 'drawer' | 'routes' | 'people'
+export type ScreenId = 'questions' | 'board' | 'drawer' | 'routes' | 'people' | 'radar'
 
 /**
  * The width each screen is laid out at before the stage scales it to the frame —
@@ -528,6 +558,9 @@ export const SCREEN_WIDTH: Record<ScreenId, number> = {
   drawer: 400,
   routes: 520,
   people: 880,
+  // Wider than the card looks, so the whole proposal — evidence line, both
+  // names and the two buttons — fits the stage without the camera moving.
+  radar: 1020,
 }
 
 /**
@@ -654,22 +687,51 @@ const SCRIPT: Array<Omit<Scene, 'duration'>> = [
     View: SceneNetworkFirst,
   },
   {
-    id: 'ai-search',
+    id: 'suggest-guests',
     chapter: 'people',
-    title: 'Reaching further: assisted search',
-    caption: 'Not built yet. A research assistant on open sources — not a magic box.',
+    title: 'Ask for names, on any question',
+    caption: 'One button reads the open scholarly record and comes back with people.',
     narration:
-      'Reaching beyond the network is where assisted search comes in. It is not built yet, and this is how it will work: like a research assistant watching open sources — journals, registries, regulators, congress programmes, the news — for your live questions.',
-    View: SceneAiSearch,
+      'When those rings run out, ask. One button on any live question reads the open scholarly record and comes back with people who have actually published on it — usually in under a minute.',
+    screen: 'questions',
+    focus: { scale: 1.55, x: 30, y: 50 },
   },
   {
-    id: 'ai-filters',
+    id: 'radar-review',
     chapter: 'people',
-    title: 'Three filters, then a human',
-    caption: 'Every suggestion would arrive with its source, and wait for someone to accept it.',
+    title: 'Or it comes to you',
+    caption: 'Radar reads every fortnight and proposes the question, not just the names.',
     narration:
-      'What it finds passes three filters: is it about the question, does it group with what we have, and who is named. Every suggestion carries its source, and a person accepts it before it reaches the board. The score stays plain arithmetic, never a model.',
-    View: SceneAiFilters,
+      'You do not have to ask. Every fortnight Radar reads the same sources and proposes questions the podcast could be asking — each one a single card, waiting on the Radar tab.',
+    screen: 'radar',
+  },
+  {
+    id: 'radar-evidence',
+    chapter: 'people',
+    title: 'Two sources, or it does not appear',
+    caption: 'Every name carries the paper that names them; the count is of records, not opinions.',
+    narration:
+      'Nothing reaches this card on one source. Two independent groups published inside a fortnight, and each suggested person carries the paper that names them, with one line on what only they could say.',
+    screen: 'radar',
+    focus: { scale: 1.4, x: 30, y: 34 },
+  },
+  {
+    id: 'grounding',
+    chapter: 'people',
+    title: 'The model never sources a fact',
+    caption: 'Names, affiliations and dates come from records. The model only groups and phrases.',
+    narration:
+      'That is the rule underneath all of it. Names, affiliations, papers and dates come from the catalogues; the model is handed records it cannot add to, and only groups and phrases them. A name no record backs is dropped before you ever see it, rather than shown with a warning nobody reads.',
+    View: SceneGrounding,
+  },
+  {
+    id: 'radar-accept',
+    chapter: 'people',
+    title: 'Accepting opens a draft',
+    caption: 'A draft question and unscored cards — never a score, never a listener action.',
+    narration:
+      'Tick the names worth having and accept. That opens a draft question and puts unscored cards on the wishlist — it never writes a score, never invents what a listener should do, and never moves anything past wishlist. If it is wrong, one tap says why, and that is the only thing Radar learns from.',
+    View: SceneAccept,
   },
 
   // ── The board ──────────────────────────────────────────────────────────────

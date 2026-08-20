@@ -22,7 +22,18 @@ interface SendDigestOptions {
   baseUrl: string
   now?: Date
   reason?: 'manual' | 'scheduled'
+  highlights?: DigestHighlight[]
 }
+
+/**
+ * A one-line pointer to something waiting elsewhere in the workspace.
+ *
+ * Deliberately anonymous: the caller composes the sentence and the link, so
+ * this module never learns what a Radar proposal or any other component's
+ * backlog is. The digest is the one place people reliably look, and every
+ * component will eventually want a line in it.
+ */
+export type DigestHighlight = { text: string; href: string }
 
 interface DigestRunResult {
   sent: boolean
@@ -36,6 +47,7 @@ function buildDigestEmailHtml(params: {
   reviewUrl: string
   breakdown: Array<{ label: string; count: number }>
   generatedAt: string
+  highlights?: DigestHighlight[]
 }) {
   const rows = params.items
     .slice(0, 8)
@@ -61,6 +73,13 @@ function buildDigestEmailHtml(params: {
     .map(
       (entry) =>
         `<span style="display:inline-block;margin:0 8px 8px 0;padding:6px 10px;border-radius:999px;background:#fff7ed;color:#9a3412;font-size:12px;font-weight:600;">${entry.count} ${entry.label}</span>`
+    )
+    .join('')
+
+  const highlightsHtml = (params.highlights ?? [])
+    .map(
+      (h) =>
+        `<div style="margin:0 0 8px;"><a href="${h.href}" style="color:#2563eb;text-decoration:none;font-size:14px;font-weight:600;">${escapeHtml(h.text)} &rarr;</a></div>`
     )
     .join('')
 
@@ -90,6 +109,7 @@ function buildDigestEmailHtml(params: {
                 ${getDigestWindowLabel(params.items.length)} have been captured for review since the last digest run.
               </p>
               <div style="margin:0 0 20px;">${breakdownHtml}</div>
+              ${highlightsHtml ? `<div style="margin:0 0 20px;padding:14px 16px;background:#f8fafc;border-left:3px solid #cbd5e1;border-radius:6px;">${highlightsHtml}</div>` : ''}
               <table width="100%" cellpadding="0" cellspacing="0">${rows}</table>
               <div style="margin-top:24px;">
                 <a href="${params.reviewUrl}" style="display:inline-block;background:#ea580c;color:#fff;text-decoration:none;padding:12px 20px;border-radius:10px;font-weight:700;">Open intake queue</a>
@@ -239,6 +259,7 @@ export async function sendDailyCommsDigest(options: SendDigestOptions): Promise<
     reviewUrl: `${baseUrl}/app/comms/intake`,
     breakdown: buildBreakdown(items),
     generatedAt,
+    highlights: options.highlights,
   })
 
   const result = await attemptDigestDelivery({
@@ -264,7 +285,12 @@ export async function sendDailyCommsDigest(options: SendDigestOptions): Promise<
   return { sent: result.sent, itemCount: items.length, error: result.error }
 }
 
-export async function sendScheduledCommsDigests(supabase: AdminClient, baseUrl: string, now = new Date()) {
+export async function sendScheduledCommsDigests(
+  supabase: AdminClient,
+  baseUrl: string,
+  now = new Date(),
+  highlights: DigestHighlight[] = [],
+) {
   const { data: recipientRows, error } = await supabase
     .from('profiles')
     .select('id, email, name, role, timezone, notification_prefs')
@@ -290,6 +316,7 @@ export async function sendScheduledCommsDigests(supabase: AdminClient, baseUrl: 
       baseUrl,
       now,
       reason: 'scheduled',
+      highlights,
     })
 
     results.push({

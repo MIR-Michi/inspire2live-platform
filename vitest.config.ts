@@ -53,6 +53,22 @@ export default defineConfig({
         'src/modules/podcast-planning/domain/actions.ts',
         'src/modules/podcast-planning/domain/config.ts',
         'src/modules/podcast-planning/domain/schema.ts',
+        // Sprint 22 (ADR-0016), same rule again. Radar's *decisions* are pure and
+        // covered: grounding and the drop-unsourced rule (`radar-grounding.ts`),
+        // dedupe, independence counting, search widening and the artefact filter
+        // (`radar-types.ts`), and the retention boundary (`retention.ts`, kept in
+        // deliberately) all sit at or near 100%. What is excluded here is the
+        // part with nothing left to decide: Supabase reads and writes, the
+        // settings resolver, the run-lock, and `radar.ts`, which is the wiring
+        // that hands a catalogue response to the model and the result to the
+        // repository. Covering those means mocking Supabase and a provider, and
+        // the resulting test asserts the mock rather than the behaviour.
+        'src/modules/podcast-planning/domain/radar-repository.ts',
+        'src/modules/podcast-planning/domain/radar-actions.ts',
+        'src/modules/podcast-planning/domain/radar-config.ts',
+        'src/modules/podcast-planning/domain/radar-run.ts',
+        'src/modules/podcast-planning/domain/radar.ts',
+        'src/modules/network/domain/retention.ts',
         // External API / email dispatch wrappers — no unit-test value.
         'src/modules/intake/domain/whatsapp-send.ts',
         'src/modules/intake/domain/whatsapp-media.ts',

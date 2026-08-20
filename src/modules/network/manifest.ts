@@ -48,6 +48,7 @@ export const manifest = defineManifest({
       'upsertPeopleByName',
       'recordObjection',
       'deletePerson',
+      'purgeInactivePeople',
       // affiliations
       'loadPersonAffiliations',
       'loadMemberAffiliations',
@@ -125,6 +126,16 @@ export const manifest = defineManifest({
       default: 14,
       min: 1,
       max: 90,
+      step: 1,
+    },
+    retentionInactiveMonths: {
+      type: 'number',
+      label: 'Delete inactive people after (months)',
+      description:
+        'These records describe people who never signed up. A record nobody has touched in this long is deleted — except members, CRM contacts, anyone still on a live card, and anyone who objected (their row is the objection).',
+      default: 18,
+      min: 3,
+      max: 120,
       step: 1,
     },
   },

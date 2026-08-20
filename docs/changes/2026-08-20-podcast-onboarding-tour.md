@@ -87,7 +87,12 @@ remove the tour.
 - Watch it in the browser: check the zoom framing on the board (the six-column layout needs a
   viewport ≥ 1280 px; below that Tailwind's `md:grid-cols-3` applies and the coordinates point at
   different columns), and tune `focus` values.
-- When Radar ships, the two "Coming next" scenes should become real screens like the rest.
+- ~~When Radar ships, the two "Coming next" scenes should become real screens like the rest.~~
+  **Done** — Radar shipped in [Sprint 22](../../sprints/sprint-22-podcast-radar/description.md) and
+  the two scenes became five in
+  [`2026-08-21-radar-in-the-tour.md`](2026-08-21-radar-in-the-tour.md), three of them the real Radar
+  review. The tour is now 27 scenes. That change also found and fixed the reason the scene captions
+  described below were never actually visible.
 - The script restates reasoning that lives in `PODCAST_OPPORTUNITY_ENGINE_CONCEPT.md`. That is a
   deliberate copy (a spoken script cannot link), and it is the one place in this feature that can
   drift — revisit it when the concept changes.

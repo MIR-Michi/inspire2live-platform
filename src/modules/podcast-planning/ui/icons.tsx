@@ -200,6 +200,18 @@ export function IconBoard({ className }: { className?: string }) {
   )
 }
 
+export function IconRadar({ className }: { className?: string }) {
+  // Concentric sweeps around a fixed point: something is being watched for.
+  return (
+    <Svg className={className}>
+      <path d="M12 12v-9" />
+      <circle cx="12" cy="12" r="9" />
+      <circle cx="12" cy="12" r="4.5" />
+      <circle cx="12" cy="12" r="1" />
+    </Svg>
+  )
+}
+
 export function IconOverride({ className }: { className?: string }) {
   return (
     <Svg className={className}>
