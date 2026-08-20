@@ -44,7 +44,13 @@ const SMALL_TILE_LIMIT = 6
 const EPISODE_SELECT =
   'id, name, start_date, event_image_url, presentation_summary, podcast_episode_title, podcast_series_name, podcast_guests, podcast_hosts, podcast_published, podcast_brief_ready, podcast_guest_confirmed, podcast_release_form_ready, podcast_equipment_ready, podcast_recording_completed, podcast_backup_completed, podcast_edit_completed, podcast_transcript_completed, podcast_show_notes_completed, podcast_followup_completed'
 
-const PLANNING_SCREENS: PlanningScreen[] = ['board', 'questions', 'people', 'introductions']
+const PLANNING_SCREENS: PlanningScreen[] = [
+  'board',
+  'questions',
+  'radar',
+  'people',
+  'introductions',
+]
 
 export default async function CommsPodcastPage({
   searchParams,

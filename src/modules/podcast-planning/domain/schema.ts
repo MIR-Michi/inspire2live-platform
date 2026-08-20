@@ -69,6 +69,8 @@ export type CandidateRow = {
   seats_filled: boolean
   will_share: boolean | null
   content_calendar_id: string | null
+  origin: string
+  radar_proposal_id: string | null
   created_by: string | null
   created_at: string
   updated_at: string
@@ -106,9 +108,58 @@ export type InvitationRow = {
   created_at: string
 }
 
+export type RadarSignalRow = {
+  id: string
+  source: string
+  external_id: string
+  title: string
+  url: string | null
+  published_at: string | null
+  people: unknown
+  payload: unknown
+  dedupe_key: string
+  discovered_at: string
+  created_at: string
+}
+
+export type RadarProposalRow = {
+  id: string
+  question_id: string | null
+  mode: string
+  proposed_question: string
+  why_now: string | null
+  why_now_at: string | null
+  signal_ids: string[]
+  names: unknown
+  model: string | null
+  effort: string | null
+  raw_response: unknown
+  status: string
+  dismissed_reason: string | null
+  decided_by: string | null
+  decided_at: string | null
+  opened_question_id: string | null
+  opened_candidates: number
+  created_by: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type RadarStatusRow = {
+  singleton: boolean
+  last_run_status: string
+  last_run_started_at: string | null
+  last_run_finished_at: string | null
+  last_run_message: string | null
+  last_run_inserted: number | null
+}
+
 export type PlanningDatabase = ModuleDatabase<{
   podcast_questions: ModuleTable<QuestionRow>
   podcast_question_candidates: ModuleTable<CandidateRow>
   podcast_candidate_scores: ModuleTable<CandidateScoreRow>
   podcast_invitations: ModuleTable<InvitationRow>
+  podcast_radar_signals: ModuleTable<RadarSignalRow>
+  podcast_radar_proposals: ModuleTable<RadarProposalRow>
+  podcast_radar_status: ModuleTable<RadarStatusRow>
 }>

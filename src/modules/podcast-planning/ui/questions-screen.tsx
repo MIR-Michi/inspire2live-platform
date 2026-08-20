@@ -14,6 +14,7 @@ import { ASK_META, FORMAT_META } from '@/modules/podcast-planning/domain/types'
 import type { PodcastQuestion, PlanningConfig } from '@/modules/podcast-planning/domain/types'
 import type { QuestionSummary } from '@/modules/podcast-planning/domain/question-summary'
 import { QuestionComposer } from '@/modules/podcast-planning/ui/question-composer'
+import { FindNamesButton } from '@/modules/podcast-planning/ui/find-names-button'
 import { IconCheck, IconStar } from '@/modules/podcast-planning/ui/icons'
 
 /** The readiness gate, one chip per requirement. Mirrors `questionReadiness`. */
@@ -125,6 +126,16 @@ export function QuestionsScreen({
                   <Stat value={wishlistSize} label="wishlist" />
                   <Stat value={inPlay} label="in play" />
                   <Stat value={episodes} label="episodes" />
+                  {/* The board's front door. Offered on every question that is
+                      still being worked, and loudest on an empty wishlist —
+                      which is the state where nothing else on this card helps. */}
+                  {question.status !== 'retired' && (
+                    <FindNamesButton
+                      questionId={question.id}
+                      label={wishlistSize === 0 ? 'Suggest guests' : 'Suggest more'}
+                      className="flex flex-wrap items-center gap-2"
+                    />
+                  )}
                   {question.format && (
                     <span className="text-xs font-medium text-neutral-500">
                       {FORMAT_META[question.format].label}

@@ -3,8 +3,12 @@
  *
  * Concept §4. Four screens in Phase A (Board · Questions · People ·
  * Introductions), navigated by an icon pill row — since the 2026-08 UX pass the
- * screens explain themselves visually instead of carrying a blurb, and Phase
- * B's Radar/Results are not named at all: an empty tab teaches nothing.
+ * screens explain themselves visually instead of carrying a blurb.
+ *
+ * Sprint 22 adds the fifth, Radar. It was withheld in Phase A on the grounds
+ * that an empty tab teaches nothing; it appears now because there is something
+ * in it, and it carries a count so the tab itself says whether it is worth
+ * opening. Results (Phase B's second screen) is still not named.
  *
  * This is the composition point between the two components: it loads the board
  * from `podcast-planning` and the people/routes/introductions from `network`'s
@@ -39,14 +43,17 @@ import { OpportunityBoard } from '@/modules/podcast-planning/ui/opportunity-boar
 import { QuestionsScreen } from '@/modules/podcast-planning/ui/questions-screen'
 import { CandidateDrawer } from '@/modules/podcast-planning/ui/candidate-drawer'
 import { GuestImportButton } from '@/modules/podcast-planning/ui/guest-import-button'
+import { RadarScreen } from '@/modules/podcast-planning/ui/radar-screen'
+import { loadProposals } from '@/modules/podcast-planning/domain/radar-repository'
 import {
   IconBoard,
   IconHandshake,
   IconPeople,
   IconQuestion,
+  IconRadar,
 } from '@/modules/podcast-planning/ui/icons'
 
-export type PlanningScreen = 'board' | 'questions' | 'people' | 'introductions'
+export type PlanningScreen = 'board' | 'questions' | 'people' | 'introductions' | 'radar'
 
 const SCREENS: Array<{
   id: PlanningScreen
@@ -55,6 +62,7 @@ const SCREENS: Array<{
 }> = [
   { id: 'board', label: 'Board', icon: IconBoard },
   { id: 'questions', label: 'Questions', icon: IconQuestion },
+  { id: 'radar', label: 'Radar', icon: IconRadar },
   { id: 'people', label: 'People', icon: IconPeople },
   { id: 'introductions', label: 'Introductions', icon: IconHandshake },
 ]
@@ -69,15 +77,21 @@ export async function PlanningStrategyShell({
   basePath: string
 }) {
   const supabase = await createClient()
-  const {
-    data: { user },
-  } = await supabase.auth.getUser()
+  const [
+    {
+      data: { user },
+    },
+    waiting,
+  ] = await Promise.all([supabase.auth.getUser(), loadProposals({ status: 'pending', limit: 50 })])
 
   const nav = (
     <nav className="inline-flex flex-wrap gap-1 rounded-xl border border-neutral-200 bg-white p-1">
       {SCREENS.map((item) => {
         const Icon = item.icon
         const active = screen === item.id
+        // The count is on the tab, not inside it: whether Radar is worth
+        // opening should be answerable without opening it.
+        const badge = item.id === 'radar' && waiting.length > 0 ? waiting.length : null
         return (
           <Link
             key={item.id}
@@ -91,6 +105,15 @@ export async function PlanningStrategyShell({
           >
             <Icon className="h-4 w-4" />
             {item.label}
+            {badge !== null && (
+              <span
+                className={`rounded-full px-1.5 text-[11px] font-bold ${
+                  active ? 'bg-white/20 text-white' : 'bg-amber-100 text-amber-800'
+                }`}
+              >
+                {badge}
+              </span>
+            )}
           </Link>
         )
       })}
@@ -103,6 +126,7 @@ export async function PlanningStrategyShell({
 
       {screen === 'board' && <BoardScreen basePath={basePath} cardId={cardId} />}
       {screen === 'questions' && <QuestionsTab />}
+      {screen === 'radar' && <RadarScreen />}
       {screen === 'people' && <PeopleTab profileId={user?.id ?? null} />}
       {screen === 'introductions' && <IntroductionsTab profileId={user?.id ?? null} />}
     </section>

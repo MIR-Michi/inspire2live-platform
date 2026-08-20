@@ -19,11 +19,12 @@
 >
 > **The in-app "How it works" tour narrates the reasoning in this document** — §1 (why the tab
 > exists), §2 (question before names), §3 (the stages, the gates and the one limit), §5 (what Radar
-> will watch, and that it is not built yet), §7, §8 and §10 (chance of a yes, routes and the score).
+> reads and the rule that keeps it grounded), §7, §8 and §10 (chance of a yes, routes and the score).
 > The script lives in `src/modules/podcast-planning/ui/onboarding-tour-scenes.tsx` and walks a
 > worked example through the real screens (`onboarding-tour-fixture.ts` ·
-> `onboarding-tour-screens.tsx`); when the thinking here changes, change it there too. See
-> `docs/changes/2026-08-20-podcast-onboarding-tour.md`.
+> `onboarding-tour-screens.tsx`) — including the real Radar review; when the thinking here changes,
+> change it there too. See `docs/changes/2026-08-20-podcast-onboarding-tour.md` and
+> `docs/changes/2026-08-21-radar-in-the-tour.md`.
 
 ---
 
@@ -186,6 +187,10 @@ invitations · draft message.
 ---
 
 ## 5. Where questions and names come from
+
+> **Radar is designed in detail in [`PODCAST_RADAR_CONCEPT.md`](PODCAST_RADAR_CONCEPT.md)** — the
+> review interaction, how these sources are actually read, and what accepting a proposal writes.
+> This section stays the statement of *which* sources and under what constraint.
 
 The Radar screen (Phase B) watches two families of source. The internal ones are more valuable,
 because nobody else has them.
@@ -542,6 +547,15 @@ least fifteen members with a completed affiliation profile.*
 KWF, congress programmes, news); grouping and automatic scoring with timeliness decay;
 co-authorship import and affiliation matching producing suggested routes; the Radar screen with
 promote/dismiss where dismissals tune relevance; launch-plan task generation and the Results screen.
+Designed in [`PODCAST_RADAR_CONCEPT.md`](PODCAST_RADAR_CONCEPT.md), which sequences it as
+**find names → the fortnightly scan → routes from co-authorship** and argues that finding names for
+a live question comes first, because Phase A shipped without any way to add a candidate at all.
+
+> **Delivered in [Sprint 22](../sprints/sprint-22-podcast-radar/description.md):** find names, the
+> fortnightly scan, the Radar screen with promote/dismiss, and dismissal learning — sourced from
+> **OpenAlex and Europe PMC**. Still outstanding from this paragraph: the remaining feeds (EMA,
+> ZonMw, KWF, congress programmes, news), co-authorship import and suggested routes, launch-plan
+> tasks and the Results screen.
 
 **Phase C — drafting and calibration.** Claude-drafted background, invitations and route
 explanations; post-recording extraction into the content calendar; weights corrected from measured

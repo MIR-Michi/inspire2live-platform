@@ -74,7 +74,11 @@ export {
 export type { FatigueVerdict, IntroducerLoad } from '@/modules/network/domain/fatigue'
 
 // ─── configuration ───────────────────────────────────────────────────────────
-export { resolveNetworkConfig } from '@/modules/network/domain/config'
+export {
+  DEFAULT_RETENTION_INACTIVE_MONTHS,
+  resolveNetworkConfig,
+  resolveRetentionMonths,
+} from '@/modules/network/domain/config'
 
 // ─── reads ───────────────────────────────────────────────────────────────────
 export {
@@ -113,6 +117,10 @@ export {
   updatePerson,
   upsertPeopleByName,
 } from '@/modules/network/domain/actions'
+
+// ─── retention (background) ──────────────────────────────────────────────────
+export { purgeInactivePeople } from '@/modules/network/domain/retention'
+export type { PurgeResult } from '@/modules/network/domain/retention'
 
 // ─── ui ──────────────────────────────────────────────────────────────────────
 export { PeopleDirectory } from '@/modules/network/ui/people-directory'

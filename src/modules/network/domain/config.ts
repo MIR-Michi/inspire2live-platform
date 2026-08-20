@@ -14,6 +14,7 @@
 
 import { componentPanel, resolveSetting } from '@/kernel/settings'
 import { createClient } from '@/kernel/data/server'
+import { createAdminClient } from '@/lib/supabase/admin'
 import { manifest } from '@/modules/network/manifest'
 import type { NetworkConfig } from '@/modules/network/domain/types'
 import { DEFAULT_NETWORK_CONFIG } from '@/modules/network/domain/types'
@@ -51,5 +52,27 @@ export async function resolveNetworkConfig(): Promise<NetworkConfig> {
   } catch (error) {
     console.error('[network] settings unavailable, using declared defaults:', error)
     return DEFAULT_NETWORK_CONFIG
+  }
+}
+
+/** Default retention window, in months. Mirrors the manifest declaration. */
+export const DEFAULT_RETENTION_INACTIVE_MONTHS = 18
+
+/**
+ * How long an untouched person record is kept.
+ *
+ * Read with the service role, because the only caller is a session-less cron —
+ * and a retention job that silently fell back to a default would be deleting
+ * records on a schedule the operator did not choose.
+ */
+export async function resolveRetentionMonths(): Promise<number> {
+  const panel = componentPanel(manifest)
+  if (!panel) return DEFAULT_RETENTION_INACTIVE_MONTHS
+  try {
+    const value = await resolveSetting(createAdminClient() as never, panel, 'retentionInactiveMonths')
+    return num(value, DEFAULT_RETENTION_INACTIVE_MONTHS)
+  } catch (error) {
+    console.error('[network] retention setting unavailable, using the default:', error)
+    return DEFAULT_RETENTION_INACTIVE_MONTHS
   }
 }
