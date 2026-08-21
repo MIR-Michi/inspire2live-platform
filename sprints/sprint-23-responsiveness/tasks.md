@@ -91,6 +91,25 @@ to prevent — the tests set the secret in every case and only ever presented a 
 branch that actually shipped was never executed by a test, and the environment reference had always
 documented the behaviour we wanted rather than the behaviour we had.
 
+## Also found: the test suite is not deterministic
+
+Adding two test files to the suite made **other, untouched** tests fail — `invite-user-account`,
+`resend-invitation` and the dead-code scan — with the signature of accumulated mock state
+("expected 1 call, got 2"). They pass in isolation, they pass in a three-file run alongside the new
+files, `main` passes cleanly, and the combined branch then passed three full runs in a row. Two
+runs failed with *different* sets of files. So it is a flake, not a defect, and the new tests only
+exposed it.
+
+The likely mechanism is load rather than leakage: Vitest isolates files by default, but
+`invite-user-account` takes ~14 s and `resend-invitation` ~6.5 s, which is extraordinary for unit
+tests and points at real timers or waits. Two more files in the pool changes the scheduling enough
+to tip them over.
+
+This matters here because the sprint will be judged on measurements, and a suite that fails
+randomly makes every "did this help?" answer unreliable — and it means CI can go red for reasons
+nobody changed. Worth a task of its own: find what those two files are actually waiting on. Not
+scoped into this sprint, because it is test infrastructure rather than product responsiveness.
+
 ## Outcome
 
 *To be written when the sprint closes. Must contain the before/after table from S23-T22, and an
