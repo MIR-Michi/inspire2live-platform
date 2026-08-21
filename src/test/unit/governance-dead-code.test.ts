@@ -29,8 +29,15 @@ function toPosix(p: string): string {
   return p.split(sep).join('/')
 }
 
+/**
+ * Sixty seconds, not the default five. This walks every source file in the
+ * repository twice, so its cost is disk rather than computation: alone it takes
+ * about a second, and under a fully parallel suite on a cold Windows filesystem
+ * it has been seen past five. Timing out there reports "dead code" for a tree
+ * that has none, which is a worse failure than waiting.
+ */
 describe('dead-code scan (lib + components)', () => {
-  it('has no zero-reference files', () => {
+  it('has no zero-reference files', { timeout: 60_000 }, () => {
     const candidates = [
       ...listSourceFiles(resolve(SRC, 'lib')),
       ...listSourceFiles(resolve(SRC, 'components')),

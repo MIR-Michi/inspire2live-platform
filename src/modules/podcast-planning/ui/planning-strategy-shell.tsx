@@ -221,6 +221,7 @@ async function PeopleTab({ profileId }: { profileId: string | null }) {
         <PeopleDirectory
           people={people}
           emptyHint="Nobody yet — import the past guests to start."
+          actions
         />
       </section>
 

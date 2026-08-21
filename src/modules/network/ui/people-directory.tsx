@@ -8,8 +8,10 @@
  */
 
 import { StatusBadge } from '@/kernel/ui'
+import { CRM_PERSON_TYPE_OPTIONS } from '@/modules/contacts'
 import { FRICTION_META, ORIGIN_META } from '@/modules/network/domain/types'
 import type { NetworkPerson, PersonOrigin } from '@/modules/network/domain/types'
+import { PersonActions } from '@/modules/network/ui/person-actions'
 
 const ORIGIN_TONE: Record<PersonOrigin, 'green' | 'blue' | 'violet' | 'neutral'> = {
   past_guest: 'green',
@@ -36,9 +38,15 @@ function appearanceLabel(person: NetworkPerson): { label: string; tone: 'green' 
 export function PeopleDirectory({
   people,
   emptyHint,
+  actions = false,
 }: {
   people: NetworkPerson[]
   emptyHint?: string
+  /**
+   * Off by default. The tour renders this component over invented people, where
+   * a working Remove button would be a trap.
+   */
+  actions?: boolean
 }) {
   if (people.length === 0) {
     return (
@@ -81,7 +89,9 @@ export function PeopleDirectory({
               </div>
             </div>
 
-            {(person.topicTags.length > 0 || Object.keys(person.sourceAttribution).length > 0) && (
+            {(actions ||
+              person.topicTags.length > 0 ||
+              Object.keys(person.sourceAttribution).length > 0) && (
               <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-neutral-100 pt-3 text-xs text-neutral-500">
                 {person.topicTags.slice(0, 6).map((tag) => (
                   <span key={tag} className="rounded-full bg-neutral-100 px-2 py-0.5 font-medium">
@@ -94,6 +104,17 @@ export function PeopleDirectory({
                   {Object.keys(person.sourceAttribution).length} field
                   {Object.keys(person.sourceAttribution).length === 1 ? '' : 's'} source-attributed
                 </span>
+                {actions && (
+                  <div className="w-full">
+                    <PersonActions
+                      personId={person.id}
+                      fullName={person.fullName}
+                      origin={person.origin}
+                      crmContactId={person.crmContactId}
+                      personTypes={CRM_PERSON_TYPE_OPTIONS}
+                    />
+                  </div>
+                )}
               </div>
             )}
           </li>

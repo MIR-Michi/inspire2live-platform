@@ -98,8 +98,18 @@ export type { PeopleFilter } from '@/modules/network/domain/repository'
 export { loadRoutesForPerson } from '@/modules/network/domain/routes'
 export type { NamedRoute } from '@/modules/network/domain/routes'
 
+// ─── pure rules ──────────────────────────────────────────────────────────────
+export { canDeletePerson } from '@/modules/network/domain/deletion'
+export type { PersonDeletionVerdict, PersonHistory } from '@/modules/network/domain/deletion'
+export {
+  contactInputFromPerson,
+  contactLinksFor,
+  provenanceNote,
+} from '@/modules/network/domain/crm-promotion'
+
 // ─── writes (server actions) ─────────────────────────────────────────────────
 export {
+  addPersonToCrm,
   answerConnectionCheck,
   askConnectionCheck,
   buildIntroducerPackage,

@@ -28,7 +28,7 @@ export const manifest = defineManifest({
   featureFlag: "comms_team",
   personas: ["communications-coordinator"],
   roles: { read: ["comms_team", "admin"], write: ["comms_team", "admin"] },
-  requirements: ["REQ-DATA-CONTACT-001", "REQ-DATA-CONTACT-002"],
+  requirements: ["REQ-DATA-CONTACT-001", "REQ-DATA-CONTACT-002", "REQ-DATA-CONTACT-003"],
   operations: [],
 })
 

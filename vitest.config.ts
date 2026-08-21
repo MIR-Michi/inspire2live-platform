@@ -10,6 +10,15 @@ export default defineConfig({
     globals: true,
     include: ['src/test/unit/**/*.{test,spec}.{ts,tsx}'],
     exclude: ['src/test/e2e/**', 'node_modules/**'],
+    // Vitest's default is five seconds, which is generous for a pure function
+    // and tight for a suite of ~90 files running in parallel on a cold Windows
+    // filesystem: several tests that finish in under 300ms alone have been seen
+    // past five seconds under full load. The failure that produces is not a
+    // slow test — it is a *wrong* one, because a test killed mid-flight leaves
+    // its mocks behind and the next test in the file fails on a call count it
+    // never made. Raising the ceiling costs nothing on a healthy run and makes
+    // the local gate agree with CI.
+    testTimeout: 30_000,
     coverage: {
       provider: 'v8',
       // Unit tests focus on business logic, which since Sprint 16 (ADR-0009)
@@ -69,6 +78,14 @@ export default defineConfig({
         'src/modules/podcast-planning/domain/radar-run.ts',
         'src/modules/podcast-planning/domain/radar.ts',
         'src/modules/network/domain/retention.ts',
+        // Same rule once more. `canDeletePerson` and the CRM-promotion mapping
+        // are pure and covered; these two are the query layers underneath them —
+        // one reaching across to the podcast cards, one reading and writing the
+        // CRM. `contact-resolution.ts` keeps its one decision, `matchExistingContact`,
+        // as an exported pure function precisely so the risky part is tested
+        // without mocking Supabase.
+        'src/modules/network/domain/live-cards.ts',
+        'src/modules/contacts/domain/contact-resolution.ts',
         // External API / email dispatch wrappers — no unit-test value.
         'src/modules/intake/domain/whatsapp-send.ts',
         'src/modules/intake/domain/whatsapp-media.ts',
