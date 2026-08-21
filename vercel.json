@@ -2,6 +2,7 @@
   "framework": "nextjs",
   "installCommand": "pnpm install --frozen-lockfile",
   "buildCommand": "pnpm build",
+  "regions": ["fra1"],
   "crons": [
     {
       "path": "/api/comms/digest",

@@ -331,6 +331,25 @@ documentation standard in [`../AGENTS.md`](../AGENTS.md) §8.
 | **GitHub Actions** | CI/CD | `.github/workflows/{ci,db-migrations,deploy-vercel}.yml` |
 | **Vercel** | Hosting · Edge CDN | `vercel.json` |
 
+### Function region — keep it next to the database
+
+`vercel.json` pins `"regions": ["fra1"]`. This is not a preference; it is the difference between a
+database round trip taking single-digit milliseconds and taking about ninety.
+
+Supabase runs in **AWS `eu-central-1` (Frankfurt)** — see [`SECURITY_AND_PRIVACY.md`](SECURITY_AND_PRIVACY.md)
+and [ADR-0002](ADR/0002-supabase-baas.md) — and data residency means it stays there. Until
+2026-08-21 no region was pinned, so functions ran in Vercel's default `iad1` (Washington, D.C.) and
+**every query crossed the Atlantic twice**. Pages here make eleven to sixteen round trips, so that
+was of the order of a second of pure network per page load, paid again on every mutation.
+
+**How to check it, and the trap in checking it.** Read the `x-vercel-id` response header from a
+deployed URL: its format is `<edge>::<compute>::<id>`. A *prerendered* page such as `/login` returns
+only two parts (`fra1::…`), which is the edge node nearest you and says nothing about where
+functions run — it looks reassuring and is meaningless. Request an `/api/*` route to force a
+function invocation and read the middle segment.
+
+If Supabase ever moves region, this line moves with it.
+
 ---
 
 ## 10 · Cross-Document Index
