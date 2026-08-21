@@ -18,8 +18,7 @@ import 'server-only'
  */
 
 import { runAiMessage } from '@/kernel/ai-client'
-import { OpenAlexError, searchEuropePmc, searchWorks } from '@/kernel/sources'
-import type { OpenAlexWork } from '@/kernel/sources'
+import { searchEuropePmc, searchWorks } from '@/kernel/sources'
 import type { PodcastQuestion } from '@/modules/podcast-planning/domain/types'
 import { toQuestion } from '@/modules/podcast-planning/domain/repository'
 import {
@@ -33,6 +32,7 @@ import {
   parseJsonReply,
   rejectedExamplesBlock,
   topicsPayload,
+  unparsedReply,
 } from '@/modules/podcast-planning/domain/radar-grounding'
 import {
   dedupeAcrossSources,
@@ -76,6 +76,11 @@ const FALLBACK_THEMES = [
   'early detection screening',
 ]
 
+/** A rejected promise carries `unknown`; the message is the only part worth keeping. */
+function asError(reason: unknown): Error {
+  return reason instanceof Error ? reason : new Error(String(reason))
+}
+
 export type FindNamesResult = {
   proposalId: string | null
   /** Records the sources returned. */
@@ -118,24 +123,42 @@ export async function runFindNames(
   }
 
   const fromDate = isoDaysAgo(config.lookbackDays)
-  let works: OpenAlexWork[] = []
+  let found: RadarSignalInput[] = []
   let used = search
-  try {
-    // Widen until something comes back. The index ANDs every term, so a
-    // four-word question can legitimately match nothing while two of its words
-    // have a whole literature behind them.
-    for (const attempt of wideningSearches(search, config.domainAnchor)) {
-      used = attempt
-      works = await searchWorks({ search: attempt, fromDate, limit: WORKS_PER_LANE })
-      if (works.length >= MIN_USEFUL_WORKS) break
+  let lastFailure: Error | null = null
+
+  // Widen until something comes back. The index ANDs every term, so a
+  // four-word question can legitimately match nothing while two of its words
+  // have a whole literature behind them.
+  for (const attempt of wideningSearches(search, config.domainAnchor)) {
+    used = attempt
+
+    // Both catalogues, settled independently — the same rule the scan follows.
+    // OpenAlex throttles anonymous callers hard enough to fail a click (429,
+    // sometimes dressed as 503), and losing the whole feature to that while
+    // Europe PMC is answering normally is not a trade worth making.
+    const [works, records] = await Promise.allSettled([
+      searchWorks({ search: attempt, fromDate, limit: WORKS_PER_LANE }),
+      searchEuropePmc({ search: attempt, fromDate, limit: WORKS_PER_LANE }),
+    ])
+
+    if (works.status === 'rejected') lastFailure = asError(works.reason)
+    if (records.status === 'rejected') lastFailure = asError(records.reason)
+
+    found = dedupeAcrossSources([
+      ...(works.status === 'fulfilled' ? signalsFromWorks(works.value) : []),
+      ...(records.status === 'fulfilled' ? signalsFromEuropePmc(records.value) : []),
+    ])
+    if (found.length >= MIN_USEFUL_WORKS) break
+
+    // Only give up when *nothing* answered. One source down is a thinner
+    // result, not a failed run.
+    if (works.status === 'rejected' && records.status === 'rejected') {
+      throw new Error(`The scholarly sources could not be reached: ${lastFailure?.message ?? 'unknown error'}`)
     }
-  } catch (error) {
-    if (error instanceof OpenAlexError) {
-      throw new Error(`The scholarly source could not be reached: ${error.message}`)
-    }
-    throw error
   }
-  const { signals } = await storeSignals(db, signalsFromWorks(works))
+
+  const { signals } = await storeSignals(db, found)
   const options = personOptions(signals, { limit: MAX_OPTIONS })
 
   if (options.length === 0) {
@@ -147,12 +170,15 @@ export async function runFindNames(
       ungrounded: 0,
       message:
         `Searched open scholarly sources for “${used}” since ${fromDate} and found ` +
-        `${works.length} paper${works.length === 1 ? '' : 's'}, but no named authors to work from. ` +
+        `${found.length} paper${found.length === 1 ? '' : 's'}, but no named authors to work from. ` +
         `Widen the date range in settings, or add a name by hand.`,
     }
   }
 
-  const reply = await runAiMessage({
+  // `<unknown>`, as every other structured caller does: with a `structuredFormat`
+  // set the client returns the parsed object, and the generic's `string` default
+  // would let the compiler agree with code that treats it as text.
+  const reply = await runAiMessage<unknown>({
     feature: 'podcast_radar_names',
     workload: 'podcast_radar_names',
     system: NAMES_SYSTEM_PROMPT,
@@ -211,7 +237,7 @@ export async function runFindNames(
     names: grounded.names,
     model: reply.config.model,
     effort: reply.config.effort,
-    rawResponse: parsed ?? { unparsed: reply.output.slice(0, 4000) },
+    rawResponse: parsed ?? { unparsed: unparsedReply(reply.output) },
     createdBy: opts.createdBy ?? null,
   })
 
@@ -323,7 +349,7 @@ export async function runRadarScan(
   const options = personOptions(recent, { limit: MAX_OPTIONS })
 
   await progress(`Grouping ${recent.length} records into questions.`)
-  const reply = await runAiMessage({
+  const reply = await runAiMessage<unknown>({
     feature: 'podcast_radar_topics',
     workload: 'podcast_radar_topics',
     system: TOPICS_SYSTEM_PROMPT + rejectedExamplesBlock(await loadRecentDismissals(db)),
@@ -377,7 +403,7 @@ export async function runRadarScan(
       names: topic.names,
       model: reply.config.model,
       effort: reply.config.effort,
-      rawResponse: parsed ?? { unparsed: reply.output.slice(0, 4000) },
+      rawResponse: parsed ?? { unparsed: unparsedReply(reply.output) },
       createdBy: null,
     })
     saved += 1

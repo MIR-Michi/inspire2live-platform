@@ -17,6 +17,7 @@ import {
   groundTopics,
   parseJsonReply,
   rejectedExamplesBlock,
+  unparsedReply,
 } from '@/modules/podcast-planning/domain/radar-grounding'
 import {
   buildMessageRequest,
@@ -674,5 +675,47 @@ describe('parseJsonReply', () => {
 
   it('returns null rather than throwing on nonsense', () => {
     expect(parseJsonReply('sorry, I cannot help with that')).toBeNull()
+  })
+
+  /**
+   * The shipped bug, and the reason it shipped.
+   *
+   * `runAiMessage` parses the JSON itself when a `structuredFormat` is set, so
+   * `output` arrives as an **object**. `AiRunResult<T>` defaults `T` to `string`,
+   * so the compiler was happy with a caller that treated it as text, and every
+   * test here passed a string — which is the same wrong assumption twice, and no
+   * gate can catch an assumption it shares. The first real model reply produced
+   * `output.trim is not a function` in front of a user.
+   */
+  it('passes through a reply the client already parsed', () => {
+    const parsed = { picks: [{ ref: 'p1', angle: 'x' }] }
+    expect(parseJsonReply(parsed)).toBe(parsed)
+    expect(parseJsonReply([1, 2])).toEqual([1, 2])
+  })
+
+  it('does not throw on any non-string the client could hand back', () => {
+    for (const value of [null, undefined, 42, true]) {
+      expect(() => parseJsonReply(value)).not.toThrow()
+    }
+    expect(parseJsonReply(null)).toBeNull()
+    expect(parseJsonReply(undefined)).toBeNull()
+  })
+})
+
+describe('unparsedReply — the diagnostic kept when nothing could be read', () => {
+  it('keeps a string, capped', () => {
+    expect(unparsedReply('nope')).toBe('nope')
+    expect(unparsedReply('x'.repeat(9000))).toHaveLength(4000)
+  })
+
+  it('renders a non-string instead of crashing the run that was already failing', () => {
+    expect(unparsedReply({ a: 1 })).toBe('{"a":1}')
+    expect(unparsedReply(undefined)).toBe('undefined')
+  })
+
+  it('survives a value JSON cannot serialise', () => {
+    const circular: Record<string, unknown> = {}
+    circular.self = circular
+    expect(() => unparsedReply(circular)).not.toThrow()
   })
 })
