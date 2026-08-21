@@ -26,6 +26,7 @@ import {
   NAMES_SYSTEM_PROMPT,
   TOPICS_SCHEMA,
   TOPICS_SYSTEM_PROMPT,
+  fillToFloor,
   groundNames,
   groundTopics,
   namesPayload,
@@ -36,7 +37,9 @@ import {
 } from '@/modules/podcast-planning/domain/radar-grounding'
 import {
   dedupeAcrossSources,
+  normalisePersonName,
   personOptions,
+  radarDedupeKey,
   searchTermsForQuestion,
   signalsFromEuropePmc,
   signalsFromWorks,
@@ -52,14 +55,64 @@ import {
 } from '@/modules/podcast-planning/domain/radar-repository'
 import type { RadarConfig } from '@/modules/podcast-planning/domain/radar-config'
 
-/** How many works one lane pulls back. Enough to see a pattern, few enough to read. */
+/** How many works one scan lane pulls back. Enough to see a pattern, few enough to read. */
 const WORKS_PER_LANE = 30
 
-/** Below this a query has effectively missed, and is worth widening. */
-const MIN_USEFUL_WORKS = 5
+/**
+ * How many works one "Find names" query pulls back.
+ *
+ * Europe PMC allows 100 per page and OpenAlex 200; asking for thirty was a
+ * guess made when the loop stopped at the first query that returned anything.
+ * Now that the run accumulates and stops on *people*, a bigger page is simply a
+ * better first attempt, and usually the only one needed.
+ */
+const WORKS_PER_FIND = 100
+
+/**
+ * Distinct named people that make a list worth ranking.
+ *
+ * The stop rule used to be five *papers*, which is how a run settled on a query
+ * that returned five irrelevant results and never widened again. Counting the
+ * thing the model is actually handed makes the ladder stop for the right reason.
+ */
+const TARGET_PEOPLE = 30
+
+/**
+ * The shortlist "Suggest guests" tries to fill.
+ *
+ * A screen that answers "nobody" when thirty cited authors were retrieved is
+ * not being rigorous, it is being unhelpful. Where the retrieved list allows it,
+ * this many names are always shown — see `fillToFloor`.
+ */
+const TARGET_NAMES = 10
+
+/** The most source round trips one click may make. Two catalogues per attempt. */
+const MAX_ATTEMPTS = 8
+
+/**
+ * The most records one click may store.
+ *
+ * A ceiling on the read-back `.in('dedupe_key', …)` as much as on anything else:
+ * every key travels in the query string, and a few hundred is where that stops
+ * being free. Three hundred papers name far more people than a shortlist needs.
+ */
+const MAX_RECORDS_PER_FIND = 300
 
 /** The most people any single model call may be shown. Beyond this the list stops being a list. */
 const MAX_OPTIONS = 60
+
+/**
+ * How far back a query is retried when the configured window returns nothing.
+ *
+ * A fixed 120 days is right for the fortnightly scan, whose job is to notice
+ * what is new, and wrong for a person asking who could answer a question they
+ * already have. Measured against Europe PMC: the Brazil-specific CAR-T query
+ * returns nothing at 120 days, nothing at a year, and one paper over three —
+ * "Challenges and Pathways in Regulating Next-Gen Biological Therapies", which
+ * is squarely the question and names five people. Three years is where an
+ * access or policy question's literature actually lives.
+ */
+const DEEP_LOOKBACK_DAYS = 1095
 
 /**
  * Standing themes, used only when no question carries a tag.
@@ -87,12 +140,23 @@ export type FindNamesResult = {
   signals: number
   /** Distinct people those records named. */
   candidates: number
-  /** People the model put forward and that survived grounding. */
+  /** Names on the proposal, including any added to reach the floor. */
   suggested: number
+  /** Of those, how many carry no editorial angle because the model did not reach them. */
+  unassessed: number
   /** Suggestions discarded for naming somebody who was not offered. */
   ungrounded: number
   /** Plain-English account of the run, shown whether or not it found anything. */
   message: string
+}
+
+const NOTHING: Omit<FindNamesResult, 'message'> = {
+  proposalId: null,
+  signals: 0,
+  candidates: 0,
+  suggested: 0,
+  unassessed: 0,
+  ungrounded: 0,
 }
 
 // ─── B1: find names for a question that already exists ───────────────────────
@@ -113,65 +177,144 @@ export async function runFindNames(
   const search = searchTermsForQuestion(question.question, question.topicTags)
   if (!search) {
     return {
-      proposalId: null,
-      signals: 0,
-      candidates: 0,
-      suggested: 0,
-      ungrounded: 0,
-      message: 'There is nothing searchable in this question yet. Add a few topic tags and try again.',
+      ...NOTHING,
+      message:
+        'There is nothing specific enough to search for in this question yet — it is all verbs and ' +
+        'judgements, with no subject a catalogue could match. Add a topic tag or two and try again.',
     }
   }
 
-  const fromDate = isoDaysAgo(config.lookbackDays)
-  let found: RadarSignalInput[] = []
-  let used = search
+  // ── Retrieval. Accumulate across every attempt rather than keeping only the
+  // last: a narrow query that returns three papers squarely on the question and
+  // a broad one that returns eighty around it are both worth having, and the
+  // previous version threw the first away when it ran the second.
+  const queries = wideningSearches(search, config.domainAnchor)
+  const baseWindow = config.lookbackDays
+  const deepWindow = Math.max(config.lookbackDays, DEEP_LOOKBACK_DAYS)
+
+  const collected: RadarSignalInput[] = []
+  const seenRecords = new Set<string>()
+  const seenPeople = new Set<string>()
+  /**
+   * Dedupe key → the rung of the widening ladder that found it. Carried into
+   * `personOptions`, where it outranks weight of evidence: the people named by
+   * the narrowest query that returned anything are the people most nearly about
+   * the question, and there are usually very few of them.
+   */
+  const closenessByRecord = new Map<string, number>()
+  const trace: string[] = []
+  let attempts = 0
+  let answered = false
+  let oneSourceDown = false
   let lastFailure: Error | null = null
+  let used = queries[0] ?? search
+  let usedFrom = isoDaysAgo(baseWindow)
 
-  // Widen until something comes back. The index ANDs every term, so a
-  // four-word question can legitimately match nothing while two of its words
-  // have a whole literature behind them.
-  for (const attempt of wideningSearches(search, config.domainAnchor)) {
-    used = attempt
+  // Read through a function: `lastFailure` is only ever assigned inside the
+  // attempt closure, which control-flow analysis cannot see, so a direct read
+  // would be narrowed to `null`.
+  const failureMessage = () => lastFailure?.message ?? 'unknown error'
 
-    // Both catalogues, settled independently — the same rule the scan follows.
-    // OpenAlex throttles anonymous callers hard enough to fail a click (429,
-    // sometimes dressed as 503), and losing the whole feature to that while
-    // Europe PMC is answering normally is not a trade worth making.
+  const enough = () =>
+    seenPeople.size >= TARGET_PEOPLE || collected.length >= MAX_RECORDS_PER_FIND
+
+  function collect(inputs: RadarSignalInput[], rung: number): void {
+    for (const input of inputs) {
+      if (collected.length >= MAX_RECORDS_PER_FIND) return
+      const key = radarDedupeKey(input.source, input.externalId)
+      if (seenRecords.has(key)) continue
+      seenRecords.add(key)
+      closenessByRecord.set(key, rung)
+      collected.push(input)
+      for (const person of input.people) {
+        const name = normalisePersonName(person.name)
+        if (name) seenPeople.add(name)
+      }
+    }
+  }
+
+  /** One query against both catalogues. Returns how many new records it added. */
+  async function attempt(query: string, days: number, rung: number): Promise<number> {
+    attempts += 1
+    const fromDate = isoDaysAgo(days)
+
+    // Both catalogues, settled independently. OpenAlex throttles anonymous
+    // callers hard enough to fail a click (429, sometimes dressed as 503), and
+    // losing the whole feature to that while Europe PMC answers normally is not
+    // a trade worth making.
     const [works, records] = await Promise.allSettled([
-      searchWorks({ search: attempt, fromDate, limit: WORKS_PER_LANE }),
-      searchEuropePmc({ search: attempt, fromDate, limit: WORKS_PER_LANE }),
+      searchWorks({ search: query, fromDate, limit: WORKS_PER_FIND }),
+      searchEuropePmc({ search: query, fromDate, limit: WORKS_PER_FIND }),
     ])
-
     if (works.status === 'rejected') lastFailure = asError(works.reason)
     if (records.status === 'rejected') lastFailure = asError(records.reason)
+    if ((works.status === 'rejected') !== (records.status === 'rejected')) oneSourceDown = true
+    if (works.status === 'fulfilled' || records.status === 'fulfilled') answered = true
 
-    found = dedupeAcrossSources([
-      ...(works.status === 'fulfilled' ? signalsFromWorks(works.value) : []),
-      ...(records.status === 'fulfilled' ? signalsFromEuropePmc(records.value) : []),
-    ])
-    if (found.length >= MIN_USEFUL_WORKS) break
+    const before = collected.length
+    if (works.status === 'fulfilled') collect(signalsFromWorks(works.value), rung)
+    if (records.status === 'fulfilled') collect(signalsFromEuropePmc(records.value), rung)
+    const gained = collected.length - before
 
-    // Only give up when *nothing* answered. One source down is a thinner
-    // result, not a failed run.
-    if (works.status === 'rejected' && records.status === 'rejected') {
-      throw new Error(`The scholarly sources could not be reached: ${lastFailure?.message ?? 'unknown error'}`)
+    // The reported query is the one that actually supplied the material.
+    if (gained > 0) {
+      used = query
+      usedFrom = fromDate
     }
+
+    trace.push(
+      `"${query}" since ${fromDate} → ` +
+        `openalex ${works.status === 'fulfilled' ? works.value.length : 'FAILED'}, ` +
+        `europepmc ${records.status === 'fulfilled' ? records.value.length : 'FAILED'}, ` +
+        `+${gained} new (${seenPeople.size} people so far)`,
+    )
+    return gained
   }
 
+  // Narrowest query first, giving up a term only once that query has genuinely
+  // been exhausted. A query that returns nothing has said something about the
+  // *window*, not about the question — so it is retried over three years before
+  // any term is surrendered. Broadening is the expensive move: it is what turns
+  // "CAR-T in Brazil" into "CAR-T", and it should be the last resort, not the
+  // first.
+  for (const [rung, query] of queries.entries()) {
+    if (attempts >= MAX_ATTEMPTS) break
+    const gained = await attempt(query, baseWindow, rung)
+    if (gained === 0 && deepWindow > baseWindow && attempts < MAX_ATTEMPTS) {
+      await attempt(query, deepWindow, rung)
+    }
+    if (enough()) break
+  }
+
+  // Only give up when *nothing* answered. One source down is a thinner result,
+  // not a failed run.
+  if (!answered) {
+    throw new Error(`The scholarly sources could not be reached: ${failureMessage()}`)
+  }
+
+  const found = dedupeAcrossSources(collected)
   const { signals } = await storeSignals(db, found)
-  const options = personOptions(signals, { limit: MAX_OPTIONS })
+  const options = personOptions(signals, { limit: MAX_OPTIONS, closenessByRecord })
+
+  const sourceNote = oneSourceDown
+    ? ` One of the two catalogues did not answer (${failureMessage()}), so this is a thinner read than usual.`
+    : ''
+
+  console.info(
+    `[podcast-planning] find-names q=${question.id} terms="${search}" ` +
+      `attempts=${attempts} records=${found.length} people=${seenPeople.size} ` +
+      `options=${options.length}\n  ${trace.join('\n  ')}`,
+  )
 
   if (options.length === 0) {
     return {
-      proposalId: null,
+      ...NOTHING,
       signals: signals.length,
-      candidates: 0,
-      suggested: 0,
-      ungrounded: 0,
       message:
-        `Searched open scholarly sources for “${used}” since ${fromDate} and found ` +
+        `Searched open scholarly sources for “${used}” back to ${usedFrom} and found ` +
         `${found.length} paper${found.length === 1 ? '' : 's'}, but no named authors to work from. ` +
-        `Widen the date range in settings, or add a name by hand.`,
+        `This question may need a route other than the literature — a regulator, a patient ` +
+        `organisation or a congress programme — so try adding a name by hand.${sourceNote}`,
     }
   }
 
@@ -209,19 +352,30 @@ export async function runFindNames(
   })
 
   const parsed = parseJsonReply(reply.output)
-  const grounded = groundNames(parsed, options, { limit: config.maxNames })
+  const grounded = groundNames(parsed, options, {
+    limit: Math.max(config.maxNames, TARGET_NAMES),
+  })
 
-  if (grounded.names.length === 0) {
+  // Top the shortlist up from the people who were retrieved but not chosen.
+  // They are the same cited authors in the same ranked order; what they lack is
+  // the editorial sentence, and their angle says exactly that.
+  const { names, added } = fillToFloor(grounded.names, options, TARGET_NAMES)
+
+  console.info(
+    `[podcast-planning] find-names q=${question.id} parsed=${parsed === null ? 'FAILED' : 'ok'} ` +
+      `picked=${grounded.names.length} floored=${added} ` +
+      `dropped=${JSON.stringify(grounded.dropped)}`,
+  )
+
+  if (names.length === 0) {
     return {
-      proposalId: null,
+      ...NOTHING,
       signals: signals.length,
       candidates: options.length,
-      suggested: 0,
       ungrounded: grounded.dropped.unknownRef,
       message:
-        `Read ${signals.length} recent paper${signals.length === 1 ? '' : 's'} naming ${options.length} ` +
-        `author${options.length === 1 ? '' : 's'}, and none of them was a good enough fit to put forward. ` +
-        `That is a real answer, not a failure — this question may need a route other than the literature.`,
+        `Read ${signals.length} paper${signals.length === 1 ? '' : 's'} naming ${options.length} ` +
+        `author${options.length === 1 ? '' : 's'}, but nothing could be put forward from them.${sourceNote}`,
     }
   }
 
@@ -233,23 +387,36 @@ export async function runFindNames(
     proposedQuestion: question.question,
     whyNow: question.whyNow,
     whyNowAt: question.whyNowAt,
-    signalIds: [...new Set(grounded.names.map((n) => n.signalId))],
-    names: grounded.names,
+    signalIds: [...new Set(names.map((n) => n.signalId))],
+    names,
     model: reply.config.model,
     effort: reply.config.effort,
     rawResponse: parsed ?? { unparsed: unparsedReply(reply.output) },
     createdBy: opts.createdBy ?? null,
   })
 
+  // The three things worth saying, in the order somebody would ask them: how
+  // many names, what was read to get them, and what is not yet judged.
+  const parseNote =
+    parsed === null
+      ? ' The assistant’s reply could not be read, so these are ranked by the evidence alone.'
+      : ''
+  const floorNote =
+    added > 0 && parsed !== null
+      ? ` ${added} of them ${added === 1 ? 'is' : 'are'} ranked by evidence and not yet assessed against the question.`
+      : ''
+
   return {
     proposalId,
     signals: signals.length,
     candidates: options.length,
-    suggested: grounded.names.length,
+    suggested: names.length,
+    unassessed: added,
     ungrounded: grounded.dropped.unknownRef,
     message:
-      `${grounded.names.length} name${grounded.names.length === 1 ? '' : 's'} from ` +
-      `${signals.length} recent paper${signals.length === 1 ? '' : 's'}.`,
+      `${names.length} name${names.length === 1 ? '' : 's'} from ${signals.length} ` +
+      `paper${signals.length === 1 ? '' : 's'}, searched as “${used}” back to ${usedFrom}.` +
+      `${floorNote}${parseNote}${sourceNote}`,
   }
 }
 

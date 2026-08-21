@@ -53,6 +53,7 @@ export const manifest = defineManifest({
       'updateQuestion',
       'verifyAskDestination',
       'retireQuestion',
+      'deleteQuestion',
       // the board
       'loadBoard',
       'loadCandidates',
@@ -70,6 +71,7 @@ export const manifest = defineManifest({
       'summariseScore',
       // stages (pure)
       'canAdvance',
+      'canDeleteQuestion',
       'waitingState',
       'boardAgenda',
       'countOpenAsks',
@@ -215,10 +217,10 @@ export const manifest = defineManifest({
       type: 'number',
       label: 'Names per proposal',
       description:
-        'The most people one proposal may suggest. A shortlist somebody reads beats a list they scroll.',
-      default: 6,
+        'A ceiling, not a target. "Suggest guests" aims to fill ten where the retrieved list allows it — set this below ten and it will show fewer.',
+      default: 12,
       min: 1,
-      max: 20,
+      max: 30,
       step: 1,
     },
     radarMinSources: {

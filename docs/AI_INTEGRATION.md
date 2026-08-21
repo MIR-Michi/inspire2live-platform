@@ -174,6 +174,17 @@ workloads. Decision: [ADR-0016](ADR/0016-radar-structured-sources.md). Concept:
   against the list supplied and **drop** anything that does not resolve, counting the drops. Names,
   organisations and countries are always taken from the source record, never from the reply — so a
   fabricated person cannot reach a reviewer even if the model invents one.
+- **On the names workload the model ranks; it does not decide.** It used to inherit a shared rule
+  saying "an empty answer is a useful answer", and acted on it: handed authors who were adjacent to a
+  question rather than squarely on it, it returned nothing and the screen reported that no suitable
+  guest existed. Whether somebody is worth inviting is the coordinator's judgement, made on a card
+  with the evidence attached — so the instructions now ask for an ordering, ten deep where the
+  retrieved list allows it, and the "empty answer" rule stays only on the *topics* workload, where an
+  ungroupable set of records genuinely is nothing. Where the model returns fewer than ten,
+  `fillToFloor` tops the list up from the retrieved people it did not reach, in the same ranked
+  order, each carrying its citation and an angle that says in words that the fit has not been
+  assessed. That is not a confidence badge (which ADR-0016 rightly refuses): every name still
+  resolves to a record retrieved before any model ran.
 - **Two independent sources, honestly counted.** A proposal must cite records from independent author
   groups (`countIndependentSources`, union-find over shared authors). Records that both catalogues
   indexed are collapsed by DOI first, because one paper found twice is not corroboration.

@@ -35,7 +35,7 @@ export const DEFAULT_RADAR_CONFIG: RadarConfig = {
   domainAnchor: 'cancer',
   intervalDays: 14,
   lookbackDays: 120,
-  maxNames: 6,
+  maxNames: 12,
   minSources: 2,
   maxTopicsPerRun: 10,
   maxSearchesPerRun: 8,

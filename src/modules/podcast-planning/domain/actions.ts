@@ -23,7 +23,11 @@ import type {
   QuestionInput,
   ResearchInput,
 } from '@/modules/podcast-planning/domain/types'
-import { canAdvance, countOpenAsks } from '@/modules/podcast-planning/domain/stages'
+import {
+  canAdvance,
+  canDeleteQuestion,
+  countOpenAsks,
+} from '@/modules/podcast-planning/domain/stages'
 import { scoreCandidate } from '@/modules/podcast-planning/domain/scoring'
 import { resolvePlanningConfig } from '@/modules/podcast-planning/domain/config'
 import {
@@ -106,6 +110,10 @@ export async function updateQuestion(
   questionId: string,
   input: Partial<QuestionInput>,
 ): Promise<ActionResult> {
+  if ('question' in input && !input.question?.trim()) {
+    return { ok: false, error: 'A question cannot be blank.' }
+  }
+
   const db = await planningDb()
   const payload = questionPayload(input)
   const supplied = Object.fromEntries(
@@ -115,6 +123,25 @@ export async function updateQuestion(
     }),
   )
   if (Object.keys(supplied).length === 0) return { ok: true }
+
+  // The same ceiling `createQuestion` applies, for the same reason: a rule that
+  // only guards one door is not a rule, and going live by editing is the easier
+  // of the two doors to walk through.
+  if (supplied.status === 'live') {
+    const config = await resolvePlanningConfig()
+    const { data: live, error: liveError } = await db
+      .from('podcast_questions')
+      .select('id')
+      .eq('status', 'live')
+      .neq('id', questionId)
+    if (liveError) return { ok: false, error: liveError.message }
+    if ((live ?? []).length >= config.liveQuestionLimit) {
+      return {
+        ok: false,
+        error: `${config.liveQuestionLimit} questions are already live. Retire one, or leave this as a draft.`,
+      }
+    }
+  }
 
   // Changing where the ask points invalidates the previous verification: the
   // "does the page work" points must be re-earned, not inherited.
@@ -157,6 +184,51 @@ export async function retireQuestion(questionId: string, reason?: string): Promi
   if (error) return { ok: false, error: error.message }
   revalidatePath(PLANNER_PATH)
   return { ok: true }
+}
+
+/**
+ * Delete a question outright, where `canDeleteQuestion` allows it.
+ *
+ * The counts are read here and the rule is applied there, for the same reason
+ * `moveCandidate` defers to `canAdvance`: the interesting part is the decision,
+ * and a decision that needs a database to exercise does not get exercised.
+ */
+export async function deleteQuestion(
+  questionId: string,
+  opts: { confirmCards?: boolean } = {},
+): Promise<ActionResult<{ cardsRemoved: number }>> {
+  const db = await planningDb()
+
+  const { data: cards, error: cardsError } = await db
+    .from('podcast_question_candidates')
+    .select('id')
+    .eq('question_id', questionId)
+  if (cardsError) return { ok: false, error: cardsError.message }
+
+  const cardIds = (cards ?? []).map((c) => c.id)
+  const cardCount = cardIds.length
+
+  let invitations = 0
+  if (cardCount > 0) {
+    const { count, error: inviteError } = await db
+      .from('podcast_invitations')
+      .select('id', { count: 'exact', head: true })
+      .in('candidate_id', cardIds)
+    if (inviteError) return { ok: false, error: inviteError.message }
+    invitations = count ?? 0
+  }
+
+  const verdict = canDeleteQuestion(
+    { cards: cardCount, invitations },
+    { confirmed: opts.confirmCards },
+  )
+  if (!verdict.allowed) return { ok: false, error: verdict.reason }
+
+  const { error } = await db.from('podcast_questions').delete().eq('id', questionId)
+  if (error) return { ok: false, error: error.message }
+
+  revalidatePath(PLANNER_PATH)
+  return { ok: true, data: { cardsRemoved: cardCount } }
 }
 
 // ─── Candidates ──────────────────────────────────────────────────────────────

@@ -75,6 +75,56 @@ export function questionReadiness(question: PodcastQuestion): QuestionReadiness 
   return { ready: missing.length === 0, missing }
 }
 
+// ─── Deleting a question ─────────────────────────────────────────────────────
+
+export type DeletionVerdict =
+  | { allowed: true }
+  /** `confirmable` separates "you may, once you have looked" from a flat refusal. */
+  | { allowed: false; confirmable: boolean; reason: string }
+
+/**
+ * May this question be deleted outright?
+ *
+ * `podcast_question_candidates.question_id` cascades, and scores and
+ * invitations cascade off that, so one delete can quietly take out the record
+ * of who was asked, what they said and when. That record is not incidental:
+ * refusals are what the scoring model learns from, and somebody who declined
+ * once should not be approached again in ignorance of it.
+ *
+ * Hence three answers rather than two — *delete when there is nothing to lose,
+ * confirm when there is something small, refuse when there is history*. Retire
+ * takes the question off the screen just as effectively and keeps all of it.
+ *
+ * Pure so the rule can be exercised without a database, and enforced in
+ * `deleteQuestion`: a gate that only exists in a dialog is not a gate.
+ */
+export function canDeleteQuestion(
+  counts: { cards: number; invitations: number },
+  opts: { confirmed?: boolean } = {},
+): DeletionVerdict {
+  if (counts.invitations > 0) {
+    return {
+      allowed: false,
+      confirmable: false,
+      reason:
+        `This question has ${counts.cards} card${counts.cards === 1 ? '' : 's'} and ` +
+        `${counts.invitations} invitation${counts.invitations === 1 ? '' : 's'} on record. Deleting it ` +
+        `would erase who was asked and what they said, which is what stops somebody being ` +
+        `approached twice. Retire it instead — it leaves the screen but keeps the history.`,
+    }
+  }
+  if (counts.cards > 0 && !opts.confirmed) {
+    return {
+      allowed: false,
+      confirmable: true,
+      reason:
+        `This question has ${counts.cards} card${counts.cards === 1 ? '' : 's'} on it, which would be ` +
+        `deleted with it. Confirm to go ahead, or retire the question to keep them.`,
+    }
+  }
+  return { allowed: true }
+}
+
 // ─── Stage transitions ───────────────────────────────────────────────────────
 
 export type TransitionContext = {

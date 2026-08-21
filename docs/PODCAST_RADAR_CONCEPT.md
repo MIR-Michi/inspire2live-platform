@@ -288,6 +288,41 @@ correct outcome is *"this person is already in your People list"*, which should 
 an existing person attached to a new question is a stronger signal than a new name, not a weaker
 one.
 
+### 8.1 The other failure mode: an empty shortlist that is not the truth (2026-08-21)
+
+Everything above guards against a name that should not be there. The first real use hit the mirror
+image — no name at all, on a question with a large literature — and it is worth recording because
+nothing was broken, in the sense that every layer did what it had been told.
+
+Asked *"how to make CAR-T cell therapy available in Brazil"*, the search ran the query **`cancer
+make`**: terms were taken in sentence order, so the verb was kept and `brazil` cut, and because the
+widening ladder drops terms from the end, the word with the least meaning was the one that survived
+to the last rung. Thirty authors of unrelated recent oncology papers were handed to the model, which
+had been instructed that "an empty answer is a useful answer", judged correctly that none of them
+could speak to CAR-T access in Brazil, and returned nothing. The screen said no suitable guest
+existed. A fabricated name is a visible failure that somebody will report; **a false empty is
+invisible, and reads as a considered verdict**. Three principles came out of it:
+
+- **Rank terms by specificity, not by position.** Words that name no subject (`make`, `available`)
+  are removed outright, and the rest ordered by technical markers and length. Since the ladder drops
+  from the end, ordering by specificity means the subject noun is the last thing surrendered.
+- **An empty result is a fact about the window, not about the question.** The narrow query is
+  retried over three years before any term is given up, because broadening is the expensive move: it
+  is what turns "CAR-T in Brazil" into "CAR-T". Results accumulate across rungs rather than
+  overwriting, and people are then ranked by **how narrow the query that found them was** — without
+  which the five authors of the one on-topic paper sit below five hundred generic CAR-T papers.
+- **The model ranks; the coordinator decides.** Judging whether somebody is worth inviting is a
+  human call made on a card with the evidence attached. The "empty answer is useful" rule belongs
+  only to the *topics* mode, where an ungroupable set of records genuinely is nothing. Filtering
+  before ranking was the same mistake in another place: keeping only first, last and corresponding
+  authors is the right convention for who **led** a piece of work and the wrong one for who could
+  **talk** about it.
+
+The floor that follows from this — topping a short list up from ranked retrieved people the model
+did not reach — is not a softening of §8. Those people were retrieved from a catalogue before any
+model ran, carry the same citation as any other, and say in their own angle that nobody has yet
+judged the fit. The rule that a name must resolve to a source record is untouched.
+
 ---
 
 ## 9. Routes from co-authorship
@@ -456,4 +491,4 @@ Retention (§13) attaches to B1, because it is B1 that starts creating people at
 *Concept v0.1. Proposed, not built. Numbers and thresholds here are starting values to be calibrated
 against real outcomes, which is why they belong in manifest config rather than in constants.*
 
-*Last reviewed: 2026-08-20.*
+*Last reviewed: 2026-08-21.*

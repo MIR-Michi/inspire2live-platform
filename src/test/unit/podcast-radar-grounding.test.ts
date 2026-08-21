@@ -13,6 +13,7 @@ import {
   NAMES_SCHEMA,
   NAMES_SYSTEM_PROMPT,
   TOPICS_SCHEMA,
+  fillToFloor,
   groundNames,
   groundTopics,
   parseJsonReply,
@@ -391,6 +392,125 @@ describe('personOptions', () => {
     expect(options).toHaveLength(1)
     expect(options[0].name).toBe('Elena Rossi')
   })
+
+  it('carries every record naming somebody, so an angle has more than one title to work from', () => {
+    const options = personOptions([
+      signal('a', { title: 'Surrogate endpoints in reimbursement' }),
+      signal('b', { externalId: 'Wb', title: 'Overall survival as the standard' }),
+    ])
+    expect(options[0].signalTitles).toEqual([
+      'Surrogate endpoints in reimbursement',
+      'Overall survival as the standard',
+    ])
+  })
+
+  it('marks somebody a principal when any record has them leading the work', () => {
+    const middle = signal('a', {
+      people: [
+        { name: 'Elena Rossi', role: 'Author', organisation: null, country: null, externalId: 'A1', url: null },
+      ],
+    })
+    expect(personOptions([middle])[0].principal).toBe(false)
+    // `signal('b')` has her as first author.
+    expect(personOptions([middle, signal('b', { externalId: 'Wb' })])[0].principal).toBe(true)
+  })
+
+  it('puts the people found by the narrowest query above the people found by the broadest', () => {
+    // The reported case in miniature. One paper answers the Brazil-specific
+    // query and names one person; five hundred answer `cancer car-t therapy`.
+    // Ranking on weight of evidence alone buries the one that is actually about
+    // the question.
+    const onPoint = signal('close', {
+      externalId: 'Wclose',
+      people: [
+        { name: 'Priya Gurjar', role: 'First author', organisation: 'Fiocruz', country: 'BR', externalId: 'A7', url: null },
+      ],
+    })
+    const broad = [
+      signal('a'),
+      signal('b', { externalId: 'Wb' }),
+      signal('c', { externalId: 'Wc' }),
+    ]
+
+    const closenessByRecord = new Map([[radarDedupeKey('openalex', 'Wclose'), 0]])
+    for (const s of broad) closenessByRecord.set(radarDedupeKey('openalex', s.externalId), 2)
+
+    const options = personOptions([...broad, onPoint], { closenessByRecord })
+    // Named by one record against her rival's three, and still first.
+    expect(options[0].name).toBe('Priya Gurjar')
+    expect(options[0].sourceCount).toBe(1)
+    expect(options[1].sourceCount).toBe(3)
+  })
+
+  it('falls back to weight of evidence when no closeness is supplied', () => {
+    const solo = signal('c', {
+      externalId: 'Wc',
+      people: [{ name: 'Solo Author', role: null, organisation: null, country: null, externalId: 'A9', url: null }],
+    })
+    const options = personOptions([solo, signal('a'), signal('b', { externalId: 'Wb' })])
+    expect(options[0].name).toBe('Elena Rossi')
+  })
+})
+
+describe('fillToFloor', () => {
+  const options = personOptions([
+    signal('a'),
+    signal('b', {
+      externalId: 'Wb',
+      people: [{ name: 'Marta Silva', role: 'Senior author', organisation: 'NKI', country: 'NL', externalId: 'A2', url: null }],
+    }),
+    signal('c', {
+      externalId: 'Wc',
+      people: [{ name: 'Jonas Weber', role: null, organisation: null, country: null, externalId: 'A3', url: null }],
+    }),
+  ])
+
+  const picked = groundNames(
+    { picks: [{ ref: options[0].ref, angle: 'Ran the analysis that started the argument.' }] },
+    options,
+    { limit: 10 },
+  ).names
+
+  it('tops a short shortlist up from the people who were retrieved', () => {
+    const { names, added } = fillToFloor(picked, options, 3)
+    expect(names.map((n) => n.name)).toEqual(['Elena Rossi', 'Marta Silva', 'Jonas Weber'])
+    expect(added).toBe(2)
+  })
+
+  it('says in the angle that nobody has judged the fit, so it cannot be mistaken for one', () => {
+    const { names } = fillToFloor(picked, options, 2)
+    expect(names[0].angle).toBe('Ran the analysis that started the argument.')
+    expect(names[1].angle).toContain('not yet assessed')
+    // Still an argument from evidence rather than a hedge.
+    expect(names[1].angle).toContain('Paper b')
+  })
+
+  it('never repeats somebody the model already picked', () => {
+    const { names } = fillToFloor(picked, options, 3)
+    expect(new Set(names.map((n) => n.name)).size).toBe(names.length)
+  })
+
+  it('takes only the fields that came from the record, never from a reply', () => {
+    const { names } = fillToFloor([], options, 1)
+    expect(names[0]).toMatchObject({
+      name: 'Elena Rossi',
+      organisation: 'Karolinska',
+      country: 'SE',
+      signalId: 'a',
+    })
+  })
+
+  it('stops at what was retrieved rather than inventing a tenth name', () => {
+    const { names, added } = fillToFloor(picked, options, 10)
+    expect(names).toHaveLength(3)
+    expect(added).toBe(2)
+  })
+
+  it('leaves a full shortlist alone', () => {
+    const { names, added } = fillToFloor(picked, options, 1)
+    expect(names).toEqual(picked)
+    expect(added).toBe(0)
+  })
 })
 
 describe('signalsFromWorks', () => {
@@ -412,12 +532,46 @@ describe('signalsFromWorks', () => {
     ],
   }
 
-  it('carries only the authors who can speak for the work', () => {
+  it('puts the authors who can speak for the work first, and keeps the rest', () => {
+    // Principal authorship used to be a filter applied before anybody was
+    // ranked, which discarded most of the supply on a question with a thin
+    // literature. It is now an ordering, and `personOptions` ranks on it.
     const [result] = signalsFromWorks([work])
-    expect(result.people.map((p) => p.name)).toEqual(['First A', 'Last D'])
+    expect(result.people.map((p) => p.name)).toEqual(['First A', 'Last D', 'Middle B', 'Middle C'])
     expect(result.people[0].role).toBe('First author')
     expect(result.people[1].role).toBe('Senior author')
     expect(result.people[1].url).toBe('https://orcid.org/0000-0002-1825-0097')
+    expect(result.people[2].role).toBe('Author')
+  })
+
+  it('labels a corresponding middle author as one, so ranking can see them', () => {
+    const corresponding: OpenAlexWork = {
+      ...work,
+      authors: work.authors.map((a) =>
+        a.name === 'Middle B' ? { ...a, isCorresponding: true } : a,
+      ),
+    }
+    const [result] = signalsFromWorks([corresponding])
+    expect(result.people.find((p) => p.name === 'Middle B')?.role).toBe('Corresponding author')
+  })
+
+  it('caps what one paper contributes, so a consortium cannot fill the list', () => {
+    const consortium: OpenAlexWork = {
+      ...work,
+      authors: Array.from({ length: 40 }, (_, i) => ({
+        id: `A${i}`,
+        name: `Author ${i}`,
+        orcid: null,
+        position: i === 0 ? 'first' : i === 39 ? 'last' : 'middle',
+        organisation: null,
+        country: null,
+        isCorresponding: false,
+      })),
+    }
+    const people = signalsFromWorks([consortium])[0].people
+    expect(people).toHaveLength(8)
+    // The principals survive the cap; the cap eats middle authors.
+    expect(people.slice(0, 2).map((p) => p.name)).toEqual(['Author 0', 'Author 39'])
   })
 
   it('keeps every author on a small team, where the convention does not apply', () => {
@@ -469,6 +623,55 @@ describe('searchTermsForQuestion', () => {
 
   it('is empty for a question with nothing searchable in it', () => {
     expect(searchTermsForQuestion('Why not?')).toBe('')
+  })
+
+  it('is empty when a question is all verbs and judgements', () => {
+    // Saying so is better than searching. The alternative is a query like
+    // `cancer make`, which retrieves the entire recent cancer literature that
+    // happens to contain a verb.
+    expect(searchTermsForQuestion('How can we make things better?')).toBe('')
+  })
+
+  // The reported failure, in both halves. Reproduced live before the fix: the
+  // run executed `cancer make` and returned 381 unrelated cancer papers.
+  describe('the CAR-T-in-Brazil regression', () => {
+    const question = 'how to make car-T cell therapy available in brazil'
+
+    it('never lets a meaningless verb into the query', () => {
+      const terms = searchTermsForQuestion(question).split(' ')
+      expect(terms).not.toContain('make')
+      expect(terms).not.toContain('available')
+    })
+
+    it('keeps the subject, which used to be cut by the four-term ceiling', () => {
+      const terms = searchTermsForQuestion(question).split(' ')
+      expect(terms).toContain('brazil')
+      expect(terms).toContain('car-t')
+    })
+
+    it('gives up the vaguest term first, so the subject is the last one standing', () => {
+      // Ordering here *is* the widening ladder: `wideningSearches` drops from
+      // the end, so the final rung is whatever sorts first.
+      const ladder = wideningSearches(searchTermsForQuestion(question), 'cancer')
+      expect(ladder.at(-1)).toBe('cancer car-t')
+      for (const rung of ladder) expect(rung).not.toBe('cancer make')
+    })
+  })
+
+  it('keeps the disease when a question also names patients and a treatment', () => {
+    const terms = searchTermsForQuestion(
+      'Should immunotherapy be offered to older patients with advanced melanoma?',
+    ).split(' ')
+    expect(terms).toContain('melanoma')
+    expect(terms).toContain('immunotherapy')
+  })
+
+  it('ranks a technical token above a longer ordinary word', () => {
+    // `pd-l1` is four characters and worth more than `expression`, because a
+    // hyphen or a digit marks the word that makes a query about one thing.
+    expect(searchTermsForQuestion('Does pd-l1 expression predict benefit?').split(' ')[0]).toBe(
+      'pd-l1',
+    )
   })
 
   it('never exceeds the measured term ceiling', () => {
@@ -523,7 +726,7 @@ describe('signalsFromEuropePmc', () => {
     ],
   }
 
-  it('keeps the ends of the author list and labels them', () => {
+  it('puts the ends of the author list first and labels them', () => {
     const [signal] = signalsFromEuropePmc([record])
     expect(signal.source).toBe('europepmc')
     // Namespaced, because a bare numeric id collides across Europe PMC's sources.
@@ -531,6 +734,8 @@ describe('signalsFromEuropePmc', () => {
     expect(signal.people.map((p) => [p.name, p.role])).toEqual([
       ['Roessler N', 'First author'],
       ['Senior S', 'Senior author'],
+      ['Middle M', 'Author'],
+      ['Vale C', 'Author'],
     ])
   })
 

@@ -103,6 +103,15 @@ describe('summariseQuestions', () => {
     expect(q1.inPlay).not.toBe(6)
   })
 
+  it('counts every card for the delete confirmation, including the hidden ones', () => {
+    // What a delete would take with it, which is deliberately more than the
+    // three visible counts add up to: sleeping and closed cards are hidden on
+    // the screen and destroyed just the same.
+    const [q1] = summariseQuestions(questions, candidates)
+    expect(q1.totalCards).toBe(9)
+    expect(q1.totalCards).toBeGreaterThan(q1.wishlistSize + q1.inPlay + q1.episodes)
+  })
+
   it('keeps each question to its own candidates', () => {
     const [, q2] = summariseQuestions(questions, candidates)
     expect(q2.wishlistSize).toBe(1)
@@ -126,6 +135,12 @@ describe('summariseQuestions', () => {
 
   it('returns a row for a question with no candidates at all', () => {
     const [only] = summariseQuestions([question('q4')], [])
-    expect(only).toMatchObject({ wishlistSize: 0, inPlay: 0, episodes: 0, anchorSecured: false })
+    expect(only).toMatchObject({
+      wishlistSize: 0,
+      inPlay: 0,
+      episodes: 0,
+      totalCards: 0,
+      anchorSecured: false,
+    })
   })
 })

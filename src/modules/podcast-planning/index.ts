@@ -42,6 +42,7 @@ export {
   BOARD_STAGES,
   boardAgenda,
   canAdvance,
+  canDeleteQuestion,
   countOpenAsks,
   dueToWake,
   isWaitingStage,
@@ -50,6 +51,7 @@ export {
   waitingState,
 } from '@/modules/podcast-planning/domain/stages'
 export type {
+  DeletionVerdict,
   QuestionReadiness,
   TransitionContext,
   TransitionVerdict,
@@ -175,6 +177,7 @@ export { planningAdminDb } from '@/modules/podcast-planning/domain/radar-reposit
 export {
   addCandidate,
   createQuestion,
+  deleteQuestion,
   handOverToContentCalendar,
   importPastGuests,
   moveCandidate,
