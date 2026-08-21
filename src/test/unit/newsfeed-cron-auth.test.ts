@@ -30,6 +30,13 @@ describe('newsfeed cron route auth', () => {
     expect(runOrgNewsfeedJob).not.toHaveBeenCalled()
   })
 
+  it('rejects everyone when CRON_SECRET is unset, rather than running for anyone', async () => {
+    delete process.env.CRON_SECRET
+    const res = await GET(request('Bearer anything'))
+    expect(res.status).toBe(503)
+    expect(runOrgNewsfeedJob).not.toHaveBeenCalled()
+  })
+
   it('returns 503 when AI is disabled', async () => {
     process.env.CRON_SECRET = 'expected-secret'
     isAiEnabled.mockReturnValue(false)

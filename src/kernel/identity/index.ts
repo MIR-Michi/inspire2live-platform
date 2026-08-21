@@ -5,3 +5,4 @@
  * not here; kernel identity is the thin auth layer everything depends on.
  */
 export * from '@/kernel/identity/auth-redirect-url'
+export * from '@/kernel/identity/cron-auth'

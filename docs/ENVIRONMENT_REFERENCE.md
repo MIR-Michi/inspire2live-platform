@@ -47,9 +47,18 @@
 
 | Variable | Scope | Required | Default | Description |
 |----------|-------|----------|---------|-------------|
-| `CRON_SECRET` | Server only | ❌ | — | Secret token to authenticate cron endpoint calls. Generate with: `openssl rand -base64 32` |
+| `CRON_SECRET` | Server only | ✅ (in any deployed environment) | — | Shared secret authenticating every scheduled route. Checked in one place, `denyUnauthorizedCron` (`src/kernel/identity/cron-auth.ts`). Generate with: `openssl rand -base64 32` |
 
-**If missing:** Cron endpoints will reject requests (401). No impact on interactive features.
+**If missing:** every cron endpoint refuses with **503** and runs nothing, so the scheduled jobs
+stop — the daily digest, conference discovery, the org newsfeed, the Radar scan and the retention
+purge. That is deliberate. These routes hold the service-role client, so the alternative to
+refusing is serving them to anyone who knows the path. A 503 also shows up red in Vercel's cron
+dashboard, which is how an operator finds out the variable is missing; a 401 would read like
+someone else's problem.
+
+This documentation described the 401 behaviour long before the code did it — until 2026-08-21 the
+guard was `if (expected && provided !== expected)`, which skipped the comparison entirely when the
+variable was unset. Interactive features are unaffected either way.
 
 ### AI / Claude (Sprint 14)
 

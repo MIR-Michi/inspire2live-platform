@@ -1,15 +1,12 @@
 import { NextResponse } from 'next/server'
+import { denyUnauthorizedCron } from '@/kernel/identity'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { sendScheduledCommsDigests, type DigestHighlight } from '@/lib/comms-digest'
 import { countPendingProposals, planningAdminDb } from '@/modules/podcast-planning'
 
 export async function GET(request: Request) {
-  const expected = process.env.CRON_SECRET
-  const provided = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? ''
-
-  if (expected && provided !== expected) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = denyUnauthorizedCron(request)
+  if (denied) return denied
 
   try {
     const supabase = createAdminClient()
