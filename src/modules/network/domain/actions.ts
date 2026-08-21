@@ -17,6 +17,7 @@
 import { revalidatePath } from 'next/cache'
 import { createClient } from '@/kernel/data/server'
 import { moduleClient } from '@/kernel/data'
+import { resolveContact } from '@/modules/contacts'
 import type { NetworkDatabase } from '@/modules/network/domain/schema'
 import type {
   ActionResult,
@@ -32,11 +33,15 @@ import {
   connectionTypeForAnswer,
 } from '@/modules/network/domain/connection-strength'
 import { suggestConnections } from '@/modules/network/domain/affiliation-overlap'
+import { canDeletePerson } from '@/modules/network/domain/deletion'
+import { contactInputFromPerson } from '@/modules/network/domain/crm-promotion'
 import { canRequestIntroduction } from '@/modules/network/domain/fatigue'
+import { peopleHeldByLiveCards } from '@/modules/network/domain/live-cards'
 import { resolveNetworkConfig } from '@/modules/network/domain/config'
 import {
   loadIntroducerHistory,
   loadMemberAffiliations,
+  loadPerson,
   loadPersonAffiliations,
 } from '@/modules/network/domain/repository'
 
@@ -195,13 +200,108 @@ export async function recordObjection(personId: string): Promise<ActionResult> {
  * Delete a person. The owning component's delete path (ADR-0009 §9 rule 3):
  * other components hold soft references, so this is where the consequences of a
  * deletion are decided.
+ *
+ * `canDeletePerson` decides them. A caller gets one of three answers: it
+ * happened, it needs confirming and here is exactly what would be destroyed, or
+ * it is refused and here is why — so nothing about the cascade is discovered
+ * afterwards.
  */
-export async function deletePerson(personId: string): Promise<ActionResult> {
+export async function deletePerson(
+  personId: string,
+  opts: { confirmed?: boolean } = {},
+): Promise<ActionResult<{ deleted: boolean; confirm?: string }>> {
   const client = await db()
+
+  const { data: person, error: readError } = await client
+    .from('network_people')
+    .select('id, full_name, profile_id, crm_contact_id')
+    .eq('id', personId)
+    .maybeSingle()
+  if (readError) return { ok: false, error: readError.message }
+  if (!person) return { ok: false, error: 'That person no longer exists.' }
+
+  const [introductions, answeredChecks] = await Promise.all([
+    client
+      .from('network_introduction_requests')
+      .select('id', { count: 'exact', head: true })
+      .eq('person_id', personId),
+    client
+      .from('network_connection_checks')
+      .select('id', { count: 'exact', head: true })
+      .eq('person_id', personId)
+      .not('answer', 'is', null),
+  ])
+  if (introductions.error) return { ok: false, error: introductions.error.message }
+  if (answeredChecks.error) return { ok: false, error: answeredChecks.error.message }
+
+  let liveCards = 0
+  try {
+    liveCards = (await peopleHeldByLiveCards([personId])).size
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not check live cards.' }
+  }
+
+  const verdict = canDeletePerson(
+    {
+      liveCards,
+      introductions: introductions.count ?? 0,
+      answeredChecks: answeredChecks.count ?? 0,
+      isMember: Boolean(person.profile_id),
+      inCrm: Boolean(person.crm_contact_id),
+    },
+    { confirmed: opts.confirmed },
+  )
+  if (!verdict.allowed) return { ok: false, error: verdict.reason }
+  if (verdict.confirm) return { ok: true, data: { deleted: false, confirm: verdict.confirm } }
+
   const { error } = await client.from('network_people').delete().eq('id', personId)
   if (error) return { ok: false, error: error.message }
   revalidatePath('/app/comms/podcast')
-  return { ok: true }
+  return { ok: true, data: { deleted: true } }
+}
+
+/**
+ * Put a directory person into the CRM, and remember that they are there.
+ *
+ * The one cross-component write this component is permitted (manifest
+ * `dependsOn.components: ['contacts@^1']`, ADR-0007): `network_people` has
+ * carried a `crm_contact_id` since it was created and nothing ever set it.
+ *
+ * Worth knowing before calling: linking a person to a CRM contact takes them
+ * out of the eighteen-month retention purge, which exempts anybody held on
+ * another basis. That is the correct outcome — a contact is a relationship, not
+ * a search result — but it is a real change to how long the record lives.
+ */
+export async function addPersonToCrm(
+  personId: string,
+  opts: { personType?: string | null; email?: string | null } = {},
+): Promise<ActionResult<{ contactId: string; created: boolean }>> {
+  const person = await loadPerson(personId)
+  if (!person) return { ok: false, error: 'That person no longer exists.' }
+  if (person.crmContactId) {
+    return { ok: true, data: { contactId: person.crmContactId, created: false } }
+  }
+
+  let resolved: Awaited<ReturnType<typeof resolveContact>>
+  try {
+    resolved = await resolveContact(contactInputFromPerson(person, opts))
+  } catch (error) {
+    return { ok: false, error: error instanceof Error ? error.message : 'Could not reach the CRM.' }
+  }
+
+  const client = await db()
+  const { error } = await client
+    .from('network_people')
+    .update({ crm_contact_id: resolved.contactId, last_activity_at: new Date().toISOString() })
+    .eq('id', personId)
+  // The contact exists either way; failing to record the link would only make
+  // the next click create a second one, so it is reported rather than ignored.
+  if (error) return { ok: false, error: `Added to the CRM, but the link was not saved: ${error.message}` }
+
+  revalidatePath('/app/comms/podcast')
+  revalidatePath('/app/comms/crm')
+  revalidatePath('/app/comms/crm/people')
+  return { ok: true, data: { contactId: resolved.contactId, created: resolved.created } }
 }
 
 // ─── Member affiliations (opt-in, item by item, revocable) ───────────────────

@@ -47,7 +47,9 @@ export const manifest = defineManifest({
       'updatePerson',
       'upsertPeopleByName',
       'recordObjection',
+      'canDeletePerson',
       'deletePerson',
+      'addPersonToCrm',
       'purgeInactivePeople',
       // affiliations
       'loadPersonAffiliations',
@@ -142,7 +144,7 @@ export const manifest = defineManifest({
   featureFlag: 'comms_team',
   personas: ['communications-coordinator', 'patient-advocate'],
   roles: { read: ['comms_team', 'admin'], write: ['comms_team', 'admin'] },
-  requirements: ['REQ-NET-001', 'REQ-NET-002', 'REQ-NET-003'],
+  requirements: ['REQ-NET-001', 'REQ-NET-002', 'REQ-NET-003', 'REQ-NET-004'],
   operations: [],
 })
 

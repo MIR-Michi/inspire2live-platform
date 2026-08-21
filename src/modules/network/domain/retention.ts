@@ -17,6 +17,7 @@ import 'server-only'
 
 import { createAdminClient } from '@/lib/supabase/admin'
 import { moduleClient } from '@/kernel/data'
+import { peopleHeldByLiveCards } from '@/modules/network/domain/live-cards'
 import type { NetworkDatabase } from '@/modules/network/domain/schema'
 
 export type PurgeResult = {
@@ -74,20 +75,9 @@ export async function purgeInactivePeople(opts: {
 
   // The soft reference has to be checked by hand: there is no foreign key from
   // `podcast_question_candidates.person_id` to check it for us (ADR-0013 §2),
-  // which is the price of the split and is paid here.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const admin = createAdminClient() as any
-  const { data: onCards, error: cardError } = await admin
-    .from('podcast_question_candidates')
-    .select('person_id')
-    .in(
-      'person_id',
-      eligible.map((p) => p.id),
-    )
-    .neq('stage', 'closed')
-  if (cardError) throw new Error(`Could not check live cards: ${cardError.message}`)
-
-  const held = new Set((onCards ?? []).map((row: { person_id: string }) => row.person_id))
+  // which is the price of the split. It is paid once, in `live-cards.ts`, and
+  // shared with the single-person delete.
+  const held = await peopleHeldByLiveCards(eligible.map((p) => p.id))
   const toDelete = eligible.filter((person) => !held.has(person.id))
 
   if (toDelete.length === 0) {

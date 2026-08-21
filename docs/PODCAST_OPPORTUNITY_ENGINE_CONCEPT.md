@@ -524,6 +524,28 @@ most sensitive module in the platform so far. It needs a written position **befo
 | **Editorial independence** | Person records show any relationship with an industry partner, so a conflict is visible at booking time. |
 | **Residency** | Unchanged. Supabase `eu-central-1`, Frankfurt. |
 
+### Where the minimisation line falls when a person joins the CRM (2026-08-21)
+
+"None at all for names still on a wishlist" is a rule about **`network_people`**, and it still holds
+without exception: nothing in the directory holds a way to reach anybody, and no automated step ever
+writes one.
+
+Promoting somebody to a CRM contact from the People screen does not bend that. The two records are
+held on different bases and the crossing is deliberately manual:
+
+- The **directory record** keeps exactly what it had — professional fields, each with its source.
+- The **contact** is created only when a human decides to begin a relationship, which is the CRM's
+  own basis rather than this tab's legitimate interest. Its consent status is written as `unknown`,
+  never inferred: appearing in a public catalogue is not permission to be contacted, and the note on
+  the contact says in words that nobody has spoken to them.
+- An **email, if there is one, is typed by that human** from something they already had. The
+  platform has no path that discovers one, and ADR-0016 keeps it that way.
+
+The consequence worth naming is the retention one. The eighteen-month purge exempts anyone with a
+`crm_contact_id`, so promoting a person also ends their automatic expiry — correctly, because they
+are now held as a relationship rather than as a search result, but it is a real change and the
+person doing it should know they are making it.
+
 ---
 
 ## 17. Delivery in three phases
@@ -591,4 +613,4 @@ None of them blocks Phase A; the first one blocks going live with real people da
 be calibrated against real outcomes, not settled parameters — which is why they are manifest
 config and a versioned weights table rather than constants scattered through the code.*
 
-*Last reviewed: 2026-08-20.*
+*Last reviewed: 2026-08-21.*

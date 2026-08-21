@@ -416,6 +416,36 @@ build failure, not a future sprint.
 3. **Dead-code scan.** A standing `knip` (or equivalent) run for unused files/exports — the pass Sprint 15
    listed as S15-T06 and had to run by hand. As a gate it never needs running by hand again.
 
+### The fourth gap, found in the field: a declared contract with nothing behind it (2026-08-21)
+
+The three sets above reconcile tables, files and nav. They do not reconcile the **contract** — and that
+turns out to be the gap components actually fall into.
+
+`contacts` has declared `provides.api: ['loadCrmDirectory', 'resolveContact']` since it was scaffolded.
+Its `index.ts` exported the manifest and nothing else, and no `resolveContact` existed anywhere in the
+repository. Nothing failed: table-ownership only reads `data.tables`, reachability only reads
+`provides.ui`, the dead-code scan only walks `src/lib` and `src/components`, and the import-boundary
+rule can only catch a deep import somebody *made* — not the one they gave up on. The visible cost was
+paid elsewhere, as the thing a missing contract always produces: `saveCrmContact`, the three pipeline
+insert paths and `events`' own `resolveOrCreateCrmContact` each grew a private way to create a contact,
+with different dedupe rules, and a person saved by one flow was a duplicate to another.
+
+`network` had the mirror-image version — `deletePerson`, `recordObjection`, `createPerson`,
+`updatePerson` and three more exported, declared, and called by nobody, which is how a `deletePerson`
+whose docstring promised to weigh the consequences of a deletion shipped as a bare `DELETE`.
+
+So the reconciliation has a fourth pair, and both directions are real:
+
+- In **declared** (`provides.api`) but not **exported** → a **phantom contract**. Other components
+  route around it, usually by duplicating it.
+- In **exported** but not **called** → an **untested promise**. It compiles, it is documented, and the
+  first caller is the one who finds out what it actually does.
+
+Neither is gated today. The first is cheap to gate (assert every `provides.api` name is exported from
+`index.ts`) and should be; the second is a judgement call, because a contract published slightly ahead
+of its first consumer is legitimate — but it is only legitimate if somebody is honest that it is
+unproven.
+
 ### The quarantine list — the honest home for "kept for a reason"
 
 Sprint 15 correctly kept several retired-space tables because of live readers, triggers, FK parents, or
