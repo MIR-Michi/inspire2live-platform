@@ -13,8 +13,9 @@ import { StatusBadge } from '@/kernel/ui'
 import { ASK_META, FORMAT_META } from '@/modules/podcast-planning/domain/types'
 import type { PodcastQuestion, PlanningConfig } from '@/modules/podcast-planning/domain/types'
 import type { QuestionSummary } from '@/modules/podcast-planning/domain/question-summary'
-import { QuestionComposer } from '@/modules/podcast-planning/ui/question-composer'
+import { QuestionEditor } from '@/modules/podcast-planning/ui/question-editor'
 import { FindNamesButton } from '@/modules/podcast-planning/ui/find-names-button'
+import { VerifyAskButton } from '@/modules/podcast-planning/ui/verify-ask-button'
 import { IconCheck, IconStar } from '@/modules/podcast-planning/ui/icons'
 
 /** The readiness gate, one chip per requirement. Mirrors `questionReadiness`. */
@@ -77,7 +78,7 @@ export function QuestionsScreen({
         <span className="rounded-full bg-neutral-100 px-2.5 py-1 text-xs font-semibold text-neutral-600">
           {liveCount}/{config.liveQuestionLimit} live
         </span>
-        <QuestionComposer owners={owners} />
+        <QuestionEditor owners={owners} />
       </div>
 
       {summaries.length === 0 ? (
@@ -86,7 +87,7 @@ export function QuestionsScreen({
         </p>
       ) : (
         <ul className="space-y-3">
-          {summaries.map(({ question, wishlistSize, inPlay, episodes, anchorSecured }) => {
+          {summaries.map(({ question, wishlistSize, inPlay, episodes, totalCards, anchorSecured }) => {
             const ready =
               Boolean(question.question?.trim()) &&
               Boolean(question.whyNow?.trim()) &&
@@ -122,6 +123,27 @@ export function QuestionsScreen({
 
                 <ReadinessChips question={question} />
 
+                {/* Shown because they are not decoration: tags replace the
+                    question's own words in the guest search, so a question with
+                    none is searched by whatever nouns its sentence happens to
+                    contain. Seeing that is how somebody knows to fix it. */}
+                <ul className="flex flex-wrap items-center gap-1.5">
+                  {question.topicTags.length > 0 ? (
+                    question.topicTags.map((tag) => (
+                      <li
+                        key={tag}
+                        className="rounded-full bg-neutral-100 px-2 py-0.5 text-[11px] font-medium text-neutral-600"
+                      >
+                        {tag}
+                      </li>
+                    ))
+                  ) : (
+                    <li className="text-[11px] text-neutral-400">
+                      No topics — the guest search will fall back to the wording of the question.
+                    </li>
+                  )}
+                </ul>
+
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-1 border-t border-neutral-100 pt-3">
                   <Stat value={wishlistSize} label="wishlist" />
                   <Stat value={inPlay} label="in play" />
@@ -136,6 +158,7 @@ export function QuestionsScreen({
                       className="flex flex-wrap items-center gap-2"
                     />
                   )}
+                  <QuestionEditor owners={owners} question={question} totalCards={totalCards} />
                   {question.format && (
                     <span className="text-xs font-medium text-neutral-500">
                       {FORMAT_META[question.format].label}
@@ -148,7 +171,7 @@ export function QuestionsScreen({
                       {question.askVerifiedAt ? (
                         <IconCheck className="h-3.5 w-3.5 shrink-0 text-emerald-600" />
                       ) : (
-                        <StatusBadge label="Unchecked" tone="amber" />
+                        <VerifyAskButton questionId={question.id} />
                       )}
                     </span>
                   )}

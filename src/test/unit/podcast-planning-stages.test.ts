@@ -11,6 +11,7 @@ import {
   BOARD_STAGES,
   boardAgenda,
   canAdvance,
+  canDeleteQuestion,
   countOpenAsks,
   dueToWake,
   isWaitingStage,
@@ -306,5 +307,40 @@ describe('boardAgenda', () => {
 
   it('is empty when nothing needs attention — it must not manufacture work', () => {
     expect(boardAgenda([candidate({ stage: 'research' })], { now: NOW })).toEqual([])
+  })
+})
+
+describe('canDeleteQuestion', () => {
+  it('allows a question nobody has worked on', () => {
+    expect(canDeleteQuestion({ cards: 0, invitations: 0 })).toEqual({ allowed: true })
+  })
+
+  it('asks first when cards would go with it, and says how many', () => {
+    const verdict = canDeleteQuestion({ cards: 3, invitations: 0 })
+    expect(verdict.allowed).toBe(false)
+    if (verdict.allowed) return
+    expect(verdict.confirmable).toBe(true)
+    expect(verdict.reason).toContain('3 cards')
+  })
+
+  it('goes ahead once that has been confirmed', () => {
+    expect(canDeleteQuestion({ cards: 3, invitations: 0 }, { confirmed: true })).toEqual({
+      allowed: true,
+    })
+  })
+
+  it('refuses outright once anybody has been invited, however small the question', () => {
+    // The hard case: one card, one invitation. Cascading the delete would erase
+    // the fact that this person was already approached, which is exactly what
+    // stops them being approached twice.
+    const verdict = canDeleteQuestion({ cards: 1, invitations: 1 }, { confirmed: true })
+    expect(verdict.allowed).toBe(false)
+    if (verdict.allowed) return
+    expect(verdict.confirmable).toBe(false)
+    expect(verdict.reason).toContain('Retire it instead')
+  })
+
+  it('cannot be talked round by confirming harder', () => {
+    expect(canDeleteQuestion({ cards: 9, invitations: 4 }, { confirmed: true }).allowed).toBe(false)
   })
 })

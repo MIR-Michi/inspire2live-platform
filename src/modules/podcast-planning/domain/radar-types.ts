@@ -186,14 +186,6 @@ export function countIndependentSources(
 // ─── Normalising a source ────────────────────────────────────────────────────
 
 /**
- * Turn OpenAlex works into signals.
- *
- * Only principal authors are carried through. A middle author on a forty-name
- * consortium paper has not been shown to be able to speak to it, and putting
- * them on the list would make the shortlist unreadable — which is the failure
- * mode the whole review interaction is designed to avoid.
- */
-/**
  * Records that are not papers.
  *
  * Seen on the first live run: OpenAlex indexes supplementary artefacts
@@ -207,6 +199,43 @@ function isArtefact(title: string): boolean {
   return /<\/?[a-z][^>]*>/i.test(title) || title.trim().length < 10
 }
 
+/**
+ * The roles that mean somebody can speak *for* a piece of work rather than
+ * merely having been on it.
+ *
+ * Derived from the stored role string rather than a flag of its own, so signals
+ * written before principal authorship became a ranking signal keep working.
+ */
+const PRINCIPAL_ROLES = new Set(['First author', 'Senior author', 'Corresponding author'])
+
+export function isPrincipalRole(role: string | null): boolean {
+  return role !== null && PRINCIPAL_ROLES.has(role)
+}
+
+/**
+ * How many people one paper may contribute.
+ *
+ * The rule used to be first, last and corresponding only, on the reasoning that
+ * a middle author of a forty-name consortium paper has not shown they can speak
+ * to it. That is the right convention for *who led the work* and the wrong one
+ * for *who could talk about it*: it discarded most of the supply before ranking
+ * ever ran, so a question with a thin literature was left with nobody at all.
+ *
+ * Principal authorship is now a ranking signal (`personOptions`) instead of a
+ * gate. The cap survives, because a single consortium paper must still not be
+ * able to fill the whole list — principals first, then the rest in print order.
+ */
+const MAX_AUTHORS_PER_WORK = 8
+
+/** Principals first, then everybody else in the order the paper printed them. */
+function principalsFirst<T>(all: T[], principals: T[]): T[] {
+  const chosen = new Set(principals)
+  return [...all.filter((a) => chosen.has(a)), ...all.filter((a) => !chosen.has(a))].slice(
+    0,
+    MAX_AUTHORS_PER_WORK,
+  )
+}
+
 export function signalsFromWorks(works: OpenAlexWork[]): RadarSignalInput[] {
   return works.filter((work) => !isArtefact(work.title) && work.authors.length > 0).map((work) => ({
     source: 'openalex' as const,
@@ -214,9 +243,16 @@ export function signalsFromWorks(works: OpenAlexWork[]): RadarSignalInput[] {
     title: work.title,
     url: work.url,
     publishedAt: work.publicationDate,
-    people: principalAuthors(work).map((author) => ({
+    people: principalsFirst(work.authors, principalAuthors(work)).map((author) => ({
       name: author.name,
-      role: author.position === 'first' ? 'First author' : author.position === 'last' ? 'Senior author' : 'Author',
+      role:
+        author.position === 'first'
+          ? 'First author'
+          : author.position === 'last'
+            ? 'Senior author'
+            : author.isCorresponding
+              ? 'Corresponding author'
+              : 'Author',
       organisation: author.organisation,
       country: author.country,
       externalId: author.id,
@@ -246,7 +282,6 @@ export function signalsFromEuropePmc(records: EuropePmcRecord[]): RadarSignalInp
   return records
     .filter((record) => !isArtefact(record.title) && record.authors.length > 0)
     .map((record) => {
-      const principals = principalEuropePmcAuthors(record)
       const last = record.authors[record.authors.length - 1]
       return {
         source: 'europepmc' as const,
@@ -254,7 +289,7 @@ export function signalsFromEuropePmc(records: EuropePmcRecord[]): RadarSignalInp
         title: record.title,
         url: record.url,
         publishedAt: record.publicationDate,
-        people: principals.map((author) => ({
+        people: principalsFirst(record.authors, principalEuropePmcAuthors(record)).map((author) => ({
           name: author.name,
           role:
             author.position === 1
@@ -327,6 +362,41 @@ const STOPWORDS = new Set([
 ])
 
 /**
+ * Content words that name no subject.
+ *
+ * These survive the stopword filter — they are verbs, adjectives and vague
+ * nouns rather than function words — but each of them describes an action or a
+ * judgement instead of a thing, and each matches an entire literature.
+ *
+ * This list exists because of a real failure. "How to make CAR-T cell therapy
+ * available in Brazil" kept `make` and cut `brazil`, and because the widening
+ * ladder drops terms from the end, `make` then survived every rung: the query
+ * the run actually executed was `cancer make`, which returned 381 recent cancer
+ * papers containing that verb. Thirty unrelated oncologists were shown to the
+ * model, which correctly said none of them could answer the question.
+ */
+const WEAK_TERMS = new Set([
+  'able', 'about', 'actual', 'actually', 'allow', 'allowed', 'allows', 'already', 'always',
+  'another', 'available', 'become', 'becomes', 'been', 'begin', 'best', 'better', 'bring',
+  'brings', 'came', 'come', 'comes', 'coming', 'could', 'currently', 'differ', 'different',
+  'done', 'during', 'each', 'either', 'else', 'enough', 'ensure', 'ensures', 'especially',
+  'even', 'ever', 'every', 'exist', 'exists', 'find', 'finds', 'gave', 'general', 'generally',
+  'gets', 'getting', 'give', 'given', 'gives', 'goes', 'going', 'gone', 'good', 'happen',
+  'happens', 'hard', 'help', 'helps', 'here', 'hold', 'holds', 'important', 'instead', 'keep',
+  'keeps', 'kind', 'know', 'known', 'knows', 'less', 'like', 'likely', 'long', 'look', 'looking',
+  'looks', 'made', 'make', 'makes', 'making', 'many', 'matter', 'matters', 'maybe', 'mean',
+  'means', 'might', 'much', 'need', 'needed', 'needs', 'never', 'often', 'once', 'ones', 'onto',
+  'other', 'others', 'often', 'part', 'parts', 'perhaps', 'possible', 'put', 'puts', 'quite',
+  'rather', 'real', 'really', 'right', 'said', 'same', 'says', 'seem', 'seems', 'sees', 'show',
+  'shown', 'shows', 'similar', 'simply', 'since', 'some', 'something', 'sort', 'take', 'taken',
+  'takes', 'tell', 'tells', 'than', 'thing', 'things', 'think', 'thinks', 'those', 'though',
+  'through', 'thus', 'together', 'took', 'toward', 'towards', 'turn', 'turns', 'under', 'upon',
+  'used', 'uses', 'using', 'usually', 'very', 'want', 'wants', 'ways', 'well', 'went', 'were',
+  'while', 'within', 'without', 'work', 'worked', 'working', 'works', 'worse', 'worst', 'wrong',
+  'yet',
+])
+
+/**
  * The most terms a query may carry.
  *
  * Measured against the live index rather than guessed: OpenAlex ANDs the words
@@ -337,26 +407,53 @@ const STOPWORDS = new Set([
 export const MAX_SEARCH_TERMS = 4
 
 /**
+ * How much retrieval value a term carries. Higher sorts earlier, and the
+ * widening ladder drops from the end, so this is also the order in which terms
+ * are given up.
+ *
+ * Two crude signals, both honest about being crude. A hyphen or a digit marks a
+ * technical token — `car-t`, `pd-l1`, `braf` — and those are the words that make
+ * a query about one thing. Length is otherwise a decent proxy among words that
+ * already cleared the stopword and weak-term filters: `immunotherapy` narrows,
+ * `cell` does not. Neither is a corpus frequency, which is what one would really
+ * want and what no free API offers cheaply.
+ */
+function specificity(term: string): number {
+  return (/[\d-]/.test(term) ? 10 : 0) + Math.min(term.length, 20)
+}
+
+/**
  * The search string for a question.
  *
  * Tags win when they exist, because somebody chose them deliberately; the
  * question's own content words are the fallback. Terms are ANDed by the index,
- * so ordering matters — the caller widens a query by dropping from the end.
+ * so which words are kept matters far more than how many — and the ones kept
+ * are now chosen by specificity rather than by where they happened to appear
+ * in the sentence.
+ *
+ * Returns an empty string when a question contains nothing but weak words. That
+ * is the honest answer: searching for `cancer make` is worse than saying there
+ * is nothing here to search for and asking for a tag.
  */
 export function searchTermsForQuestion(question: string, tags: string[] = []): string {
   const fromTags = tags.map((t) => t.trim()).filter(Boolean)
   // Tags replace the content words rather than joining them. Adding "different"
   // to "surrogate endpoints reimbursement" does not widen the search, it
-  // narrows it — every extra word is another AND.
+  // narrows it — every extra word is another AND. They are also left in the
+  // order they were written: a tag list is already a considered ranking.
   if (fromTags.length > 0) return [...new Set(fromTags)].slice(0, MAX_SEARCH_TERMS).join(' ')
 
   const fromText = question
     .toLowerCase()
     .replace(/[^\p{L}\p{N}\s-]/gu, ' ')
     .split(/\s+/)
-    .filter((word) => word.length > 3 && !STOPWORDS.has(word))
+    .filter((word) => word.length > 3 && !STOPWORDS.has(word) && !WEAK_TERMS.has(word))
 
-  return [...new Set(fromText)].slice(0, MAX_SEARCH_TERMS).join(' ')
+  return [...new Set(fromText)]
+    // Stable, so equally specific terms keep the order the question wrote them.
+    .sort((a, b) => specificity(b) - specificity(a))
+    .slice(0, MAX_SEARCH_TERMS)
+    .join(' ')
 }
 
 /**
@@ -373,6 +470,10 @@ export function searchTermsForQuestion(question: string, tags: string[] = []): s
  * "actually", "change" — are not stopwords but carry no subject, and a search
  * on them returned a twin-prime proof and a kidney-stone study. The anchor is
  * never dropped, so every query stays inside the organisation's field.
+ *
+ * Which term is given up first is decided upstream: `searchTermsForQuestion`
+ * orders by specificity, so dropping from the end here surrenders the vaguest
+ * word each time and the subject noun is the last one standing.
  */
 export function wideningSearches(search: string, anchor?: string | null): string[] {
   const anchorTerms = (anchor ?? '').split(/\s+/).filter(Boolean)
@@ -409,27 +510,73 @@ export type PersonOption = {
   country: string | null
   signalId: string
   signalTitle: string
+  /**
+   * Every record naming them, most recent first, capped. One title is too thin
+   * a basis for the sentence the model is asked to write about somebody.
+   */
+  signalTitles: string[]
   publishedAt: string | null
   url: string | null
   sourceCount: number
+  /** True where at least one record has them as first, senior or corresponding author. */
+  principal: boolean
+  /**
+   * How closely the query that found them matched the question — 0 is the most
+   * specific query the run made, and higher is broader. See `personOptions`.
+   */
+  closeness: number
 }
+
+/**
+ * The most records carried per person.
+ *
+ * The model is asked what only this person could say, and it used to be shown
+ * exactly one paper title to say it from — which is how angles ended up
+ * indistinguishable from one another. Three is enough to see a line of work
+ * without turning the payload into a bibliography.
+ */
+const MAX_TITLES_PER_PERSON = 3
 
 /**
  * Collapse the people named across a set of signals into one option each,
  * strongest evidence first.
  *
  * Ordering matters more than it looks: when the list is truncated it is
- * truncated from the bottom, so somebody named by three papers must never be
- * dropped in favour of somebody named by one.
+ * truncated from the bottom, so the wrong sort here is invisible and decides
+ * everything.
+ *
+ * Closeness comes first, and it is what a search over two catalogues cannot
+ * otherwise express. A run walks progressively broader queries, so the record
+ * that answered the narrowest one is the record most nearly *about* the
+ * question. Measured on the reported case: "how to make CAR-T therapy available
+ * in Brazil" has exactly one paper in three years matching the Brazil-specific
+ * query, and five hundred matching `cancer car-t therapy`. Sorting by weight of
+ * evidence alone buries those five people among five hundred; sorting by
+ * closeness first puts them at the top and keeps the rest as the pool behind
+ * them.
+ *
+ * Then weight of evidence: somebody named by three papers must never be dropped
+ * in favour of somebody named by one. Principal authorship breaks ties beneath
+ * that — it used to be a filter applied before anybody was ranked at all, which
+ * threw away most of the supply on any question with a thin literature.
  */
 export function personOptions(
   signals: RadarSignal[],
-  opts: { limit?: number } = {},
+  opts: {
+    limit?: number
+    /**
+     * Dedupe key → how broad the query that found that record was, 0 being the
+     * narrowest the run tried. Absent for callers that made a single query.
+     */
+    closenessByRecord?: Map<string, number>
+  } = {},
 ): PersonOption[] {
   type Draft = Omit<PersonOption, 'ref'> & { latest: string }
   const byName = new Map<string, Draft>()
 
   for (const signal of signals) {
+    const closeness =
+      opts.closenessByRecord?.get(radarDedupeKey(signal.source, signal.externalId)) ?? 0
     for (const person of signal.people) {
       const key = normalisePersonName(person.name)
       if (!key) continue
@@ -443,7 +590,17 @@ export function personOptions(
           existing.signalId = signal.id
           existing.signalTitle = signal.title
           existing.publishedAt = signal.publishedAt
+          // The role shown is the one from their strongest, most recent record.
+          if (isPrincipalRole(person.role)) existing.role = person.role
         }
+        if (
+          existing.signalTitles.length < MAX_TITLES_PER_PERSON &&
+          !existing.signalTitles.includes(signal.title)
+        ) {
+          existing.signalTitles.push(signal.title)
+        }
+        existing.principal ||= isPrincipalRole(person.role)
+        existing.closeness = Math.min(existing.closeness, closeness)
         existing.organisation ??= person.organisation
         existing.country ??= person.country
         existing.url ??= person.url
@@ -456,16 +613,23 @@ export function personOptions(
         country: person.country,
         signalId: signal.id,
         signalTitle: signal.title,
+        signalTitles: [signal.title],
         publishedAt: signal.publishedAt,
         url: person.url ?? signal.url,
         sourceCount: 1,
+        principal: isPrincipalRole(person.role),
+        closeness,
         latest: signal.publishedAt ?? '',
       })
     }
   }
 
   const ranked = [...byName.values()].sort(
-    (a, b) => b.sourceCount - a.sourceCount || (b.latest > a.latest ? 1 : b.latest < a.latest ? -1 : 0),
+    (a, b) =>
+      a.closeness - b.closeness ||
+      b.sourceCount - a.sourceCount ||
+      Number(b.principal) - Number(a.principal) ||
+      (b.latest > a.latest ? 1 : b.latest < a.latest ? -1 : 0),
   )
   const limit = opts.limit ?? 60
   return ranked.slice(0, limit).map(({ latest: _latest, ...option }, index) => ({
