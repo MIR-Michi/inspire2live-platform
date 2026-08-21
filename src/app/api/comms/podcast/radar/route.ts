@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { denyUnauthorizedCron } from '@/kernel/identity'
 import { createClient } from '@/lib/supabase/server'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
 import { isAiEnabled } from '@/lib/ai/feature-flag'
@@ -30,11 +31,8 @@ export const maxDuration = 300
  * stops silently is indistinguishable from one that is broken (ADR-0016 §5).
  */
 export async function GET(request: Request) {
-  const expected = process.env.CRON_SECRET
-  const provided = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? ''
-  if (expected && provided !== expected) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = denyUnauthorizedCron(request)
+  if (denied) return denied
 
   // First because it is an env read, and because a platform with AI switched
   // off has not failed — reporting 503 here would show a red cron every week.

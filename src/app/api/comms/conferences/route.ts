@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server'
+import { denyUnauthorizedCron } from '@/kernel/identity'
 import { createClient } from '@/lib/supabase/server'
 import { createAdminClient } from '@/lib/supabase/admin'
 import { canAccessCommsWorkspace } from '@/lib/comms-access'
@@ -82,12 +83,8 @@ async function refreshedRecently(intervalDays: number): Promise<boolean> {
  * chosen cadence.
  */
 export async function GET(request: Request) {
-  const expected = process.env.CRON_SECRET
-  const provided = request.headers.get('authorization')?.replace(/^Bearer\s+/i, '') ?? ''
-
-  if (expected && provided !== expected) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
+  const denied = denyUnauthorizedCron(request)
+  if (denied) return denied
 
   const settings = await resolveDiscoverySettings()
   if (!settings.enabled) {
