@@ -383,8 +383,18 @@ export function groundTopics(
  * text contract rather than an enforced format, so the reply has to be treated
  * as text. Returns null rather than throwing: a run that could not parse should
  * say so, not crash.
+ *
+ * Takes `unknown` because the kernel client hands back **either** shape. When a
+ * `structuredFormat` is set it has already parsed the JSON and `output` is an
+ * object; when that parse failed it falls back to the raw string. Typing this
+ * as `string` was a lie the compiler could not catch — `AiRunResult<T>` defaults
+ * `T` to `string` — and it crashed on the first reply a model ever sent.
  */
-export function parseJsonReply(output: string): unknown {
+export function parseJsonReply(output: unknown): unknown {
+  // Already parsed upstream. Objects and arrays pass straight through; `null`
+  // is indistinguishable from "nothing came back" and is reported as such.
+  if (typeof output !== 'string') return output ?? null
+
   const text = output.trim()
   const candidates = [text]
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/)
@@ -400,4 +410,23 @@ export function parseJsonReply(output: string): unknown {
     }
   }
   return null
+}
+
+/** How much of an unparseable reply is worth keeping to work out what went wrong. */
+const MAX_DIAGNOSTIC = 4000
+
+/**
+ * A reply that could not be understood, rendered for the stored diagnostic.
+ *
+ * Only reached when `parseJsonReply` gave up, so the value is whatever the
+ * provider actually sent — usually a string, but not reliably, which is the
+ * mistake this exists to stop repeating.
+ */
+export function unparsedReply(output: unknown): string {
+  if (typeof output === 'string') return output.slice(0, MAX_DIAGNOSTIC)
+  try {
+    return JSON.stringify(output)?.slice(0, MAX_DIAGNOSTIC) ?? String(output)
+  } catch {
+    return String(output)
+  }
 }

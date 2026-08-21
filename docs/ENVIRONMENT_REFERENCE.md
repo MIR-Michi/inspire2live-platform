@@ -60,12 +60,15 @@ AI configuration is primarily managed from `/app/admin/ai` and stored in `public
 | `ANTHROPIC_API_KEY` | Server only | ❌ | — | Fallback Claude credential when no encrypted admin-managed credential exists in `ai_settings`. |
 | `AI_SETTINGS_ENCRYPTION_KEY` | Server only | ✅ when storing an admin-managed credential | — | Encryption material used by the server-side AI settings helper. Use a high-entropy value and keep stable across deployments. |
 | `NEXT_PUBLIC_FEATURE_AI` | Client + Server | ❌ | `false` | Feature flag for AI UI and server calls. Server code also checks `requireAiEnabled()`. |
+| `OPENALEX_CONTACT_EMAIL` | Server only | ❌ (strongly recommended) | — | Contact address sent as `mailto` to OpenAlex, which puts the app in its **polite pool**. Read by `src/kernel/sources/openalex.ts` for Radar. |
 
 **If `ANTHROPIC_API_KEY` is missing:** AI calls still work if an encrypted credential is stored in Admin AI Settings. If neither is configured, AI calls fail with a configuration error.
 
 **If `AI_SETTINGS_ENCRYPTION_KEY` is missing:** Admins cannot store or decrypt the admin-managed credential. The environment fallback can still work.
 
 **If `NEXT_PUBLIC_FEATURE_AI` is false:** Product-facing AI capabilities remain hidden and server guarded. The admin connection test can still run for setup.
+
+**If `OPENALEX_CONTACT_EMAIL` is missing:** Radar still runs, but from OpenAlex's anonymous pool, where it is throttled hard enough to fail an interactive click — `429`, sometimes served as `503`. "Suggest guests" then falls back to its Europe PMC half and returns a thinner result rather than failing, but half the evidence is missing and the two-source floor is harder to clear. Any monitored address works; OpenAlex uses it only to contact you about traffic.
 
 ### WhatsApp Cloud API (Required for the Communications WhatsApp inbox)
 

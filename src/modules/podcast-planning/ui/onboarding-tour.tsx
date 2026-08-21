@@ -16,7 +16,8 @@
  * demo card cannot move anything.
  *
  * Each scene is narrated aloud through the browser's built-in speech synthesis
- * at a deliberately slow, level rate (no audio assets, nothing to re-record):
+ * in a male English voice, at a deliberately slow, level rate (no audio assets,
+ * nothing to re-record):
  * a scene that finishes visually holds until its sentence has been spoken,
  * pausing the tour pauses the voice, and a speaker button mutes it. Where
  * speech synthesis is unavailable the tour plays silently.
@@ -68,19 +69,46 @@ function advance(prev: PlayerState, waitForSpeech: boolean): PlayerState {
   return { ...prev, elapsed, playing: false }
 }
 
-/** Calm, unhurried English voices, best first. Falls back to whatever exists. */
-const CALM_VOICES = [/serena/i, /libby/i, /sonia/i, /daniel/i, /google uk english/i, /samantha/i]
+/**
+ * Male English voices, best first, across the platforms that actually ship them.
+ *
+ * The neural "Natural"/"Online" voices come first because they carry a sentence
+ * far better than the older formant ones — the difference between a presenter
+ * and a station announcement. Everything after `daniel` is a fallback.
+ */
+const MALE_VOICES = [
+  /ryan/i, // Edge/Windows neural, en-GB
+  /guy|andrew|brian|christopher|eric/i, // Edge/Windows neural, en-US
+  /google uk english male/i,
+  /george|oliver/i, // Windows/macOS en-GB
+  /daniel/i, // macOS en-GB
+  /alex|tom|aaron|fred/i, // macOS en-US
+  /david|mark|james/i, // older Windows SAPI
+]
+
+/**
+ * Voices that are unambiguously female, used only to keep the *fallback* from
+ * undoing the choice above. Without it a machine with no recognised male voice
+ * silently lands on the platform default, which is female nearly everywhere.
+ */
+const FEMALE_VOICES =
+  /zira|hazel|susan|linda|heera|serena|libby|sonia|samantha|victoria|karen|moira|tessa|fiona|ava|allison|susan|zoe|female|emma|jenny|aria|michelle|ana|amber|ashley|cora|elizabeth|monica|sara/i
 
 function pickVoice(voices: SpeechSynthesisVoice[]): SpeechSynthesisVoice | null {
   const english = voices.filter((voice) => voice.lang?.toLowerCase().startsWith('en'))
   if (english.length === 0) return null
+  // British first when there is one, then any English: an accent mismatch is a
+  // smaller problem than the wrong voice entirely.
   const british = english.filter((voice) => voice.lang.toLowerCase().startsWith('en-gb'))
-  const pool = british.length > 0 ? british : english
-  for (const pattern of CALM_VOICES) {
-    const match = pool.find((voice) => pattern.test(voice.name))
-    if (match) return match
+
+  for (const pool of [british, english]) {
+    for (const pattern of MALE_VOICES) {
+      const match = pool.find((voice) => pattern.test(voice.name))
+      if (match) return match
+    }
   }
-  return pool[0] ?? null
+  const notFemale = english.find((voice) => !FEMALE_VOICES.test(voice.name))
+  return notFemale ?? english[0] ?? null
 }
 
 function clock(ms: number): string {
@@ -212,6 +240,11 @@ function TourPlayer({ screens, onClose }: { screens: TourScreens; onClose: () =>
   )
   const [voiceOn, setVoiceOn] = useState(true)
   const [size, setSize] = useState<Size>(storedSize)
+  // A ref, not state, because Chrome fills the voice list asynchronously and
+  // re-rendering on it would restart the sentence being spoken. Reading the
+  // list while it is still empty silently yields the platform default, which is
+  // female on nearly every machine — hence resolving it separately at all.
+  const voiceRef = useRef<SpeechSynthesisVoice | null>(null)
   const dialogRef = useRef<HTMLDivElement>(null)
   // Chrome garbage-collects utterances it no longer references, which silences
   // `onend`; holding the current one in a ref keeps it alive until it finishes.
@@ -286,6 +319,18 @@ function TourPlayer({ screens, onClose }: { screens: TourScreens; onClose: () =>
     return () => clearInterval(timer)
   }, [playing, narrating])
 
+  useEffect(() => {
+    if (!voiceSupported) return
+    const synth = window.speechSynthesis
+    const read = () => {
+      const picked = pickVoice(synth.getVoices())
+      if (picked) voiceRef.current = picked
+    }
+    read()
+    synth.addEventListener('voiceschanged', read)
+    return () => synth.removeEventListener('voiceschanged', read)
+  }, [voiceSupported])
+
   // Speak the current scene; re-runs when the scene changes or voice is toggled.
   useEffect(() => {
     if (!narrating) return
@@ -297,9 +342,10 @@ function TourPlayer({ screens, onClose }: { screens: TourScreens; onClose: () =>
       utterance.lang = 'en-GB'
       utterance.rate = SPEECH_RATE
       utterance.pitch = SPEECH_PITCH
-      // Read late: Chrome populates the voice list asynchronously.
-      const voice = pickVoice(synth.getVoices())
-      if (voice) utterance.voice = voice
+      // Read late as well as early: on a cold start the list can still arrive
+      // after the first scene has begun.
+      const chosen = voiceRef.current ?? pickVoice(synth.getVoices())
+      if (chosen) utterance.voice = chosen
       utterance.onend = markSpoken
       utterance.onerror = markSpoken
       utteranceRef.current = utterance
